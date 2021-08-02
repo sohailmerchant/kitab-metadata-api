@@ -1,4 +1,4 @@
-python==3.6.4+
+python>3.6
 asgiref==3.4.1
 Django==3.2.6
 django-cors-headers==3.7.0
