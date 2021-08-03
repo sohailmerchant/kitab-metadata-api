@@ -133,12 +133,9 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/3.2/howto/static-files/
 
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
-STATIC_ROOT = '/mnt/c/Development Work/django_api/kitab/kitab/static'
+STATIC_ROOT = "/home/site/wwwroot/static/"
 STATIC_URL = '/static/'
 
-STATICFILES_DIRS = (
-    os.path.join(BASE_DIR, 'static'),
-)
 
 
 # Default primary key field type
