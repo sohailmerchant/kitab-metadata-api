@@ -20,14 +20,14 @@ def apiOverview(request):
 
     return Response(api_urls)
 
-
+## Not in use but useful if we want everything in one go
 @api_view(['GET'])
 def bookList(request):
     books = Book.objects.all()
     serializer = BookSerializer(books, many=True)
     return Response(serializer.data)
 
-
+## Get a book by book_uri
 @api_view(['GET'])
 def getBook(request, pk):
     try:
@@ -36,7 +36,8 @@ def getBook(request, pk):
         return Response(serializer.data)
     except Book.DoesNotExist:
             raise Http404
-      
+
+## Remove this before going live as we shouldn't allow any POST method      
 @api_view(['POST'])
 def bookCreate(request):
     serializer = BookSerializer(data=request.data)
@@ -46,23 +47,16 @@ def bookCreate(request):
 
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-
+'''' Get all books by pagination and filter enable. we can select fields also.
+Exampe: /book/all/?fields=book_id
+'''
 class bookListView(generics.ListAPIView):
     
     queryset = Book.objects.all()
     fields = ['title_lat', 'book_id', 'title_ar']
     serializer_class = BookSerializer
     pagination_class = PageNumberPagination
-    filter_backends = (filters.DjangoFilterBackend,)
-
-# class bookListView(generics.ListAPIView):
-    
-#     queryset = Book.objects.all()
-#     serializer_class = BookSerializer
-#     pagination_class = PageNumberPagination
-#     filter_backends = (filters.DjangoFilterBackend,)
-#     filterset_fields = ['title_lat', 'book_id', 'title_ar']
-    
+    filter_backends = (filters.DjangoFilterBackend,)    
 
 
         
