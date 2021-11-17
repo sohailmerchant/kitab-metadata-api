@@ -5,7 +5,9 @@ from rest_framework import generics, status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
-from django_filters import rest_framework as filters
+from django_filters import rest_framework as django_filters
+from rest_framework import filters
+
 
 from .models import Book
 from .serializers import BookSerializer
@@ -56,7 +58,7 @@ class bookListView(generics.ListAPIView):
     fields = ['title_lat', 'book_id', 'title_ar']
     serializer_class = BookSerializer
     pagination_class = PageNumberPagination
-    filter_backends = (filters.DjangoFilterBackend,)    
-
+    filter_backends = (django_filters.DjangoFilterBackend,filters.SearchFilter)    
+    search_fields = (fields)
 
         
