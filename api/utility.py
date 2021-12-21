@@ -1,5 +1,5 @@
 import json
-from .model import Book
+from models import Book, AggregatedStats
 
 def read_json(filename):
     record= {}
@@ -10,11 +10,13 @@ def read_json(filename):
             record['book_uri'] = data['book']
             record['char_length'] = data['char_length']
             record['tok_length'] = data['tok_length']
-            record['date'] = data['date']
+            record['date'] = data['date'],
+            record['author_lat'] = data['author_lat']
             record['title_ar'] = data['title_ar']
             record['title_lat'] = data['title_lat']
             record['version_uri'] = data['versionUri']
             record['url'] = data['url']
+            record['status'] = data['status']
             bulk_load(record)
                        
 def bulk_load(record):
@@ -27,8 +29,10 @@ def bulk_load(record):
             date = record['date'],
             title_ar = record['title_ar'],
             title_lat = record['title_lat'],
+            author_lat= record['author_lat'], 
             version_uri = record['version_uri'],
-            url = record['url']
+            url = record['url'],
+            status = record['status'] 
         )
     ]
     print(instance)

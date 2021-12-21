@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Book
+from .models import Book, AggregatedStats
 from rest_flex_fields import FlexFieldsModelSerializer
 
 '''
@@ -14,4 +14,10 @@ https://github.com/rsinger86/drf-flex-fields
 class BookSerializer(FlexFieldsModelSerializer):
     class Meta:        
         model = Book
-        fields = ("book_id", "book_uri","char_length","tok_length","date","title_ar","title_lat","version_uri","url")
+        fields = ("book_id", "book_uri","char_length","tok_length","date","title_ar","title_lat","version_uri","url", "status", "author_lat", "author_ar",'annotation_status')
+
+class AggregatedStatsSerializer(serializers.ModelSerializer):
+    class Meta:        
+        model = AggregatedStats
+        #depth = 1
+        fields = ["id","number_of_authors", "number_of_unique_authors","number_of_books","number_of_unique_books","total_word_count","largest_book","date"]

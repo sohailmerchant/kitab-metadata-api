@@ -6,6 +6,7 @@ urlpatterns = [
     path('book/', views.getBook, name='book'),
     path('book/all/', views.bookListView.as_view(), name='book-list-all'),
     path('book/<str:pk>/', views.getBook, name='book'),
+    path('aggregatedstats/', views.getAggregatedStats, name='aggregatedstats'),
 
       #path('book-list/', views.bookList, name='book-list'),
     #path('book-detail/<str:pk>/', views.bookDetail, name='book-detail'),
