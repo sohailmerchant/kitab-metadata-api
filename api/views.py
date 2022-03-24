@@ -10,7 +10,7 @@ from django_filters import rest_framework as django_filters
 from rest_framework import filters
 
 
-from .models import Book, AggregatedStats
+from .models import textMeta, AggregatedStats
 from .serializers import BookSerializer, AggregatedStatsSerializer
 
 @api_view(['GET'])
@@ -26,7 +26,7 @@ def apiOverview(request):
 ## Not in use but useful if we want everything in one go
 @api_view(['GET'])
 def bookList(request):
-    books = Book.objects.all()
+    books = textMeta.objects.all()
     serializer = BookSerializer(books, many=True)
     return Response(serializer.data)
 
@@ -34,7 +34,7 @@ def bookList(request):
 @api_view(['GET'])
 def getBook(request, pk):
     try:
-        book = Book.objects.get(book_id = pk )
+        book = textMeta.objects.get(book_id = pk )
         serializer = BookSerializer(book, many=False)
         return Response(serializer.data)
     except Book.DoesNotExist:
@@ -90,7 +90,7 @@ class CustomPagination(PageNumberPagination):
 
 class bookListView(generics.ListAPIView):
     
-    queryset = Book.objects.all()
+    queryset = textMeta.objects.all()
     search_fields = ['title_lat', 'book_id', 'title_ar', 'annotation_status']
 
     ## By doing this we can do multiple value filter with '__in' /book/all/?annotation_status__in=inProgress,mARkdown
