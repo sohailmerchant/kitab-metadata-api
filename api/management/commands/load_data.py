@@ -1,7 +1,7 @@
 
 import json, csv
 from django.db import models
-from api.models import Book, AggregatedStats
+from api.models import authorMeta, textMeta, versionMeta, authorName, AggregatedStats
 from django.core.management.base import BaseCommand
 
 import urllib.request
@@ -96,8 +96,7 @@ def read_csv(filename):
             annotation_status = get_annotation_status(data['url'].split('.')[-1])
             
             )
-          
-            
+        
 
 def bulk_load(record):
     #print(record['url'])
