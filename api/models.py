@@ -2,7 +2,7 @@ from operator import truediv
 from django.db import models
 
 class authorMeta(models.Model):
-    author_uri = models.CharField(max_length=50, null=True)
+    author_uri = models.CharField(max_length=50, unique=True, null=False, primary_key=True)
     author_ar = models.CharField(max_length=255,null=True)
     author_lat = models.CharField(max_length=255)
     date = models.IntegerField(null=True)
@@ -14,37 +14,37 @@ class authorMeta(models.Model):
         return self.author_uri
 
 
+
+
+      
+class textMeta(models.Model):
+    text_uri = models.CharField(max_length=100, unique=True, null=False, primary_key=True)
+    title_ar = models.CharField(max_length=255)
+    title_lat = models.CharField(max_length=255)
+    text_type = models.CharField(max_length=10,blank=True)
+    tags =  models.CharField(max_length=255)
+    author_uri = models.ForeignKey(authorMeta, related_name='texts', related_query_name="text", on_delete=models.CASCADE)
+    
+    def __str__(self):
+        return self.text_uri
+
 class authorName(models.Model):
-    authorMeta = models.ForeignKey(authorMeta,related_name='author_names',on_delete=models.CASCADE,null=True)
+   
     language = models.CharField(max_length=3,null=True)
     shuhra = models.CharField(max_length=255,blank=True)
     kunya = models.CharField(max_length=255,blank=True)
     ism = models.CharField(max_length=255, blank=True)
     laqab = models.CharField(max_length=255,blank=True)
     nisba = models.CharField(max_length=255,blank=True)
-    
+    author_uri = models.ForeignKey(authorMeta,related_name='authornames', related_query_name="authorname", on_delete=models.DO_NOTHING)
+
     def __str__(self):
-        return self.shuhra
-
-
-
-
-       
-class textMeta(models.Model):
-    text_uri = models.CharField(max_length=100)
-    title_ar = models.CharField(max_length=255)
-    title_lat = models.CharField(max_length=255)
-    text_type = models.CharField(max_length=10,blank=True)
-    tags =  models.CharField(max_length=255)
-    authorMeta = models.ForeignKey(authorMeta, related_name='texts', related_query_name="text", on_delete=models.CASCADE)
-    
-    def __str__(self):
-        return self.text_uri
-
+        return self.language
+        
 class versionMeta(models.Model):
-    version_id = models.CharField(max_length=50, unique=True, null=False)
+    version_id = models.CharField(max_length=50, unique=True, null=False, primary_key=True)
     version_uri = models.CharField(max_length=100)
-    textMeta = models.ForeignKey(textMeta,related_name='versions',related_query_name="version", on_delete=models.CASCADE)
+    text_uri = models.ForeignKey(textMeta,related_name='versions',related_query_name="version", on_delete=models.CASCADE)
     char_length = models.IntegerField(null=True)
     tok_length = models.IntegerField(null=True)
     url = models.CharField(max_length=255)
@@ -52,13 +52,12 @@ class versionMeta(models.Model):
     editor_place = models.CharField(max_length=100,blank=True)
     publisher = models.CharField(max_length=100,blank=True)
     edition_date = models.CharField(max_length=100,blank=True)
+    ed_info = models.CharField(max_length=255,blank=True)
     version_lang = models.CharField(max_length=3,null=True)
     tags = models.CharField(max_length=100,blank=True)
-    annotation_status = models.CharField(max_length=50, null=True)
     status = models.CharField(max_length=3,blank=True)
+    annotation_status = models.CharField(max_length=50, null=True)
     
-    
-
     def __str__(self):
         return self.version_uri
 

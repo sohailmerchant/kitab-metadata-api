@@ -15,7 +15,7 @@ class AuthorNameSerializer(FlexFieldsModelSerializer):
         model = authorName
         #fields = ("author_uri", "date","author_ar","author_lat")
         fields = ("__all__")
-        depth=0
+        depth=1
 
 class VersionMetaSerializer(FlexFieldsModelSerializer):
     # author_names = AuthorNameSerializer(many=True, read_only=True)  
@@ -40,12 +40,12 @@ class AuthorMetaSerializer(FlexFieldsModelSerializer):
     #texts = serializers.SlugRelatedField(many=True, read_only=True, slug_field='text_uri')
     #versions = serializers.SlugRelatedField(many=True, read_only=True, slug_field='version_uri')
     texts = TextSerializer(many=True, read_only=True)
-    author_names = AuthorNameSerializer(many=True, read_only=True) 
+    authornames = AuthorNameSerializer(many=True, read_only=True) 
 
     class Meta:        
         model = authorMeta
-        fields = ("author_uri","author_ar", "author_lat","date","authorDateAH","authorDateCE","authorDateString","author_names","texts")
-        depth=1
+        fields = ("author_uri","author_ar", "author_lat","date","authorDateAH","authorDateCE","authorDateString","authornames","texts")
+        depth=3
 
 class AggregatedStatsSerializer(serializers.ModelSerializer):
     class Meta:        

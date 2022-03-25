@@ -114,8 +114,8 @@ class authorListView(generics.ListAPIView):
     serializer_class = AuthorMetaSerializer 
     pagination_class = CustomPagination
     filter_backends = (django_filters.DjangoFilterBackend,filters.SearchFilter,filters.OrderingFilter)    
-    search_fields = (search_fields)
-    filter_fields = (search_fields)
+    # search_fields = (search_fields)
+    # filter_fields = (search_fields)
     #ordering_fields = (ordering_fields)
 
 
@@ -134,8 +134,8 @@ class versionListView(generics.ListAPIView):
     serializer_class = VersionMetaSerializer 
     pagination_class = CustomPagination
     filter_backends = (django_filters.DjangoFilterBackend,filters.SearchFilter,filters.OrderingFilter)    
-    search_fields = (search_fields)
-    filter_fields = (search_fields)
+    # search_fields = (search_fields)
+    # filter_fields = (search_fields)
     #ordering_fields = (ordering_fields)
 
 class textListView(generics.ListAPIView):
