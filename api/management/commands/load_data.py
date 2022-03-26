@@ -121,8 +121,17 @@ def read_csv(filename):
             
             
             # print(authorMeta.objects.filter(author_uri = "0001AbuTalibCabdManaf").exists()) 
-            
-            if not authorMeta.objects.filter(author_uri = record['version_uri'].split(".")[0]).exists():
+            # never create duplicate author data, except for Anonymous authors:
+
+            author_uri = record['version_uri'].split(".")[0]
+            if re.findall('\d{4}Anonymous\.', author_uri):
+                create_new = True
+            else:
+                if not authorMeta.objects.filter(author_uri = author_uri).exists():
+                    create_new = True
+                else:
+                    create_new = False
+            if create_new:
                 am,am_created = authorMeta.objects.get_or_create(
                 
                     author_uri = record['version_uri'].split(".")[0],
@@ -160,7 +169,8 @@ def read_csv(filename):
                 ed_info = record['ed_info'],
                 tags = record['tags'],
                 annotation_status = record['annotation_status'],
-                status = record['status']
+                status = record['status'],
+                language = record['version_lang']
                 )
             # name elements are not separately in the metadata file as it is now;
             # loading bogus data for now!

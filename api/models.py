@@ -2,7 +2,7 @@ from operator import truediv
 from django.db import models
 
 class authorMeta(models.Model):
-    author_uri = models.CharField(max_length=50, unique=True, null=False, primary_key=True)
+    author_uri = models.CharField(max_length=50, unique=True, null=False)
     author_ar = models.CharField(max_length=255,null=True)
     author_lat = models.CharField(max_length=255)
     date = models.IntegerField(null=True)
@@ -13,12 +13,9 @@ class authorMeta(models.Model):
     def __str__(self):
         return self.author_uri
 
-
-
-
-      
+     
 class textMeta(models.Model):
-    text_uri = models.CharField(max_length=100, unique=True, null=False, primary_key=True)
+    text_uri = models.CharField(max_length=100, unique=True, null=False)
     title_ar = models.CharField(max_length=255)
     title_lat = models.CharField(max_length=255)
     text_type = models.CharField(max_length=10,blank=True)
@@ -42,7 +39,7 @@ class authorName(models.Model):
         return self.language
         
 class versionMeta(models.Model):
-    version_id = models.CharField(max_length=50, unique=True, null=False, primary_key=True)
+    version_id = models.CharField(max_length=50, unique=True, null=False)
     version_uri = models.CharField(max_length=100)
     text_uri = models.ForeignKey(textMeta,related_name='versions',related_query_name="version", on_delete=models.CASCADE)
     char_length = models.IntegerField(null=True)
