@@ -4,28 +4,42 @@
 kitab-metadata-api
   |- README.md: this document
   |- db.sqlite3: the database that contains the API's data
-  |- manage.py: the top-level script that must be called for all API actions (see below)
+  |- manage.py: the top-level script that must be called 
+       for all API actions (see below)
   |- api
       |- management
           |- commands: 
-              |- load_data.py: this script loads all data from the metadata csv file to the database
-              |- create_dummy_aggregate_data.py: this scripts loads some dummy data to the AggregatedStats model
+              |- load_data.py: this script loads all data 
+                   from the metadata csv file to the database
+              |- create_dummy_aggregate_data.py: this scripts loads 
+                   some dummy data to the AggregatedStats model
       |- migrations: 
-          |- ...: the migrations folder contains a file for each of the migrations (= changes to the database model) made
+          |- ...: the migrations folder contains a file 
+               for each of the migrations (= changes to the database model) made
       |- admin.py: the models are registered in this file
-      |- apps.py: a two-line class is created here for the configuration of the app, which is given the name "api"
+      |- apps.py: a two-line class is created here for the configuration of the app, 
+           which is given the name "api"
       |- models.py: in this file, the models (~ tables) are created.
       |- models-v2.py: older version of models.py?
-      |- serializers.py: define serializers (which dictate what fields are exposed through the endpoints): AuthorNameSerializer, VersionMetaSerializer, TextSerializer, AuthorMetaSerializer, AggregatedStatsSerializer
+      |- serializers.py: define serializers (which dictate what fields are exposed 
+           through the endpoints): AuthorNameSerializer, VersionMetaSerializer, 
+           TextSerializer, AuthorMetaSerializer, AggregatedStatsSerializer
       |- tests.py: (empty file)
-      |- urls.py: creates endpoint URLs, each connected with a specific view (see views.py)
-      |- utility.py: contains utility functions for loading the data: read_json(), bulk_load()
-      |- views.py: a class is created per page view (endpoint), each of which get their own url in urls.py; each view uses a serializer defined in serializers.py
+      |- urls.py: creates endpoint URLs, each connected with a specific view 
+           (see views.py)
+      |- utility.py: contains utility functions for loading the data: 
+           read_json(), bulk_load()
+      |- views.py: a class is created per page view (endpoint), 
+           each of which get their own url in urls.py; 
+           each view uses a serializer defined in serializers.py
   |- kitab
-      |- asgi.py: settings for deployment using ASGI (see https://docs.djangoproject.com/en/3.2/howto/deployment/asgi/)
-      |- settings.py: contains settings for Django (incl. pagination, throttle, ...)
+      |- asgi.py: settings for deployment using ASGI 
+           (see https://docs.djangoproject.com/en/3.2/howto/deployment/asgi/)
+      |- settings.py: contains settings for Django 
+           (incl. pagination, throttle, ...)
       |- urls.py: contains only variable `urlpatterns`
-      |- wsgi.py: settings for deployment using WSGI (see https://docs.djangoproject.com/en/3.2/howto/deployment/wsgi/)
+      |- wsgi.py: settings for deployment using WSGI 
+           (see https://docs.djangoproject.com/en/3.2/howto/deployment/wsgi/)
 ```
 
 # Useful commands:
