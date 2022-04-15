@@ -72,7 +72,7 @@ Example: /book/all/?fields=book_id or /book/all/?search=JK000001 or book/all/?fi
 class CustomPagination(PageNumberPagination):
         page_size = 10
         page_size_query_param = 'page_size'
-        max_page_size = 100
+        max_page_size = 200
         last_page_strings = ('the_end',)
         
         def get_paginated_response(self, data):
@@ -130,13 +130,13 @@ class versionListView(generics.ListAPIView):
     # print(search_fields)
 
     #filter_fields = ['title_lat', 'book_id', 'title_ar', 'annotation_status']
-    #ordering_fields = ['title_lat', 'title_ar']
+    ordering_fields = ['title_lat', 'title_ar', "text_uri__author_uri__date"]
     serializer_class = VersionMetaSerializer 
     pagination_class = CustomPagination
     filter_backends = (django_filters.DjangoFilterBackend,filters.SearchFilter,filters.OrderingFilter)    
     # search_fields = (search_fields)
     # filter_fields = (search_fields)
-    #ordering_fields = (ordering_fields)
+    ordering_fields = (ordering_fields)
 
 class textListView(generics.ListAPIView):
     queryset = textMeta.objects.all()
