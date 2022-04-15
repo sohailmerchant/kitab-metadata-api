@@ -90,7 +90,7 @@ MIDDLEWARE = [
 CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOWED_ORIGINS = [
 
-    "http://localhost:3050"
+    "http://localhost:8080"
 
 ]
 

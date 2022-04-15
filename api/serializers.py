@@ -25,7 +25,7 @@ class VersionMetaSerializer(FlexFieldsModelSerializer):
         model = versionMeta
         #fields = ("names")
         fields = ("__all__")
-        depth=0
+        depth=3
 
 class TextSerializer(FlexFieldsModelSerializer):
     versions = VersionMetaSerializer(many=True, read_only=True)
