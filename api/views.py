@@ -10,8 +10,8 @@ from django_filters import rest_framework as django_filters
 from rest_framework import filters
 
 
-from .models import Book, AggregatedStats
-from .serializers import BookSerializer, AggregatedStatsSerializer
+from .models import authorMeta, authorName, textMeta, versionMeta, AggregatedStats
+from .serializers import TextSerializer,VersionMetaSerializer,AuthorNameSerializer,AuthorMetaSerializer, AggregatedStatsSerializer
 
 @api_view(['GET'])
 def apiOverview(request):
@@ -26,18 +26,19 @@ def apiOverview(request):
 ## Not in use but useful if we want everything in one go
 @api_view(['GET'])
 def bookList(request):
-    books = Book.objects.all()
-    serializer = BookSerializer(books, many=True)
+    books = versionMeta.objects.all()
+    serializer = VersionMetaSerializer(books, many=True)
     return Response(serializer.data)
 
-## Get a book by book_uri
+## Get a text by text_uri
 @api_view(['GET'])
-def getBook(request, pk):
+def getText(request, pk):
+    
     try:
-        book = Book.objects.get(book_id = pk )
-        serializer = BookSerializer(book, many=False)
+        text = textMeta.objects.get(text_uri = pk )
+        serializer = TextSerializer(text, many=False)
         return Response(serializer.data)
-    except Book.DoesNotExist:
+    except textMeta.DoesNotExist:
             raise Http404
 
 ## Get some aggregated stats on the corpus like authors no, book no. etc.
@@ -57,7 +58,7 @@ def getAggregatedStats(request):
 ## Remove this before going live as we shouldn't allow any POST method      
 @api_view(['POST'])
 def bookCreate(request):
-    serializer = BookSerializer(data=request.data)
+    serializer = VersionMetaSerializer(data=request.data)
     if serializer.is_valid():
         serializer.save()
         return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -88,26 +89,62 @@ class CustomPagination(PageNumberPagination):
                 'results': data
             })
 
-class bookListView(generics.ListAPIView):
+class authorListView(generics.ListAPIView):
+    queryset = authorMeta.objects.all()
+
+   ## By doing this we can do multiple value filter with '__in' /book/all/?annotation_status__in=inProgress,mARkdown
+
+    # filter_fields ={
+    #     #'annotation_status': ['in', 'exact'], # note the 'in'
+    #     'text__text_uri': ['exact'],
+    #     'text__title_ar':['exact'] ,
+    #     'text__title_lat':['exact'],
+    #     'text__version__version_id':['exact']
+    # }
+
+    search_fields = [field.name for field in authorMeta._meta.get_fields() if(field.name not in ["text","author_names", 'date', 'authorDateAH', 'authorDateCE', 'id'])]+ \
+    ["text__"+ field.name for field in textMeta._meta.get_fields() if(field.name not in ["version","id", 'authorMeta'])]\
+    + ["text__version__"+ field.name for field in versionMeta._meta.get_fields() if(field.name not in ["id", 'textMeta','tok_length','char_length'])]\
+    + ["author_names__"+ field.name for field in authorName._meta.get_fields() if(field.name not in ["id", 'authorMeta'])]
     
-    queryset = Book.objects.all()
-    search_fields = ['title_lat', 'book_id', 'title_ar', 'annotation_status']
+    # print(search_fields)
 
-    ## By doing this we can do multiple value filter with '__in' /book/all/?annotation_status__in=inProgress,mARkdown
-
-    filter_fields ={
-        'annotation_status': ['in', 'exact'], # note the 'in'
-        'book_id': ['exact'],
-        'title_ar':['exact'] ,
-        'title_lat':['exact']
-    }
     #filter_fields = ['title_lat', 'book_id', 'title_ar', 'annotation_status']
-    ordering_fields = ['title_lat', 'book_id', 'title_ar']
-    serializer_class = BookSerializer
+    #ordering_fields = ['title_lat', 'title_ar']
+    serializer_class = AuthorMetaSerializer 
     pagination_class = CustomPagination
     filter_backends = (django_filters.DjangoFilterBackend,filters.SearchFilter,filters.OrderingFilter)    
-    search_fields = (search_fields)
-    filter_fields = (filter_fields)
-    ordering_fields = (ordering_fields)
+    # search_fields = (search_fields)
+    # filter_fields = (search_fields)
+    #ordering_fields = (ordering_fields)
 
-        
+
+class versionListView(generics.ListAPIView):
+    queryset = versionMeta.objects.all()
+
+    search_fields = [field.name for field in authorMeta._meta.get_fields() if(field.name not in ["text","author_names", 'date', 'authorDateAH', 'authorDateCE', 'id'])]+ \
+    ["version__"+ field.name for field in textMeta._meta.get_fields() if(field.name not in ["version","id", 'authorMeta'])]\
+    + ["text__version__"+ field.name for field in versionMeta._meta.get_fields() if(field.name not in ["id", 'textMeta','tok_length','char_length'])]\
+    + ["author_names__"+ field.name for field in authorName._meta.get_fields() if(field.name not in ["id", 'authorMeta'])]
+    
+    # print(search_fields)
+
+    #filter_fields = ['title_lat', 'book_id', 'title_ar', 'annotation_status']
+    #ordering_fields = ['title_lat', 'title_ar']
+    serializer_class = VersionMetaSerializer 
+    pagination_class = CustomPagination
+    filter_backends = (django_filters.DjangoFilterBackend,filters.SearchFilter,filters.OrderingFilter)    
+    # search_fields = (search_fields)
+    # filter_fields = (search_fields)
+    #ordering_fields = (ordering_fields)
+
+class textListView(generics.ListAPIView):
+    queryset = textMeta.objects.all()
+    #filter_fields = ['title_lat', 'book_id', 'title_ar', 'annotation_status']
+    #ordering_fields = ['title_lat', 'title_ar']
+    serializer_class = TextSerializer 
+    pagination_class = CustomPagination
+    filter_backends = (django_filters.DjangoFilterBackend,filters.SearchFilter,filters.OrderingFilter)    
+    # search_fields = (search_fields)
+    # filter_fields = (search_fields)
+    #ordering_fields = (ordering_fields)
