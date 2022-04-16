@@ -127,15 +127,15 @@ class versionListView(generics.ListAPIView):
     + ["text__version__"+ field.name for field in versionMeta._meta.get_fields() if(field.name not in ["id", 'textMeta','tok_length','char_length'])]\
     + ["author_names__"+ field.name for field in authorName._meta.get_fields() if(field.name not in ["id", 'authorMeta'])]
     
-    # print(search_fields)
+    print(search_fields)
 
     #filter_fields = ['title_lat', 'book_id', 'title_ar', 'annotation_status']
     ordering_fields = ['title_lat', 'title_ar', "text_uri__author_uri__date"]
     serializer_class = VersionMetaSerializer 
     pagination_class = CustomPagination
     filter_backends = (django_filters.DjangoFilterBackend,filters.SearchFilter,filters.OrderingFilter)    
-    # search_fields = (search_fields)
-    # filter_fields = (search_fields)
+    #search_fields = (search_fields)
+    #filter_fields = (search_fields)
     ordering_fields = (ordering_fields)
 
 class textListView(generics.ListAPIView):

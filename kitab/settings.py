@@ -90,7 +90,8 @@ MIDDLEWARE = [
 CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOWED_ORIGINS = [
 
-    "http://localhost:8080"
+    "http://localhost:8080",
+    "https://kitabwebportal.azurewebsites.net/"
 
 ]
 
