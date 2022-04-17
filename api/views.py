@@ -94,13 +94,13 @@ class authorListView(generics.ListAPIView):
 
    ## By doing this we can do multiple value filter with '__in' /book/all/?annotation_status__in=inProgress,mARkdown
 
-    # filter_fields ={
-    #     #'annotation_status': ['in', 'exact'], # note the 'in'
-    #     'text__text_uri': ['exact'],
-    #     'text__title_ar':['exact'] ,
-    #     'text__title_lat':['exact'],
-    #     'text__version__version_id':['exact']
-    # }
+    filter_fields ={
+        #'annotation_status': ['in', 'exact'], # note the 'in'
+        'text__text_uri': ['exact'],
+        'text__title_ar':['exact'] ,
+        'text__title_lat':['exact'],
+        'text__version__version_id':['exact']
+    }
 
     search_fields = [field.name for field in authorMeta._meta.get_fields() if(field.name not in ["text","author_names", 'date', 'authorDateAH', 'authorDateCE', 'id'])]+ \
     ["text__"+ field.name for field in textMeta._meta.get_fields() if(field.name not in ["version","id", 'authorMeta'])]\
@@ -114,8 +114,8 @@ class authorListView(generics.ListAPIView):
     serializer_class = AuthorMetaSerializer 
     pagination_class = CustomPagination
     filter_backends = (django_filters.DjangoFilterBackend,filters.SearchFilter,filters.OrderingFilter)    
-    # search_fields = (search_fields)
-    # filter_fields = (search_fields)
+    search_fields = (search_fields)
+    filter_fields = (filter_fields)
     #ordering_fields = (ordering_fields)
 
 
@@ -129,13 +129,13 @@ class versionListView(generics.ListAPIView):
     
     print(search_fields)
 
-    #filter_fields = ['title_lat', 'book_id', 'title_ar', 'annotation_status']
+    filter_fields = ['version_id', 'version_uri', "text_uri__text_uri", "text_uri__title_ar", "text_uri__title_lat", "status"]
     ordering_fields = ['title_lat', 'title_ar', "text_uri__author_uri__date"]
     serializer_class = VersionMetaSerializer 
     pagination_class = CustomPagination
     filter_backends = (django_filters.DjangoFilterBackend,filters.SearchFilter,filters.OrderingFilter)    
     #search_fields = (search_fields)
-    #filter_fields = (search_fields)
+    filter_fields = (filter_fields)
     ordering_fields = (ordering_fields)
 
 class textListView(generics.ListAPIView):
