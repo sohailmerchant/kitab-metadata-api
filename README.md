@@ -67,6 +67,7 @@ Create the virtual environment:
 py -3.8 –m virtualenv -p <link_to_your_python.exe> my_django_environment
 ```
 
+NB: you can list the location of your python.exe for all installed versions using the command `py -0p`
 
 Activate the virtual environment: 
 
