@@ -2,7 +2,7 @@
 import json, csv
 from webbrowser import get
 from django.db import models
-from api.models import authorMeta, textMeta, versionMeta, authorName, AggregatedStats
+from api.models import authorMeta, textMeta, versionMeta, personName, AggregatedStats
 from django.core.management.base import BaseCommand
 import re
 import random
@@ -22,7 +22,7 @@ class Command(BaseCommand):
         textMeta.objects.all().delete()
         authorMeta.objects.all().delete()
         versionMeta.objects.all().delete()
-        authorName.objects.all().delete()
+        personName.objects.all().delete()
 
         read_csv(filename)
         
@@ -181,7 +181,7 @@ def read_csv(filename):
                         name_elements.append("")
                     random.shuffle(name_elements)
 
-                    authorName.objects.get_or_create(
+                    personName.objects.get_or_create(
                         author_uri = am,
                         language = lan,
                         shuhra = name_elements[0],
