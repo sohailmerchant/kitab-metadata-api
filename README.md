@@ -1,4 +1,4 @@
-
+http://localhost:50568/
 
 Django REST API documentation: https://www.django-rest-framework.org/tutorial/1-serialization/
 
@@ -28,7 +28,7 @@ kitab-metadata-api
       |- models-v2.py: older version of models.py?
       |- serializers.py: define serializers (which create JSON representations
            of the data in the database): 
-           AuthorNameSerializer, VersionMetaSerializer, 
+           personNameSerializer, VersionMetaSerializer, 
            TextSerializer, AuthorMetaSerializer, AggregatedStatsSerializer
       |- tests.py: (empty file)
       |- urls.py: creates endpoint URLs, each connected with a specific view 
@@ -177,7 +177,7 @@ python3 manage.py load_data
 
 # delete the database
 
-You can delete all the migration by deleting all the files in kitab\api\migrations (except init.py), and the database itself (db.sqlite3).
+You can delete all migrations by deleting all files in kitab\api\migrations (except init.py), and the database itself (db.sqlite3).
 
 After you have deleted / created a database, you must create a superuser:
 
@@ -192,6 +192,43 @@ To create a shell in the application, from which you can query the api:
 ```
 python3 manage.py shell
 ```
+
+# Searching the API
+
+## Searching all (string) fields: `?search=`
+
+Use comma or space to separate multiple search terms (they are combined using AND internally). 
+
+By default, the search is case insensitive (e.g., tarikh will match Tarikh), 
+and partial words are matched (e.g., ريخ will match تاريخ).
+
+The search is sensitive to Arabic vowels, hamzas etc. (e.g., تأريخ will not match تاريخ).
+
+Possible solution: add normalized fields, and normalize search terms?
+
+### Author search, all (string) fields:
+http://127.0.0.1:8000/author/all/?search=Jahiz
+http://127.0.0.1:8000/author/all/?search=الحيوان
+
+Multiple words: use space or comma to separate them (implicitly, this is an AND search):
+http://127.0.0.1:8000/author/all/?search=Tabari تاريخ
+http://127.0.0.1:8000/author/all/?search=الجاحظ,الحيوان
+
+NB: if you are doing an author search, all books of that author will be in the result list,
+even if you use the title of one book as a search term. 
+
+### Version search, all (string) fields: 
+http://127.0.0.1:8000/version/all/?search=Tabari تاريخ
+http://127.0.0.1:8000/version/all/?search=عمرو بن بحر
+
+### Text search, all (string) fields: 
+http://127.0.0.1:8000/text/all/?search=Tabari Tarikh
+
+## Searching a specific field:
+
+
+
+
 
 # TO DO
 
