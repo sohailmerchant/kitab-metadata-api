@@ -60,7 +60,7 @@ REST_FRAMEWORK = {
         #'rest_framework.throttling.UserRateThrottle'
     ],
     'DEFAULT_THROTTLE_RATES': {
-        'anon': '3000/day',
+        'anon': '5000/day',
         #'user': '1000/day'
     },
 
@@ -90,8 +90,8 @@ MIDDLEWARE = [
 CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOWED_ORIGINS = [
 
-    "http://localhost:8080",
-    "https://kitabwebportal.azurewebsites.net"
+    "http://localhost:8080/*",
+    "https://kitabwebportal.azurewebsites.net/*"
 
 ]
 
