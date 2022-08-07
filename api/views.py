@@ -100,7 +100,6 @@ def bookCreate(request):
 
 '''' Get all books by pagination, filter and search enable. we can select fields also.
 Example: /book/all/?fields=book_id or /book/all/?search=JK000001 or book/all/?fields=book_id&search=JK000001
-
 '''
 class CustomPagination(PageNumberPagination):
         page_size = 10
@@ -239,5 +238,5 @@ class relationsListView(generics.ListAPIView):
     queryset = a2bRelation.objects.all()
     #for q in queryset:
     #    print(q.text_a_id)
+    serializer_class = AllRelationSerializer 
     
-    serializer_class = AllRelationSerializer
