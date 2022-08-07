@@ -239,4 +239,5 @@ class relationsListView(generics.ListAPIView):
     queryset = a2bRelation.objects.all()
     #for q in queryset:
     #    print(q.text_a_id)
-    serializer_class = AllRelationSerializer 
+    
+    serializer_class = AllRelationSerializer
