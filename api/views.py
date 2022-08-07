@@ -169,8 +169,6 @@ class authorListView(generics.ListAPIView):
 
     # old experiments with filters by Sohail:
 
-    ## By doing this we can do multiple value filter with '__in' /book/all/?annotation_status__in=inProgress,mARkdown:
-
     # filter_fields ={
     #     #'annotation_status': ['in', 'exact'], # note the 'in'
     #     'text__text_uri': ['exact'],
@@ -239,4 +237,4 @@ class relationsListView(generics.ListAPIView):
     #for q in queryset:
     #    print(q.text_a_id)
     serializer_class = AllRelationSerializer 
-    
+
