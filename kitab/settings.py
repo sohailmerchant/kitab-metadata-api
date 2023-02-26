@@ -21,7 +21,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/3.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-#SECRET_KEY = 'django-insecure-fnkbj84xoa4y5(!pn0ftlfz1mqp(03#&25g+ep2!dxwm#)0+@('
+# SECRET_KEY = 'django-insecure-fnkbj84xoa4y5(!pn0ftlfz1mqp(03#&25g+ep2!dxwm#)0+@('
 SECRET_KEY = 'YOUR-SECRET-KEY'
 
 # SECURITY WARNING: don't run with debug turned on in production!
@@ -40,8 +40,8 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'api.apps.ApiConfig',
-    
-    
+
+
     'rest_framework',
     'django_filters',
     'rest_flex_fields',
@@ -49,22 +49,22 @@ INSTALLED_APPS = [
 ]
 REST_FRAMEWORK = {
 
-    #'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    # 'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.LimitOffsetPagination',
-    
-    #'DEFAULT_PAGINATION_CLASS': 'api.views.CustomPagination',
+
+    # 'DEFAULT_PAGINATION_CLASS': 'api.views.CustomPagination',
     'PAGE_SIZE': 200,
 
     'DEFAULT_THROTTLE_CLASSES': [
         'rest_framework.throttling.AnonRateThrottle',
-        #'rest_framework.throttling.UserRateThrottle'
+        # 'rest_framework.throttling.UserRateThrottle'
     ],
     'DEFAULT_THROTTLE_RATES': {
         'anon': '4000/day',
-        #'user': '1000/day'
+        # 'user': '1000/day'
     },
 
-    'DEFAULT_FILTER_BACKENDS':(
+    'DEFAULT_FILTER_BACKENDS': (
         'django_filters.rest_framework.DjangoFilterBackend',
         'rest_framework.filters.SearchFilter',
     ),
@@ -83,14 +83,15 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'corsheaders.middleware.CorsMiddleware',
-    
+
 ]
 CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOWED_ORIGINS = [
 
-    "http://localhost:8080/",
-    "http://127.0.0.1:8080/",
-    "https://kitabwebportal.azurewebsites.net/"
+    "http://localhost:8080",
+    "http://127.0.0.1:8080",
+    "https://kitabwebportal.azurewebsites.net"
+    "https://nice-water-065dc9510.2.azurestaticapps.net/"
 
 ]
 
@@ -124,7 +125,7 @@ DATABASES = {
         'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
-
+DATA_UPLOAD_MAX_NUMBER_FIELDS = None
 
 # Password validation
 # https://docs.djangoproject.com/en/3.2/ref/settings/#auth-password-validators
@@ -165,7 +166,6 @@ USE_TZ = True
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 STATIC_ROOT = os.path.join(BASE_DIR, 'static/')
 STATIC_URL = '/static/'
-
 
 
 # Default primary key field type
