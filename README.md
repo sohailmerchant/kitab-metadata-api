@@ -8,44 +8,44 @@ Django REST API documentation: https://www.django-rest-framework.org/tutorial/1-
 kitab-metadata-api
   |- README.md: this document
   |- db.sqlite3: the database that contains the API's data
-  |- manage.py: the top-level script that must be called 
+  |- manage.py: the top-level script that must be called
        for all API actions (see below)
   |- api
       |- management
-          |- commands: 
-              |- load_data.py: this script loads all data 
+          |- commands:
+              |- load_data.py: this script loads all data
                    from the metadata csv file to the database
-              |- create_dummy_aggregate_data.py: this scripts loads 
+              |- create_dummy_aggregate_data.py: this scripts loads
                    some dummy data to the AggregatedStats model
-      |- migrations: 
-          |- ...: the migrations folder contains a file 
+      |- migrations:
+          |- ...: the migrations folder contains a file
                for each of the migrations (= changes to the database model) made
       |- admin.py: the models are registered in this file
            so they can be accessed from the admin panel (?)
-      |- apps.py: a two-line class is created here for the configuration of the app, 
+      |- apps.py: a two-line class is created here for the configuration of the app,
            which is given the name "api"
       |- models.py: in this file, the models (~ tables) are created.
       |- models-v2.py: older version of models.py?
       |- serializers.py: define serializers (which create JSON representations
-           of the data in the database): 
-           personNameSerializer, VersionMetaSerializer, 
+           of the data in the database):
+           personNameSerializer, VersionMetaSerializer,
            TextSerializer, AuthorMetaSerializer, AggregatedStatsSerializer
       |- tests.py: (empty file)
-      |- urls.py: creates endpoint URLs, each connected with a specific view 
+      |- urls.py: creates endpoint URLs, each connected with a specific view
            (see views.py)
-      |- utility.py: contains utility functions for loading the data: 
+      |- utility.py: contains utility functions for loading the data:
            read_json(), bulk_load()
-      |- views.py: a class is created per page view (endpoint), 
-           each of which get their own url in urls.py; 
+      |- views.py: a class is created per page view (endpoint),
+           each of which get their own url in urls.py;
            each view uses a serializer defined in serializers.py
   |- kitab
-      |- asgi.py: settings for deployment using ASGI 
+      |- asgi.py: settings for deployment using ASGI
            (see https://docs.djangoproject.com/en/3.2/howto/deployment/asgi/)
-      |- settings.py: contains settings for Django 
+      |- settings.py: contains settings for Django
            (incl. pagination, throttle, ...)
-      |- urls.py: contains urls for all apps in the application; 
+      |- urls.py: contains urls for all apps in the application;
            partly duplicates api/urls.py.
-      |- wsgi.py: settings for deployment using WSGI 
+      |- wsgi.py: settings for deployment using WSGI
            (see https://docs.djangoproject.com/en/3.2/howto/deployment/wsgi/)
 ```
 
@@ -55,13 +55,13 @@ kitab-metadata-api
 
 **After installation, first make a virtual environment:**
 
-If virtualenv is not installed, install it first: 
+If virtualenv is not installed, install it first:
 
 ```
 py -3.8 –m pip install virtualenv
 ```
 
-Create the virtual environment: 
+Create the virtual environment:
 
 ```
 py -3.8 –m virtualenv -p <link_to_your_python.exe> my_django_environment
@@ -69,33 +69,35 @@ py -3.8 –m virtualenv -p <link_to_your_python.exe> my_django_environment
 
 NB: you can list the location of your python.exe for all installed versions using the command `py -0p`
 
-Activate the virtual environment: 
+Activate the virtual environment:
 
 ```
 my_django_environment\Scripts\activate
 ```
 
+Activate the environment on Linux
+`source ./activate `
+
 Install django, djangorestframework and other libraries inside the activated virtual environment
-using the requirements.txt file in the kitab-metadata-api folder: 
+using the requirements.txt file in the kitab-metadata-api folder:
 
 ```
 pip3 install -r requirements.txt
 ```
 
-
-## Django: 
+## Django:
 
 ** always make sure the virtual environment is activated!**
 
 ### Creating a new Django app - this was already done by Sohail!
 
-Running the command `django-admin startproject <project_name>` will set up a folder 
-with the name <project_name>, in which you'll find a manage.py file, a database (db.sqlite3) 
+Running the command `django-admin startproject <project_name>` will set up a folder
+with the name <project_name>, in which you'll find a manage.py file, a database (db.sqlite3)
 and another folder called <project_name>, which contains some settings files
-(the "kitab" folder in the kitab-metadata-api folder 
+(the "kitab" folder in the kitab-metadata-api folder
 is this folder that was automatically created by the django-admin startproject command).
 
-Test if this worked by running the server: 
+Test if this worked by running the server:
 
 ```
 mkdir django_test
@@ -107,14 +109,15 @@ python manage.py runserver
 
 If you go to http://127.0.0.1:8000/ , the test server should be running.
 
-You can now run the following function to create a new app: 
+You can now run the following function to create a new app:
 
 ```
 python manage.py startapp <app_name>
 ```
 
 This will create a folder with the name <app_name>, which contains
-the scaffolding for your app: 
+the scaffolding for your app:
+
 - admin.py
 - apps.py
 - models.py
@@ -124,7 +127,7 @@ the scaffolding for your app:
 
 (in our API, this app folder is called "api" )
 
-Finally, create a superuser to access the database: 
+Finally, create a superuser to access the database:
 
 ```
 python manage.py createsuperuser
@@ -148,7 +151,7 @@ To run the django server locally:
 python3 manage.py runserver
 ```
 
-You will now be able to access the api on http://127.0.0.1:8000/ 
+You will now be able to access the api on http://127.0.0.1:8000/
 
 #### Migrations
 
@@ -159,8 +162,6 @@ python3 manage.py makemigrations
 python3 manage.py migrate
 ```
 
-
-
 To run the django server:
 
 ```
@@ -169,10 +170,10 @@ python3 manage.py runserver
 
 # load data from the metadata csv:
 
-`load_data` is the management command - with the file name load_data.py.  Located in Management\Commands folder
+`load_data` is the management command - with the file name load_data.py. Located in Management\Commands folder
 
 ```
-python3 manage.py load_data 
+python3 manage.py load_data
 ```
 
 # delete the database
@@ -185,7 +186,7 @@ After you have deleted / created a database, you must create a superuser:
 python3 manage.py createsuperuser
 ```
 
-# 
+#
 
 To create a shell in the application, from which you can query the api:
 
@@ -197,9 +198,9 @@ python3 manage.py shell
 
 ## Searching all (string) fields: `?search=`
 
-Use comma or space to separate multiple search terms (they are combined using AND internally). 
+Use comma or space to separate multiple search terms (they are combined using AND internally).
 
-By default, the search is case insensitive (e.g., tarikh will match Tarikh), 
+By default, the search is case insensitive (e.g., tarikh will match Tarikh),
 and partial words are matched (e.g., ريخ will match تاريخ).
 
 The search is sensitive to Arabic vowels, hamzas etc. (e.g., تأريخ will not match تاريخ).
@@ -207,6 +208,7 @@ The search is sensitive to Arabic vowels, hamzas etc. (e.g., تأريخ will not
 Possible solution: add normalized fields, and normalize search terms?
 
 ### Author search, all (string) fields:
+
 http://127.0.0.1:8000/author/all/?search=Jahiz
 http://127.0.0.1:8000/author/all/?search=الحيوان
 
@@ -215,20 +217,18 @@ http://127.0.0.1:8000/author/all/?search=Tabari تاريخ
 http://127.0.0.1:8000/author/all/?search=الجاحظ,الحيوان
 
 NB: if you are doing an author search, all books of that author will be in the result list,
-even if you use the title of one book as a search term. 
+even if you use the title of one book as a search term.
 
-### Version search, all (string) fields: 
+### Version search, all (string) fields:
+
 http://127.0.0.1:8000/version/all/?search=Tabari تاريخ
 http://127.0.0.1:8000/version/all/?search=عمرو بن بحر
 
-### Text search, all (string) fields: 
+### Text search, all (string) fields:
+
 http://127.0.0.1:8000/text/all/?search=Tabari Tarikh
 
 ## Searching a specific field:
-
-
-
-
 
 # TO DO
 
