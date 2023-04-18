@@ -90,7 +90,7 @@ CORS_ALLOWED_ORIGINS = [
 
     "http://localhost:8080",
     "http://127.0.0.1:8080",
-    "https://kitabwebportal.azurewebsites.net"
+    "https://kitabwebportal.azurewebsites.net",
     "https://nice-water-065dc9510.2.azurestaticapps.net"
 
 ]
