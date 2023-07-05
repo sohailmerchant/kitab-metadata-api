@@ -55,7 +55,10 @@ class textMeta(models.Model):
     tags = models.CharField(max_length=255,blank=True)
     author_id = models.ForeignKey(authorMeta, related_name='texts', related_query_name="text", on_delete=models.CASCADE)
     # BUT: one text can have more than one author! So, we should rather have:
-    #author_id = models.ManyToManyField(authorMeta, related_name='texts', related_query_name="text", on_delete=models.CASCADE)
+    #author_id = models.ManyToManyField(authorMeta, 
+    #                                   related_name='texts', 
+    #                                   related_query_name="text", 
+    #                                   on_delete=models.CASCADE)
 
     # Create a relationship between two texts (e.g., text A is a commentary on text B)
     # using a many-to-many field:
@@ -136,7 +139,7 @@ class placeMeta (models.Model):
     thuraya_uri = models.CharField(max_length=100,blank=True)
     name_ar = models.CharField(max_length=100,blank=True)
     name_lat = models.CharField(max_length=100,blank=True)
-    coordinates = models.CharField(max_length=50,blank=True) # store as string for now; use geoDjango later?
+    coordinates_str = models.CharField(max_length=50,blank=True) # store as string for now; use geoDjango later?
     # Define relation between places (A is capital of B, place A is in region B, region A is in region B, ...):
     place_relations = models.ManyToManyField(
         "self",  # see https://docs.djangoproject.com/en/4.0/ref/models/fields/#django.db.models.ManyToManyField.symmetrical
@@ -147,7 +150,7 @@ class placeMeta (models.Model):
     #region = models.ManyToManyField(regionMeta,related_name='places',related_query_name="place")
     
     def __str__(self):
-        return self.person_id + "_" + self.place_id
+        return self.thuraya_uri
 
 class relationType(models.Model):
     name = models.CharField(max_length=50,blank=True)
