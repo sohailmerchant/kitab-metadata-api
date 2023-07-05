@@ -70,7 +70,7 @@ def getAuthor(request, author_uri):
         serializer = AuthorMetaSerializer(author, many=False)
         return Response(serializer.data)
     except textMeta.DoesNotExist:
-            raise Http404
+        raise Http404
 
 
 ## Get some aggregated stats on the corpus like authors no, book no. etc.
