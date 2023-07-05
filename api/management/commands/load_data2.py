@@ -44,7 +44,8 @@ class Command(BaseCommand):
 
 
 
-        book_relations_fn = "OpenITI_Github_clone_book_relations.json"
+        #book_relations_fn = "OpenITI_Github_clone_book_relations.json"
+        book_relations_fn = "OpenITI_Github_clone_book_relations_selection.json"
         fp  = os.path.join(settings.BASE_DIR, book_relations_fn)
         print(fp)
         with open(fp, mode="r", encoding="utf-8") as file:
