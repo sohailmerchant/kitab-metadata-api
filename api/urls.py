@@ -4,8 +4,9 @@ from . import views
 urlpatterns = [
     path('', views.apiOverview, name='api-overview'),
     path('aggregatedstats/', views.getAggregatedStats, name='aggregatedstats'),
+    #path('author/', views.authorListView.as_view(), name='author-list-all'),
     path('author/', views.authorListView.as_view(), name='author-list-all'),
-    path('author/all/', views.authorListView.as_view(), name='author-list-all'),
+    path('author/all/', views.author_view, name='author-list'),
     path('author/<str:author_uri>/', views.getAuthor, name='author'),
     path('text/',views.textListView.as_view(), name='text-list-all'),
     path('text/all/',views.textListView.as_view(), name='text-list-all'),

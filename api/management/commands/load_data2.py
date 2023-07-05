@@ -15,35 +15,66 @@ import urllib.request
 
 class Command(BaseCommand):
     def handle(self, **options):
-        filename = 'OpenITI_Github_clone_metadata_light_selection.csv'
-        #filename = 'https://raw.githubusercontent.com/OpenITI/kitab-metadata-automation/master/output/OpenITI_Github_clone_metadata_light.csv'
-        
+       
         # with urllib.request.urlopen(filename) as url:
         #     data = url.read().decode('utf-8')
         # #filename = '../test.json'
         
-        textMeta.objects.all().delete()
-        authorMeta.objects.all().delete()
-        versionMeta.objects.all().delete()
-        personName.objects.all().delete()
-        relationType.objects.all().delete()
+        #textMeta.objects.all().delete()
+        #authorMeta.objects.all().delete()
+        #versionMeta.objects.all().delete()
+        #personName.objects.all().delete()
+        #relationType.objects.all().delete()
         a2bRelation.objects.all().delete()
 
+        # load relation types:
+        relation_types_fn = "relationTypes.tsv"
+        fp = os.path.join(settings.BASE_DIR, relation_types_fn)
+        print(fp)
+        load_relation_types(fp)
+
+        
+ 
+        filename = 'OpenITI_Github_clone_metadata_light.csv'
         fp  = os.path.join(settings.BASE_DIR, filename)
         print(fp)
         records = read_csv(fp)
-        load_records(records)
-        
-        #read_json(filename)
+        #load_records(records)
+        book_uris = set([d['text_uri'] for d in records])
 
-        book_relations_fn = "OpenITI_Github_clone_book_relations_selection.json"
+
+
+        book_relations_fn = "OpenITI_Github_clone_book_relations.json"
         fp  = os.path.join(settings.BASE_DIR, book_relations_fn)
         print(fp)
+        with open(fp, mode="r", encoding="utf-8") as file:
+            data = json.load(file)
+        book_uri_not_in_corpus = []
+        for book_uri in data:
+            if book_uri not in book_uris:
+                book_uri_not_in_corpus.append(book_uri)
+        if book_uri_not_in_corpus:
+            print("These book uris from the book relations file are not in the corpus:")
+            for b in book_uri_not_in_corpus:
+                print("*", b)
+            input("Fix these before loading the book relations!")
         load_book_relations(fp)
         
-        name_elements_fn = "test_name_elements.json"
+        name_elements_fn = "OpenITI_Github_clone_name_elements.json"
         fp  = os.path.join(settings.BASE_DIR, name_elements_fn)
         load_name_elements(fp)
+
+def load_relation_types(fp):
+    with open(fp, mode="r", encoding="utf-8") as file:
+        d = csv.DictReader(file, delimiter="\t")
+        for row in d:
+            rtype, created = relationType.objects.get_or_create(
+                    name = row["name"],
+                    name_inverted = row["name_inverted"],
+                    descr = row["descr"],
+                    code = row["code"],
+                    entities = row["entities"],
+                )
 
 def load_name_elements(fp):
     languages = {"AR": "ara", "EN": "eng", "FA": "per", "PE": "per", "LA": "lat"}
@@ -54,9 +85,8 @@ def load_name_elements(fp):
             author_uri = author_uri
         )
         print(author_uri, "created:", created)
-        for lang in data[author_uri]:
+        for lang, d in data[author_uri].items():
             lang_code = languages[lang]
-            d = data[author_uri][lang]
             print(d)
             name, created = personName.objects.get_or_create(
                 author_id = author_id,
@@ -68,33 +98,35 @@ def load_name_elements(fp):
                 laqab = d["laqab"],
                 nisba = d["nisba"]
             )
-
-
+            if lang_code not in ["eng", "lat"]:
+                norm, created = personName.objects.get_or_create(
+                    author_id = author_id,
+                    language = "arn",       # normalized Arabic script
+                    shuhra = d["shuhra"],   
+                    nasab = d["nasab"],
+                    kunya = d["kunya"],
+                    ism = d["ism"],
+                    laqab = d["laqab"],
+                    nisba = d["nisba"]
+                )
 
 
 def load_book_relations(fp):
+    created_objects = []
     with open(fp, mode="r", encoding="utf-8") as file:
         data = json.load(file)
     for book_uri in data:
         print(book_uri)
         print(data[book_uri])
         for rel_d in data[book_uri]:
+            code = ".".join([rel_d["main_rel_type"], rel_d["sec_rel_type"].lower()])
             # create the main relation type in the relationType table if it does not exist yet:
-            print("main_rel_type:", rel_d["main_rel_type"])
-            mrt,mrt_created = relationType.objects.get_or_create(
-                name = rel_d["main_rel_type"]
+            print("code:", code)
+            rt,rt_created = relationType.objects.get_or_create(
+                code = code
             )
-            print("created?", mrt_created)
-            # create the main relation type in the relationType table if it does not exist yet:
-            print("sec_rel_type:", rel_d["sec_rel_type"])
-            if "sec_rel_type" in rel_d and rel_d["sec_rel_type"]:
-                rt, srt_created = relationType.objects.get_or_create(
-                    name = rel_d["sec_rel_type"], 
-                )
-                rt.parent_type.add(mrt)
-            else:
-                rt = mrt  # if no secondary relation type is given, use the main relation type in the record
-            
+            if rt_created:
+                created_objects.append(code)
             a = rel_d["source"]
             if len(a.split(".")) > 1:
                 a_type = "book"
@@ -108,12 +140,28 @@ def load_book_relations(fp):
                 b_type = "person"
             print("b=dest:", b, b_type)
             if a_type == "book" and b_type == "book":
+                a_author, author_created = authorMeta.objects.get_or_create(
+                    author_uri = a.split(".")[0]
+                )
+                if author_created:
+                    created_objects.append(a.split(".")[0])
                 a_obj, a_created = textMeta.objects.get_or_create(
-                    text_uri = a 
+                    text_uri = a,
+                    author_id = a_author
                 )
+                if a_created:
+                    created_objects.append(a)
+                b_author, author_created = authorMeta.objects.get_or_create(
+                    author_uri = b.split(".")[0]
+                )
+                if author_created:
+                    created_objects.append(b.split(".")[0])
                 b_obj, b_created = textMeta.objects.get_or_create(
-                    text_uri = b 
+                    text_uri = b,
+                    author_id = b_author
                 )
+                if b_created:
+                    created_objects.append(b)
                 a2bRelation.objects.get_or_create(
                     text_a_id = a_obj,
                     text_b_id = b_obj,
@@ -123,8 +171,16 @@ def load_book_relations(fp):
                 a_obj, a_created = authorMeta.objects.get_or_create(
                     author_uri = a 
                 )
+                if a_created:
+                    created_objects.append(a)
+                b_author, author_created = authorMeta.objects.get_or_create(
+                    author_uri = b.split(".")[0]
+                )
+                if author_created:
+                    created_objects.append(b.split(".")[0])
                 b_obj, b_created = textMeta.objects.get_or_create(
-                    text_uri = b 
+                    text_uri = b,
+                    author_id = b_author
                 )
                 a2bRelation.objects.get_or_create(
                     person_a_id = a_obj,
@@ -132,38 +188,31 @@ def load_book_relations(fp):
                     relation_type = rt
                 )
             elif a_type == "book" and b_type == "person":
-                a_obj, a_created = authorMeta.objects.get_or_create(
-                    text_uri = a 
+                a_author, author_created = authorMeta.objects.get_or_create(
+                    author_uri = a.split(".")[0]
                 )
+                if author_created:
+                    created_objects.append(a.split(".")[0])
+                a_obj, a_created = textMeta.objects.get_or_create(
+                    text_uri = a,
+                    author_id = a_author
+                )
+                if a_created:
+                    created_objects.append(a)
                 b_obj, b_created = authorMeta.objects.get_or_create(
                     author_uri = b 
                 )
+                if b_created:
+                    created_objects.append(b)
                 a2bRelation.objects.get_or_create(
                     text_a_id = a_obj,
                     person_b_id = b_obj,
                     relation_type = rt
                 )
+    print("OBJECTS CREATED:")
+    for o in created_objects:
+        print("-", o)
 
-
-def read_json(filename):
-    record= {}
-    with open(filename,'r') as f:
-        for line in f:
-            
-            data = json.loads(line)
-            #print(data)
-            record['book_id'] = data['id']
-            record['book_uri'] = data['book']
-            record['char_length'] = data['char_length']
-            record['tok_length'] = data['tok_length']
-            record['date'] = data['date']
-            record['title_ar'] = data['title_ar']
-            record['title_lat'] = data['title_lat']
-            record['version_uri'] = data['versionUri']
-            record['url'] = data['url']
-            record['status'] = data['status'],
-            record['author_lat'] = data['author_lat']
-            bulk_load(record)
 
 def check_null(value):
     if value == '':
@@ -257,7 +306,9 @@ def load_records(records):
             
                 author_uri = record['version_uri'].split(".")[0],
                 author_ar = record['author_ar'],
+                author_ar_norm = normalize_str(record['author_ar']),
                 author_lat = record['author_lat'],
+                author_lat_norm = normalize_str(record['author_lat']),
                 date = record['date'],
                 authorDateAH = get_authorDateAH(record['date'], record['type']),
                 authorDateCE = get_authorDateCE(record['date'], record['type']),
@@ -272,7 +323,9 @@ def load_records(records):
                 author_id = am,
                 text_uri = record['text_uri'],
                 title_ar = record['title_ar'],
+                title_ar_norm = normalize_str(record['title_ar']),
                 title_lat = record['title_lat'],
+                title_lat_norm = normalize_str(record['title_lat']),
                 text_type = record["type"],
                 tags =  record["tags"]
                 )
@@ -290,50 +343,7 @@ def load_records(records):
             tags = record['tags'],
             annotation_status = record['annotation_status'],
             status = record['status'],
-            #language = record['version_lang']
             version_lang = record['version_lang']
             )
-        # name elements are not separately in the metadata file as it is now;
-        # loading bogus data for now!
-        if am_created:
-            for lan in ("ar", "lat"):
-                name_elements = re.split(" *:: *", record['author_'+lan])
-                while len(name_elements) < 5:
-                    name_elements.append("")
-                random.shuffle(name_elements)
 
-                personName.objects.get_or_create(
-                    author_id = am,
-                    language = lan,
-                    shuhra = name_elements[0],
-                    kunya = name_elements[1],
-                    ism = name_elements[2],
-                    laqab = name_elements[3],
-                    nisba = name_elements[4],
-                    )
-
-            
-
-def bulk_load(record):
-    #print(record['url'])
-    instance = [
-        #Book(
-        textMeta(
-            book_id = record['book_id'],
-            book_uri = record['book_uri'],
-            char_length = record['char_length'],
-            tok_length = record['tok_length'],
-            date = record['date'],
-            title_ar = record['title_ar'],
-            title_lat = record['title_lat'],
-            version_uri = record['version_uri'],
-            url = record['url'],
-            status = record['status'],
-            author_lat = record['author_lat'],
-            author_ar = record['author_ar'],
-            annotation_status = record['annotation_status']
-        )
-    ]
-    print(instance)
-    #Book.objects.bulk_create(instance)
 

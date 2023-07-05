@@ -3,7 +3,9 @@ from django.db import models
 class authorMeta(models.Model):
     author_uri = models.CharField(max_length=50, unique=True, null=False)
     author_ar = models.CharField(max_length=255,blank=True)
+    author_ar_norm = models.CharField(max_length=255,blank=True)   # normalized version of Arabic-script names
     author_lat = models.CharField(max_length=255,blank=True)
+    author_lat_norm = models.CharField(max_length=255,blank=True)  # normalized version of Latin-script names
     date = models.IntegerField(null=True,blank=True)
     authorDateAH = models.IntegerField(null=True,blank=True)
     authorDateCE =models.IntegerField(null=True,blank=True)
@@ -46,8 +48,10 @@ class authorMeta(models.Model):
 class textMeta(models.Model):
     text_uri = models.CharField(max_length=100, unique=True, null=False)
     title_ar = models.CharField(max_length=255,blank=True)
+    title_ar_norm = models.CharField(max_length=255,blank=True)  # normalized title
     title_lat = models.CharField(max_length=255,blank=True)
-    text_type = models.CharField(max_length=10,blank=True)  # document, inscription, ...
+    title_lat_norm = models.CharField(max_length=255,blank=True) # normalized title
+    text_type = models.CharField(max_length=10,blank=True)       # document, inscription, ...
     tags = models.CharField(max_length=255,blank=True)
     author_id = models.ForeignKey(authorMeta, related_name='texts', related_query_name="text", on_delete=models.CASCADE)
     # BUT: one text can have more than one author! So, we should rather have:
@@ -149,8 +153,9 @@ class relationType(models.Model):
     name = models.CharField(max_length=50,blank=True)
     name_inverted = models.CharField(max_length=50,blank=True)
     descr = models.CharField(max_length=255,blank=True)
+    code = models.CharField(max_length=15,blank=True)
     # the following makes hierarchical structure of relation types possible:
-    parent_type = models.ManyToManyField("self", symmetrical=False, related_name="sub_types", related_query_name="sub_type",)
+    #parent_type = models.ManyToManyField("self", symmetrical=False, related_name="sub_types", related_query_name="sub_type",)
     entities = models.CharField(max_length=50,blank=True) # person_person, place_place, person_place, ...
 
     def __str__(self):

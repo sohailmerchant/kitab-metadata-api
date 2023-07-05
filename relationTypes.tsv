@@ -1,0 +1,21 @@
+name	name_inverted	descr	code	entities
+is a commentary (sharḥ) on	has commentary (sharḥ)	text A is a commentary (sharḥ) on text B	COMM.sharh	sharh	book_book
+is a commentary (hashiya) on	has commentary (ḥāshiya)	text A is a commentary (ḥāshiya) on text B	COMM.hashiya	book_book
+is a commentary (radd) on	has commentary (radd)	text A is a commentary (radd) on text B	COMM.radd	book_book
+is a commentary (tahḏīb) on	has commentary (tahḏīb)	text A is a commentary (tahḏīb) on text B	COMM.tahdhib	book_book
+is a commentary (taʿlīqa) on	has commentary (taʿlīqa)	text A is a commentary (taʿlīqa) on text B	COMM.tacliqa	book_book
+is an abreviation (tahdhīb) of	has abreviation (tahdhīb)	text A is an abreviation (tahdhīb) of text B	ABR.tahdhib	book_book
+is an abreviation (mukhtaṣar) of	has abreviation (mukhtaṣar)	text A is an abreviation (mukhtaṣar) of text B	ABR.mukhtasar	book_book
+is an abreviation (muntaqā) of	has abreviation (muntaqā)	text A is an abreviation (muntaqā) of text B	ABR.muntaqa	book_book
+is an abreviation (khulāṣa) of	has abreviation (khulāṣa)	text A is an abreviation (khulāṣa) of text B	ABR.khulasa	book_book
+is an abreviation (talkhīṣ) of	has abreviation (talkhīṣ)	text A is an abreviation (talkhīṣ) of text B	ABR.talkhis	book_book
+is an abreviation (naẓm) of	has abreviation (naẓm)	text A is an abreviation (naẓm) of text B	ABR.nazm	book_book
+is an abreviation (taqrīb) of	has abreviation (taqrīb)	text A is an abreviation (taqrīb) of text B	ABR.taqrib	book_book
+is a rearrangement (tartīb) of	has rearrangement (tartīb)	text A is a rearrangement (tartīb) of text B	REARR.tartib	book_book
+is a transmission (riwāya) of	has transmission (riwāya)	text A is a transmission (riwāya) of text B	TRANSM.riwaya	book_book
+is an extract of	has extract	text A is an extract of text B	EXTRACT	book_book
+is a continuation (dhayl) of	has continuation (dhayl)	text A is a continuation (dhayl) of text B	CONT.dhayl	book_book
+is a continuation (tadhyīl) of	has continuation (tadhyīl)	text A is a continuation (tadhyīl) of text B	CONT.tadhyil	book_book
+is a continuation (tamām) of	has continuation (tamām)	text A is a continuation (tamām) of text B	CONT.tamam	book_book
+is a compilation (muntaqā) of	has compilation (muntaqā)	text A is a compilation (muntaqā) of text B	COMP.muntaqa	book_book
+is a compilation (muntakhab) of	has compilation (muntakhab)	text A is a compilation (muntakhab) of text B	COMP.muntakhab	book_book

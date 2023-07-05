@@ -1,7 +1,7 @@
 {
-  "0150AbuHanifa.Wasiya": [
+  "0150AbuHanifa.Wasiyya": [
     {
-      "dest": "0150AbuHanifa.Wasiya",
+      "dest": "0150AbuHanifa.Wasiyya",
       "main_rel_type": "COMM",
       "sec_rel_type": "sharh",
       "source": "0786IbnMuhammadBabarti.SharhWasiyyatAbiHanifa"
@@ -51,24 +51,24 @@
       "source": "0911Suyuti.TanwirHawalik"
     }
   ],
-  "0180Sibawayh.KitabSibawayh": [
+  "0180Sibawayhi.KitabSibawayhi": [
     {
-      "dest": "0180Sibawayh.KitabSibawayh",
+      "dest": "0180Sibawayhi.KitabSibawayhi",
       "main_rel_type": "COMM",
       "sec_rel_type": "sharh",
-      "source": "0368Sirafi.SharhKitabSibawayh"
+      "source": "0368Sirafi.SharhKitabSibawayhi"
     },
     {
-      "dest": "0180Sibawayh.KitabSibawayh",
+      "dest": "0180Sibawayhi.KitabSibawayhi",
       "main_rel_type": "COMM",
       "sec_rel_type": "sharh",
-      "source": "0384AbuHasanRummani.SharhKitabSibawayh"
+      "source": "0384AbuHasanRummani.SharhKitabSibawayhi"
     },
     {
-      "dest": "0180Sibawayh.KitabSibawayh",
+      "dest": "0180Sibawayhi.KitabSibawayhi",
       "main_rel_type": "COMM",
       "sec_rel_type": "sharh",
-      "source": "0385IbnHasanSirafi.SharhAbyatSibawayh"
+      "source": "0385IbnHasanSirafi.SharhAbyatSibawayhi"
     }
   ],
   "0204Shafici.Musnad": [
@@ -561,15 +561,15 @@
       "source": "0367IbnHawqal.SuratArd"
     }
   ],
-  "0368Sirafi.SharhKitabSibawayh": [
+  "0368Sirafi.SharhKitabSibawayhi": [
     {
-      "dest": "0180Sibawayh.KitabSibawayh",
+      "dest": "0180Sibawayhi.KitabSibawayhi",
       "main_rel_type": "COMM",
       "sec_rel_type": "sharh",
-      "source": "0368Sirafi.SharhKitabSibawayh"
+      "source": "0368Sirafi.SharhKitabSibawayhi"
     },
     {
-      "dest": "0368Sirafi.SharhKitabSibawayh",
+      "dest": "0368Sirafi.SharhKitabSibawayhi",
       "main_rel_type": "COMM",
       "sec_rel_type": "radd",
       "source": "0430AswadGhundijani.FarhatAdib"
@@ -615,12 +615,12 @@
       "source": "1107QadiSacidQummi.SharhTawhidSaduq"
     }
   ],
-  "0384AbuHasanRummani.SharhKitabSibawayh": [
+  "0384AbuHasanRummani.SharhKitabSibawayhi": [
     {
-      "dest": "0180Sibawayh.KitabSibawayh",
+      "dest": "0180Sibawayhi.KitabSibawayhi",
       "main_rel_type": "COMM",
       "sec_rel_type": "sharh",
-      "source": "0384AbuHasanRummani.SharhKitabSibawayh"
+      "source": "0384AbuHasanRummani.SharhKitabSibawayhi"
     }
   ],
   "0385Daraqutni.FawaidMuntaqatDhuhli": [
@@ -631,12 +631,12 @@
       "source": "0627ZaynUmanaIbnCasakir.FawaidMuntaqatDhuhli"
     }
   ],
-  "0385IbnHasanSirafi.SharhAbyatSibawayh": [
+  "0385IbnHasanSirafi.SharhAbyatSibawayhi": [
     {
-      "dest": "0180Sibawayh.KitabSibawayh",
+      "dest": "0180Sibawayhi.KitabSibawayhi",
       "main_rel_type": "COMM",
       "sec_rel_type": "sharh",
-      "source": "0385IbnHasanSirafi.SharhAbyatSibawayh"
+      "source": "0385IbnHasanSirafi.SharhAbyatSibawayhi"
     }
   ],
   "0386IbnAbiZaydQayrawani.Risala": [
@@ -863,7 +863,7 @@
   ],
   "0430AswadGhundijani.FarhatAdib": [
     {
-      "dest": "0368Sirafi.SharhKitabSibawayh",
+      "dest": "0368Sirafi.SharhKitabSibawayhi",
       "main_rel_type": "COMM",
       "sec_rel_type": "radd",
       "source": "0430AswadGhundijani.FarhatAdib"
@@ -2471,7 +2471,7 @@
     {
       "dest": "0742Mizzi.TahdhibKamal",
       "main_rel_type": "COMM",
-      "sec_rel_type": "Tahdhib",
+      "sec_rel_type": "tahdhib",
       "source": "0762MughultayIbnQilij.IkmalTahdhib"
     },
     {
@@ -2731,7 +2731,7 @@
     {
       "dest": "0742Mizzi.TahdhibKamal",
       "main_rel_type": "COMM",
-      "sec_rel_type": "Tahdhib",
+      "sec_rel_type": "tahdhib",
       "source": "0762MughultayIbnQilij.IkmalTahdhib"
     }
   ],
@@ -2913,7 +2913,7 @@
   ],
   "0786IbnMuhammadBabarti.SharhWasiyyatAbiHanifa": [
     {
-      "dest": "0150AbuHanifa.Wasiya",
+      "dest": "0150AbuHanifa.Wasiyya",
       "main_rel_type": "COMM",
       "sec_rel_type": "sharh",
       "source": "0786IbnMuhammadBabarti.SharhWasiyyatAbiHanifa"

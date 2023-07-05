@@ -30,7 +30,6 @@ def apiOverview(request):
         'List all text versions:': 'version/all/',
         'Search text versions:': 'text/all/?search= e.g., `text/all/?search=الجاحظ Hayawan Shamela`',
     }
-
     return Response(api_urls)
 
 ## Not in use but useful if we want everything in one go
@@ -137,30 +136,28 @@ excl_flds = [
     'authormeta', 'textmeta', 'related_person_a', 'related_person_b',
     "related_text_a", "related_text_b"]
 
+
 class authorListView(generics.ListAPIView):
     """
     Return a paginated list of author metadata objects
     (each containing metadata on an author, his texts and versions of his texts)
     """
+    print("authorListView".upper())
     queryset = authorMeta.objects.all()
     serializer_class = AuthorMetaSerializer 
     pagination_class = CustomPagination
 
     # customize the search: 
-    
-
     search_fields = [field.name for field in authorMeta._meta.get_fields() if (field.name not in excl_flds)] \
         + ["text__"+ field.name for field in textMeta._meta.get_fields() if (field.name not in excl_flds)] \
         + ["text__version__"+ field.name for field in versionMeta._meta.get_fields() if (field.name not in excl_flds)] \
         + ["personName__"+ field.name for field in personName._meta.get_fields() if (field.name not in excl_flds)]
+    
     print("AUTHOR SEARCH FIELDS:")
     print(search_fields)
     # NB: excl_flds needs to be declared outside of the class for the list comprehension to work, 
     # otherwise you get a NameError; see https://stackoverflow.com/a/13913933
-    # print()
-    # print("Search fields:")
-    # print(search_fields)
-    # print()
+    
     search_fields = (search_fields)
 
     # Customize filtering:
@@ -186,6 +183,26 @@ class authorListView(generics.ListAPIView):
     #ordering_fields = ['title_lat', 'title_ar']
     #ordering_fields = (ordering_fields)
 
+class authorListViewExact(authorListView):
+    print("authorListViewExact".upper())
+    search_fields = [field.name for field in authorMeta._meta.get_fields() if (field.name not in excl_flds)] \
+        + ["text__"+ field.name for field in textMeta._meta.get_fields() if (field.name not in excl_flds)] \
+        + ["text__version__"+ field.name for field in versionMeta._meta.get_fields() if (field.name not in excl_flds)] \
+        + ["personName__"+ field.name for field in personName._meta.get_fields() if (field.name not in excl_flds)]
+    search_fields = [f for f in search_fields if not "_norm" in f]
+    print(search_fields)
+
+
+
+def author_view(request):
+    
+    params = request.GET
+    print(params)
+    if "exact" in params and "True" in params["exact"]:
+        print("EXACT!")
+        return authorListViewExact.as_view()
+    else:
+        return authorListView.as_view()
 
 
 class versionListView(generics.ListAPIView):
