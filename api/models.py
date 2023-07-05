@@ -199,11 +199,11 @@ class a2bRelation (models.Model):
     relation_type = models.ForeignKey(relationType,on_delete=models.DO_NOTHING,null=True,blank=True)
     #subRelationType = models.ForeignKey(subRelationType,on_delete=models.DO_NOTHING,null=True,blank=True)
 
-    # additional information about the relationship (data types need to change!):
-    start_date = models.CharField(max_length=100,blank=True)
-    end_date = models.CharField(max_length=100,blank=True)
-    authority = models.CharField(max_length=100,blank=True)
-    confidence = models.CharField(max_length=100,blank=True)
+    # additional information about the relationship (data types may need to change!):
+    start_date = models.IntegerField(null=True,blank=True)
+    end_date = models.IntegerField(null=True,blank=True)
+    authority = models.IntegerField(null=True,blank=True)
+    confidence = models.IntegerField(null=True,blank=True)
     
 # class text2textRelation (models.Model):
 #     #text1_id = models.ForeignKey(textMeta,related_name='text1_relations',related_query_name="text1_relation",on_delete=models.DO_NOTHING)
