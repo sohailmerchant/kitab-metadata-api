@@ -3,7 +3,7 @@ from . import views
 
 urlpatterns = [
     path('', views.apiOverview, name='api-overview'),
-    path('aggregatedstats/', views.getAggregatedStats, name='aggregatedstats'),
+    path('corpusinsights/', views.getCorpusInsights, name='corpusinsights'),
     path('author/', views.authorListView.as_view(), name='author-list-all'),
     path('author/all/', views.authorListView.as_view(), name='author-list-all'),
     path('author/<str:author_uri>/', views.getAuthor, name='author'),
@@ -13,8 +13,8 @@ urlpatterns = [
     path('version/',views.versionListView.as_view(), name='version-list-all'),
     path('version/all/',views.versionListView.as_view(), name='version-list-all'),
     path('version/<str:version_id>/', views.getVersion, name='version'),
-    path('relations/all/', views.relationsListView.as_view(), name='rel')
-
+    path('relations/all/', views.relationsListView.as_view(), name='rel'),
+    path('text-reuse-stats/', views.getTextReuseStats.as_view(), name='rel')
     #path('book-list/', views.bookList, name='book-list'),
     #path('book-detail/<str:pk>/', views.bookDetail, name='book-detail'),
     #path('book-create/', views.bookCreate, name='book-create')

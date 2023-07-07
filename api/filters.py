@@ -1,7 +1,7 @@
 from django_filters import rest_framework as django_filters
 from rest_framework import filters
 
-from .models import authorMeta, personName, textMeta, versionMeta, AggregatedStats
+from .models import authorMeta, personName, textMeta, versionMeta, CorpusInsights
 
 class NumberInFilter(django_filters.BaseInFilter, django_filters.NumberFilter):
     """
@@ -95,8 +95,8 @@ class versionFilter(django_filters.FilterSet):
     status = CharInFilter(field_name="status", lookup_expr='in')
     annotation_status = CharInFilter(field_name="annotation_status", lookup_expr='in')
 
-    text_title_ar = django_filters.CharFilter(field_name="text_id__title_ar", lookup_expr='icontains')
-    text_title_lat = django_filters.CharFilter(field_name="text_id__title_lat", lookup_expr='icontains')
+    title_ar = django_filters.CharFilter(field_name="text_id__title_ar", lookup_expr='icontains')
+    title_lat = django_filters.CharFilter(field_name="text_id__title_lat", lookup_expr='icontains')
 
     author_ar = django_filters.CharFilter(field_name="text_id__author_id__author_ar", lookup_expr='icontains')
     author_lat = django_filters.CharFilter(field_name="text_id__author_id__author_lat", lookup_expr='icontains')
@@ -133,8 +133,8 @@ class textFilter(django_filters.FilterSet):
     """
     #author_ar_contains = django_filters.CharFilter(field_name="author_ar", lookup_expr='icontains')
     #author_lat_contains = django_filters.CharFilter(field_name="author_lat", lookup_expr='icontains')
-    title_ar = django_filters.CharFilter(field_name="title_ar", lookup_expr='icontains')
-    title_lat = django_filters.CharFilter(field_name="title_lat", lookup_expr='icontains')
+    title_ar = django_filters.CharFilter(field_name="text_id__title_ar", lookup_expr='icontains')
+    title_lat = django_filters.CharFilter(field_name="text_id__title_lat", lookup_expr='icontains')
     text_type = django_filters.CharFilter(field_name="text_type", lookup_expr='icontains')
     tag = django_filters.CharFilter(field_name="tags", lookup_expr='icontains')
 
@@ -159,3 +159,26 @@ class textFilter(django_filters.FilterSet):
         # additional fields with the default lookup ("exact"):
         #fields = ["author_uri", "author_lat", "author_ar", "authorDateAH"]
         fields = ["text_uri", "id"]
+
+class textReuseFilter(django_filters.FilterSet):
+    book_1 = django_filters.CharFilter(field_name="book_1", lookup_expr='icontains')
+    book_1 = django_filters.CharFilter(field_name="book_2", lookup_expr='icontains')
+    instances_count_gt = django_filters.NumberFilter(field_name="instances_count", lookup_expr="gt")
+    instances_count_lt = django_filters.NumberFilter(field_name="instances_count", lookup_expr="lt")
+    instances_count_range = django_filters.NumberFilter(field_name="instances_count", lookup_expr="range")
+
+    book1_word_match_gt = django_filters.NumberFilter(field_name="book1_word_match", lookup_expr="gt")
+    book1_word_match_lt = django_filters.NumberFilter(field_name="book1_word_match", lookup_expr="lt")
+    book1_word_match_range = django_filters.NumberFilter(field_name="book1_word_match", lookup_expr="range")
+
+    book2_word_match_gt = django_filters.NumberFilter(field_name="book2_word_match", lookup_expr="gt")
+    book2_word_match_lt = django_filters.NumberFilter(field_name="book2_word_match", lookup_expr="lt")
+    book2_word_match_range = django_filters.NumberFilter(field_name="book2_word_match", lookup_expr="range")
+
+    book1_match_book2_per_per_gt = django_filters.NumberFilter(field_name="book1_match_book2_per", lookup_expr="gt")
+    book1_match_book2_per_per_lt = django_filters.NumberFilter(field_name="book1_match_book2_per", lookup_expr="lt")
+    book1_match_book2_per_per_range = django_filters.NumberFilter(field_name="book1_match_book2_per", lookup_expr="range")
+
+    book2_match_book1_per_gt = django_filters.NumberFilter(field_name="book2_match_book1_per", lookup_expr="gt")
+    book2_match_book1_per_lt = django_filters.NumberFilter(field_name="book2_match_book1_per", lookup_expr="lt")
+    book2_match_book1_per_range = django_filters.NumberFilter(field_name="book2_match_book1_per", lookup_expr="range")

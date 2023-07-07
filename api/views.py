@@ -10,9 +10,9 @@ from django_filters import rest_framework as django_filters
 from rest_framework import filters
 
 
-from .models import authorMeta, personName, textMeta, versionMeta, AggregatedStats,a2bRelation
-from .serializers import TextSerializer,VersionMetaSerializer,personNameSerializer,AuthorMetaSerializer, AggregatedStatsSerializer,AllRelationSerializer
-from .filters import authorFilter, versionFilter, textFilter
+from .models import authorMeta, personName, textMeta, versionMeta, CorpusInsights,TextReuseStats, a2bRelation
+from .serializers import TextSerializer,VersionMetaSerializer,personNameSerializer,AuthorMetaSerializer, TextReuseStatsSerializer, CorpusInsightsSerializer,AllRelationSerializer
+from .filters import authorFilter, versionFilter, textFilter,textReuseFilter
 
 @api_view(['GET'])
 def apiOverview(request):
@@ -76,10 +76,10 @@ def getAuthor(request, author_uri):
 
 ## Get some aggregated stats on the corpus like authors no, book no. etc.
 @api_view(['GET'])
-def getAggregatedStats(request):
-    aggregatedstats = AggregatedStats.objects.all()
+def getCorpusInsights(request):
+    corpus_insight_stats = CorpusInsights.objects.all()
     
-    serializer = AggregatedStatsSerializer(aggregatedstats, many=True)
+    serializer = CorpusInsightsSerializer(corpus_insight_stats, many=True)
     # if serializer.is_valid():
     #     serializer.save()
     # else:
@@ -87,6 +87,8 @@ def getAggregatedStats(request):
     #     print(save_message)
         
     return Response(serializer.data)
+
+
 
 ## Remove this before going live as we shouldn't allow any POST method      
 @api_view(['POST'])
@@ -194,10 +196,12 @@ class versionListView(generics.ListAPIView):
     #["version__"+ field.name for field in textMeta._meta.get_fields() if(field.name not in ["version","id", 'authorMeta'])]\
     #+ ["text__version__"+ field.name for field in versionMeta._meta.get_fields() if(field.name not in ["id", 'textMeta','tok_length','char_length'])]\
     #+ ["author_names__"+ field.name for field in personName._meta.get_fields() if(field.name not in ["id", 'authorMeta'])]
+    print("FEILD", versionMeta._meta.get_fields())
     search_fields = [field.name for field in versionMeta._meta.get_fields() if (field.name not in excl_flds)] \
         + ["text_id__"+ field.name for field in textMeta._meta.get_fields() if (field.name not in excl_flds)] \
         + ["text_id__author_id__"+ field.name for field in authorMeta._meta.get_fields() if (field.name not in excl_flds)] \
         + ["text_id__author_id__personName__"+ field.name for field in personName._meta.get_fields() if (field.name not in excl_flds)]
+
     print("VERSION SEARCH FIELDS:")
     print(search_fields)
 
@@ -208,7 +212,7 @@ class versionListView(generics.ListAPIView):
     filterset_class = versionFilter
 
 
-    ordering_fields = ['title_lat', 'title_ar', "text_id__author_id__date"]
+    ordering_fields = ['text_id__title_lat', 'text_id__title_ar', "text_id__author_id__date", 'tok_length']
     ordering_fields = (ordering_fields)
 
 class textListView(generics.ListAPIView):
@@ -237,4 +241,22 @@ class relationsListView(generics.ListAPIView):
     #for q in queryset:
     #    print(q.text_a_id)
     serializer_class = AllRelationSerializer 
+
+## Text Reuse Stats
+
+class getTextReuseStats(generics.ListAPIView):
+    
+    queryset = TextReuseStats.objects.all()
+    serializer_class = TextReuseStatsSerializer 
+    #serializer = TextReuseStatsSerializer(queryset, many=True)
+    pagination_class = CustomPagination
+    
+
+    filter_backends = (django_filters.DjangoFilterBackend,filters.SearchFilter,filters.OrderingFilter)    
+    filterset_class = textReuseFilter
+
+
+    ordering_fields = ['instances_count','book1_word_match','book2_word_match']
+    ordering_fields = (ordering_fields)
+    
 
