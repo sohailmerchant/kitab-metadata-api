@@ -3,7 +3,7 @@ import json
 import csv
 from webbrowser import get
 from django.db import models
-from api.models import authorMeta, textMeta, versionMeta, personName, AggregatedStats
+from api.models import authorMeta, textMeta, versionMeta, personName, CorpusInsights
 from django.core.management.base import BaseCommand
 import re
 import random

@@ -260,12 +260,25 @@ class a2bRelation (models.Model):
 #         return self.person_id + "_" + self.place_id
 
 
-class AggregatedStats(models.Model):
+class TextReuseStats(models.Model):
     id = models.AutoField(primary_key=True)
-    number_of_authors = models.IntegerField(null=True)
+    book_1 = models.CharField(max_length=50, null=False)
+    book_2 = models.CharField(max_length=50, null=False)
+    instances_count = models.IntegerField(null=True, blank=True)
+    book1_word_match = models.IntegerField(null=True, blank=True)
+    book2_word_match = models.IntegerField(null=True, blank=True)
+    book1_match_book2_per = models.DecimalField(
+        null=True, blank=True, max_digits=5, decimal_places=2)
+    book2_match_book1_per = models.DecimalField(
+        null=True, blank=True, max_digits=5, decimal_places=2)
+
+
+class CorpusInsights(models.Model):
+    id = models.AutoField(primary_key=True)
     number_of_unique_authors = models.IntegerField(null=True, blank=True)
     number_of_books = models.IntegerField(null=True, blank=True)
-    number_of_unique_books = models.IntegerField(null=True, blank=True)
-    date = models.DateField(null=True, blank=True)
+    number_of_versions = models.IntegerField(null=True, blank=True)
     total_word_count = models.IntegerField(null=True, blank=True)
     largest_book = models.IntegerField(null=True, blank=True)
+    total_word_count_pri = models.IntegerField(null=True, blank=True)
+    top_10_book_by_word_count = models.JSONField(null=True, blank=True)
