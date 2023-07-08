@@ -10,16 +10,17 @@ from django_filters import rest_framework as django_filters
 from rest_framework import filters
 
 
-from .models import authorMeta, personName, textMeta, versionMeta, CorpusInsights,TextReuseStats, a2bRelation
-from .serializers import TextSerializer,VersionMetaSerializer,personNameSerializer,AuthorMetaSerializer, TextReuseStatsSerializer, CorpusInsightsSerializer,AllRelationSerializer
-from .filters import authorFilter, versionFilter, textFilter,textReuseFilter
+from .models import authorMeta, personName, textMeta, versionMeta, CorpusInsights, TextReuseStats, a2bRelation, ReleaseMeta, SourceCollectionDetails, ReleaseDetails
+from .serializers import TextSerializer, VersionMetaSerializer, personNameSerializer, ReleaseMetaSerializer, AuthorMetaSerializer, TextReuseStatsSerializer, CorpusInsightsSerializer, AllRelationSerializer,  SourceCollectionDetailsSerializer, ReleaseDetailsSerializer
+from .filters import authorFilter, versionFilter, textFilter, textReuseFilter, releaseFilter
+
 
 @api_view(['GET'])
 def apiOverview(request):
     api_urls = {
-        #'List All Books (without filters, will be removed in the future)': '/book-list',
-        #'List All Books (with pagination and filters)': '/book/all',
-        #'Book View': '/book/<book_uri:pk>/ e.g.book/JK00001'
+        # 'List All Books (without filters, will be removed in the future)': '/book-list',
+        # 'List All Books (with pagination and filters)': '/book/all',
+        # 'Book View': '/book/<book_uri:pk>/ e.g.book/JK00001'
         'List all authors:': 'author/all/',
         'Search authors:': 'author/?search= e.g., `author/all/?search=الجاحظ 255`',
         'Filter authors based on a specific field:': 'author/?author_lat= e.g., `author/?author_lat=Jahiz`',
@@ -29,68 +30,69 @@ def apiOverview(request):
         'Search texts:': 'text/all/?search= e.g., `text/all/?search=الجاحظ Hayawan`',
         'List all text versions:': 'version/all/',
         'Search text versions:': 'text/all/?search= e.g., `text/all/?search=الجاحظ Hayawan Shamela`',
+        'corpusinsights/':  'gives some overall insights about the corpus',
+        'text-reuse-stats/': 'Text resuse stats'
     }
 
     return Response(api_urls)
 
-## Not in use but useful if we want everything in one go
+# Not in use but useful if we want everything in one go
 @api_view(['GET'])
 def bookList(request):
     books = versionMeta.objects.all()
     serializer = VersionMetaSerializer(books, many=True)
     return Response(serializer.data)
 
-## Get a text by its text_uri
+# Get a text by its text_uri
 @api_view(['GET'])
 def getText(request, text_uri):
-    
+
     try:
-        text = textMeta.objects.get(text_uri = text_uri)
+        text = textMeta.objects.get(text_uri=text_uri)
         serializer = TextSerializer(text, many=False)
         return Response(serializer.data)
     except textMeta.DoesNotExist:
-            raise Http404
+        raise Http404
 
-## Get a text version by its version_id
+# Get a text version by its version_id
 @api_view(['GET'])
 def getVersion(request, version_id):
-    
+
     try:
-        version = versionMeta.objects.get(version_id = version_id )
+        version = versionMeta.objects.get(version_id=version_id)
         serializer = VersionMetaSerializer(version, many=False)
         return Response(serializer.data)
     except textMeta.DoesNotExist:
-            raise Http404
+        raise Http404
 
-## Get an author record by its author_uri
+# Get an author record by its author_uri
 @api_view(['GET'])
 def getAuthor(request, author_uri):
-    
+
     try:
-        author = authorMeta.objects.get(author_uri = author_uri )
+        author = authorMeta.objects.get(author_uri=author_uri)
         serializer = AuthorMetaSerializer(author, many=False)
         return Response(serializer.data)
     except textMeta.DoesNotExist:
-            raise Http404
+        raise Http404
 
 
-## Get some aggregated stats on the corpus like authors no, book no. etc.
+# Get some aggregated stats on the corpus like authors no, book no. etc.
 @api_view(['GET'])
 def getCorpusInsights(request):
     corpus_insight_stats = CorpusInsights.objects.all()
-    
+
     serializer = CorpusInsightsSerializer(corpus_insight_stats, many=True)
     # if serializer.is_valid():
     #     serializer.save()
     # else:
     #     save_message = serializer.errors
     #     print(save_message)
-        
+
     return Response(serializer.data)
 
 
-
-## Remove this before going live as we shouldn't allow any POST method      
+# Remove this before going live as we shouldn't allow any POST method
 @api_view(['POST'])
 def bookCreate(request):
     serializer = VersionMetaSerializer(data=request.data)
@@ -100,43 +102,48 @@ def bookCreate(request):
 
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
 '''' Get all books by pagination, filter and search enable. we can select fields also.
 Example: /book/all/?fields=book_id or /book/all/?search=JK000001 or book/all/?fields=book_id&search=JK000001
 '''
+
+
 class CustomPagination(PageNumberPagination):
-        page_size = 10
-        page_size_query_param = 'page_size'
-        max_page_size = 200
-        last_page_strings = ('the_end',)
-        
-        def get_paginated_response(self, data):
-       
-            return Response({
-                'links': {
-                    'next': self.get_next_link(),
-                    'previous': self.get_previous_link()
-                },
-                'page_size': self.page.paginator.per_page,
-                'has_pages': self.page.has_next(),
-                'count': self.page.paginator.count,
-                'pages': self.page.paginator.num_pages,
-                'results': data
-            })
+    page_size = 10
+    page_size_query_param = 'page_size'
+    max_page_size = 200
+    last_page_strings = ('the_end',)
+
+    def get_paginated_response(self, data):
+
+        return Response({
+            'links': {
+                'next': self.get_next_link(),
+                'previous': self.get_previous_link()
+            },
+            'page_size': self.page.paginator.per_page,
+            'has_pages': self.page.has_next(),
+            'count': self.page.paginator.count,
+            'pages': self.page.paginator.num_pages,
+            'results': data
+        })
+
 
 # fields to be excluded from search (because they are not string fields):
-#excl_flds = ["id", "date", "authorDateAH", "authorDateCE", "tok_length", "char_length",  # numeric fields
+# excl_flds = ["id", "date", "authorDateAH", "authorDateCE", "tok_length", "char_length",  # numeric fields
 #             "text", "personName", "version", "author_id", "version_id", "text_id"]      # foreign key fields
 excl_flds = [
     # numeric fields:
     "id", "date", "authorDateAH", "authorDateCE", "tok_length", "char_length",
     # foreign key fields:
-    "text", "personName", "version", "author_id", "version_id", "text_id", 
-    "related_persons", "related_places", "related_texts", "place_relations", 
-    "person_a_id", "person_b_id", "text_a_id", "text_b_id", 
+    "text", "personName", "version", "author_id", "version_id", "text_id",
+    "related_persons", "related_places", "related_texts", "place_relations",
+    "person_a_id", "person_b_id", "text_a_id", "text_b_id",
     "place_a_id", "place_b_id", "relation_type", "parent_type",
     # related fields:
     'authormeta', 'textmeta', 'related_person_a', 'related_person_b',
     "related_text_a", "related_text_b"]
+
 
 class authorListView(generics.ListAPIView):
     """
@@ -144,19 +151,19 @@ class authorListView(generics.ListAPIView):
     (each containing metadata on an author, his texts and versions of his texts)
     """
     queryset = authorMeta.objects.all()
-    serializer_class = AuthorMetaSerializer 
+    serializer_class = AuthorMetaSerializer
     pagination_class = CustomPagination
 
-    # customize the search: 
-    
+    # customize the search:
 
     search_fields = [field.name for field in authorMeta._meta.get_fields() if (field.name not in excl_flds)] \
-        + ["text__"+ field.name for field in textMeta._meta.get_fields() if (field.name not in excl_flds)] \
-        + ["text__version__"+ field.name for field in versionMeta._meta.get_fields() if (field.name not in excl_flds)] \
-        + ["personName__"+ field.name for field in personName._meta.get_fields() if (field.name not in excl_flds)]
+        + ["text__" + field.name for field in textMeta._meta.get_fields() if (field.name not in excl_flds)] \
+        + ["text__version__" + field.name for field in versionMeta._meta.get_fields() if (field.name not in excl_flds)] \
+        + ["personName__" + field.name for field in personName._meta.get_fields()
+           if (field.name not in excl_flds)]
     print("AUTHOR SEARCH FIELDS:")
     print(search_fields)
-    # NB: excl_flds needs to be declared outside of the class for the list comprehension to work, 
+    # NB: excl_flds needs to be declared outside of the class for the list comprehension to work,
     # otherwise you get a NameError; see https://stackoverflow.com/a/13913933
     # print()
     # print("Search fields:")
@@ -165,8 +172,9 @@ class authorListView(generics.ListAPIView):
     search_fields = (search_fields)
 
     # Customize filtering:
-    
-    filter_backends = (django_filters.DjangoFilterBackend,filters.SearchFilter,filters.OrderingFilter)    
+
+    filter_backends = (django_filters.DjangoFilterBackend,
+                       filters.SearchFilter, filters.OrderingFilter)
     filterset_class = authorFilter
 
     # old experiments with filters by Sohail:
@@ -178,7 +186,7 @@ class authorListView(generics.ListAPIView):
     #     'text__title_lat':['exact'],
     #     'text__version__version_id':['exact']
     # }
-    
+
     # print(filter_fields)
     #filter_fields = ['title_lat', 'book_id', 'title_ar', 'annotation_status']
     # filter_fields = (filter_fields)
@@ -186,77 +194,108 @@ class authorListView(generics.ListAPIView):
     #ordering_fields = (ordering_fields)
 
 
-
 class versionListView(generics.ListAPIView):
     queryset = versionMeta.objects.all()
-    serializer_class = VersionMetaSerializer 
+    serializer_class = VersionMetaSerializer
     pagination_class = CustomPagination
 
-    #search_fields = [field.name for field in authorMeta._meta.get_fields() if(field.name not in ["text","author_names", 'date', 'authorDateAH', 'authorDateCE', 'id'])]+ \
+    # search_fields = [field.name for field in authorMeta._meta.get_fields() if(field.name not in ["text","author_names", 'date', 'authorDateAH', 'authorDateCE', 'id'])]+ \
     #["version__"+ field.name for field in textMeta._meta.get_fields() if(field.name not in ["version","id", 'authorMeta'])]\
     #+ ["text__version__"+ field.name for field in versionMeta._meta.get_fields() if(field.name not in ["id", 'textMeta','tok_length','char_length'])]\
     #+ ["author_names__"+ field.name for field in personName._meta.get_fields() if(field.name not in ["id", 'authorMeta'])]
     print("FEILD", versionMeta._meta.get_fields())
     search_fields = [field.name for field in versionMeta._meta.get_fields() if (field.name not in excl_flds)] \
-        + ["text_id__"+ field.name for field in textMeta._meta.get_fields() if (field.name not in excl_flds)] \
-        + ["text_id__author_id__"+ field.name for field in authorMeta._meta.get_fields() if (field.name not in excl_flds)] \
-        + ["text_id__author_id__personName__"+ field.name for field in personName._meta.get_fields() if (field.name not in excl_flds)]
+        + ["text_id__" + field.name for field in textMeta._meta.get_fields() if (field.name not in excl_flds)] \
+        + ["text_id__author_id__" + field.name for field in authorMeta._meta.get_fields() if (field.name not in excl_flds)] \
+        + ["text_id__author_id__personName__" +
+            field.name for field in personName._meta.get_fields() if (field.name not in excl_flds)]
 
     print("VERSION SEARCH FIELDS:")
     print(search_fields)
 
-
     # Customize filtering:
-    
-    filter_backends = (django_filters.DjangoFilterBackend,filters.SearchFilter,filters.OrderingFilter)    
+
+    filter_backends = (django_filters.DjangoFilterBackend,
+                       filters.SearchFilter, filters.OrderingFilter)
     filterset_class = versionFilter
 
-
-    ordering_fields = ['text_id__title_lat', 'text_id__title_ar', "text_id__author_id__date", 'tok_length']
+    ordering_fields = ['text_id__title_lat', 'text_id__title_ar',
+                       "text_id__author_id__date", 'tok_length']
     ordering_fields = (ordering_fields)
+
 
 class textListView(generics.ListAPIView):
     queryset = textMeta.objects.all()
     #filter_fields = ['title_lat', 'book_id', 'title_ar', 'annotation_status']
     search_fields = [field.name for field in textMeta._meta.get_fields() if (field.name not in excl_flds)] \
-        + ["author_id__"+ field.name for field in authorMeta._meta.get_fields() if (field.name not in excl_flds)] \
-        + ["author_id__personName__"+ field.name for field in personName._meta.get_fields() if (field.name not in excl_flds)] \
-        + ["version__"+ field.name for field in versionMeta._meta.get_fields() if (field.name not in excl_flds)]
-        
-    #print(search_fields)
+        + ["author_id__" + field.name for field in authorMeta._meta.get_fields() if (field.name not in excl_flds)] \
+        + ["author_id__personName__" + field.name for field in personName._meta.get_fields() if (field.name not in excl_flds)] \
+        + ["version__" + field.name for field in versionMeta._meta.get_fields()
+           if (field.name not in excl_flds)]
 
+    # print(search_fields)
 
     #ordering_fields = ['title_lat', 'title_ar']
-    serializer_class = TextSerializer 
+    serializer_class = TextSerializer
     pagination_class = CustomPagination
-    filter_backends = (django_filters.DjangoFilterBackend,filters.SearchFilter,filters.OrderingFilter)    
+    filter_backends = (django_filters.DjangoFilterBackend,
+                       filters.SearchFilter, filters.OrderingFilter)
     filterset_class = textFilter
-    #filter_backends = (django_filters.DjangoFilterBackend,filters.SearchFilter,filters.OrderingFilter)    
+    #filter_backends = (django_filters.DjangoFilterBackend,filters.SearchFilter,filters.OrderingFilter)
     # search_fields = (search_fields)
     # filter_fields = (search_fields)
     #ordering_fields = (ordering_fields)
 
+
 class relationsListView(generics.ListAPIView):
     queryset = a2bRelation.objects.all()
-    #for q in queryset:
+    # for q in queryset:
     #    print(q.text_a_id)
-    serializer_class = AllRelationSerializer 
+    serializer_class = AllRelationSerializer
 
-## Text Reuse Stats
+# Text Reuse Stats
+
 
 class getTextReuseStats(generics.ListAPIView):
-    
+
     queryset = TextReuseStats.objects.all()
-    serializer_class = TextReuseStatsSerializer 
+    serializer_class = TextReuseStatsSerializer
     #serializer = TextReuseStatsSerializer(queryset, many=True)
     pagination_class = CustomPagination
-    
 
-    filter_backends = (django_filters.DjangoFilterBackend,filters.SearchFilter,filters.OrderingFilter)    
+    filter_backends = (django_filters.DjangoFilterBackend,
+                       filters.SearchFilter, filters.OrderingFilter)
     filterset_class = textReuseFilter
 
-
-    ordering_fields = ['instances_count','book1_word_match','book2_word_match']
+    ordering_fields = ['instances_count',
+                       'book1_word_match', 'book2_word_match']
     ordering_fields = (ordering_fields)
+
+
+class getReleaseMeta(generics.ListAPIView):
+
+    queryset = ReleaseMeta.objects.all()
+    serializer_class = ReleaseMetaSerializer
+    pagination_class = CustomPagination
+
+    filter_backends = (django_filters.DjangoFilterBackend,
+                       filters.SearchFilter, filters.OrderingFilter)
+    filterset_class = releaseFilter
+
+    ordering_fields = ['tok_length',
+                       'analysis_priority']
+    ordering_fields = (ordering_fields)
+
+class getReleaseDetails(generics.ListAPIView):
+
+    queryset = ReleaseDetails.objects.all()
+    serializer_class = ReleaseDetailsSerializer
     
+class getSourceCollectionDetails(generics.ListAPIView):
+
+    queryset = SourceCollectionDetails.objects.all()
+    serializer_class = SourceCollectionDetailsSerializer
+
+
+
 

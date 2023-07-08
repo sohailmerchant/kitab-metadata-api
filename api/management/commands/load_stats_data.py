@@ -3,7 +3,7 @@ import json
 import csv
 from webbrowser import get
 from django.db import models
-from api.models import TextReuseStats
+from api.models import TextReuseStats, versionMeta
 from django.core.management.base import BaseCommand
 import re
 import random
@@ -31,12 +31,18 @@ def read_csv(filename):
         reader = csv.DictReader(f, delimiter='\t')
         #for data in itertools.islice(reader, 300):
         for data in (reader):
+            
+            b1 = versionMeta.objects.filter(
+                    version_id=data['_T1']).first()
+            b2 = versionMeta.objects.filter(
+                    version_id=data['_T2']).first()
+            
             TextReuseStats.objects.get_or_create(
-            book_1 = data['_T1'],
-            book_2 = data['_T2'],
-            instances_count=data['instances'],
-            book1_word_match=data['WM1_Total'],
-            book2_word_match=data['WM2_Total'],
-            book1_match_book2_per=data['WM_B1inB2'],
-            book2_match_book1_per=data['WM_B2inB1'],
+                book_1 = b1,
+                book_2 = b2,
+                instances_count=data['instances'],
+                book1_word_match=data['WM1_Total'],
+                book2_word_match=data['WM2_Total'],
+                book1_match_book2_per=data['WM_B1inB2'],
+                book2_match_book1_per=data['WM_B2inB1'],
             )

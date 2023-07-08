@@ -5,10 +5,13 @@ class authorMeta(models.Model):
     author_uri = models.CharField(max_length=50, unique=True, null=False)
     author_ar = models.CharField(max_length=255, blank=True)
     author_lat = models.CharField(max_length=255, blank=True)
+    author_ar_prefered = models.CharField(max_length=255, blank=True)
+    author_lat_prefered = models.CharField(max_length=255, blank=True)
     date = models.IntegerField(null=True, blank=True)
     authorDateAH = models.IntegerField(null=True, blank=True)
     authorDateCE = models.IntegerField(null=True, blank=True)
     authorDateString = models.CharField(max_length=255, blank=True)
+    notes = models.TextField(blank=True)
     # Create a relationship between two persons (e.g., person A is a student of person B)
     # using a many-to-many field:
     related_persons = models.ManyToManyField(
@@ -51,9 +54,12 @@ class textMeta(models.Model):
     text_uri = models.CharField(max_length=100, unique=True, null=False)
     title_ar = models.CharField(max_length=255, blank=True)
     title_lat = models.CharField(max_length=255, blank=True)
+    title_ar_prefered = models.CharField(max_length=255, blank=True)
+    title_lat_prefered = models.CharField(max_length=255, blank=True)
     # document, inscription, ...
     text_type = models.CharField(max_length=10, blank=True)
     tags = models.CharField(max_length=255, blank=True)
+    notes = models.TextField(blank=True)
     author_id = models.ForeignKey(
         authorMeta, related_name='texts', related_query_name="text", on_delete=models.CASCADE)
     # BUT: one text can have more than one author! So, we should rather have:
@@ -120,9 +126,12 @@ class versionMeta(models.Model):
     version_uri = models.CharField(max_length=100, blank=True)
     text_id = models.ForeignKey(textMeta, related_name='versions',
                                 related_query_name="version", on_delete=models.CASCADE)
+
+    # char_lenght, tok length and url needs to be removed as it is gone to Release table
     char_length = models.IntegerField(null=True, blank=True)
     tok_length = models.IntegerField(null=True, blank=True)
     url = models.CharField(max_length=255, blank=True)
+
     editor = models.CharField(max_length=100, blank=True)
     edition_place = models.CharField(max_length=100, blank=True)
     publisher = models.CharField(max_length=100, blank=True)
@@ -130,6 +139,9 @@ class versionMeta(models.Model):
     ed_info = models.CharField(max_length=255, blank=True)
     version_lang = models.CharField(max_length=3, blank=True)
     tags = models.CharField(max_length=100, blank=True)
+    notes = models.TextField(blank=True)
+
+    # status and annotation status needs to be removed as it is gone to Release table
     status = models.CharField(max_length=3, blank=True)
     annotation_status = models.CharField(max_length=50, blank=True)
 
@@ -262,8 +274,8 @@ class a2bRelation (models.Model):
 
 class TextReuseStats(models.Model):
     id = models.AutoField(primary_key=True)
-    book_1 = models.CharField(max_length=50, null=False)
-    book_2 = models.CharField(max_length=50, null=False)
+    # book_1 = models.CharField(max_length=50, null=False)
+    # book_2 = models.CharField(max_length=50, null=False)
     instances_count = models.IntegerField(null=True, blank=True)
     book1_word_match = models.IntegerField(null=True, blank=True)
     book2_word_match = models.IntegerField(null=True, blank=True)
@@ -271,6 +283,8 @@ class TextReuseStats(models.Model):
         null=True, blank=True, max_digits=5, decimal_places=2)
     book2_match_book1_per = models.DecimalField(
         null=True, blank=True, max_digits=5, decimal_places=2)
+    book_1 = models.ForeignKey(versionMeta, related_name='textreuse_b1', related_query_name="textreuse_b1", to_field='version_id', on_delete=models.CASCADE)
+    book_2 = models.ForeignKey(versionMeta, related_name='textreuse_b2', related_query_name="textreuse_b2", to_field='version_id', on_delete=models.CASCADE)
 
 
 class CorpusInsights(models.Model):
@@ -282,3 +296,33 @@ class CorpusInsights(models.Model):
     largest_book = models.IntegerField(null=True, blank=True)
     total_word_count_pri = models.IntegerField(null=True, blank=True)
     top_10_book_by_word_count = models.JSONField(null=True, blank=True)
+
+
+
+class ReleaseMeta(models.Model):
+    id = models.AutoField(primary_key=True)
+    release_code = models.CharField(max_length=10, null=False)
+    
+    #change this field name to version_id
+    version_uri = models.ForeignKey(versionMeta, related_name='releases',related_query_name="release", on_delete=models.DO_NOTHING)
+    char_length = models.IntegerField(null=True, blank=True)
+    tok_length = models.IntegerField(null=True, blank=True)
+    url = models.CharField(max_length=255, blank=True)
+    # previous called status option could be pri, sec, tr
+    analysis_priority = models.CharField(max_length=3, blank=True)
+    annotation_status = models.CharField(max_length=50, blank=True)
+
+
+class ReleaseDetails(models.Model):
+    id = models.AutoField(primary_key=True)
+    release_code = models.CharField(max_length=10, null=False)
+    release_date = models.DateField(auto_now=False, auto_now_add=False)
+    zenodo_link = models.CharField(max_length=200, null=False)
+    remarks = models.CharField(max_length=500, null=False)
+
+class SourceCollectionDetails(models.Model):
+    id = models.AutoField(primary_key=True)
+    code = models.CharField(max_length=10, null=False)  #Shemala or Shia  JK0001   00001
+    url = models.CharField(max_length=200, null=False)
+    name = models.CharField(max_length=200, null=False)
+    description = models.CharField(max_length=500, null=False)

@@ -1,7 +1,7 @@
 from argparse import Namespace
 from operator import truediv
 from rest_framework import serializers
-from .models import personName, textMeta, authorMeta, versionMeta, CorpusInsights, TextReuseStats, relationType, a2bRelation
+from .models import personName, textMeta, authorMeta, versionMeta, CorpusInsights, TextReuseStats, ReleaseMeta, relationType, a2bRelation, ReleaseDetails, SourceCollectionDetails
 from rest_flex_fields import FlexFieldsModelSerializer
 
 '''
@@ -107,6 +107,26 @@ class CorpusInsightsSerializer(serializers.ModelSerializer):
 class TextReuseStatsSerializer(serializers.ModelSerializer):
     class Meta:
         model = TextReuseStats
-        #depth = 1
+        depth = 2
         fields = ["id", "book_1", "book_2", "instances_count",
                   "book1_word_match", "book2_word_match"]
+
+
+class ReleaseMetaSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ReleaseMeta
+        depth = 6
+        fields = ("__all__")
+
+class ReleaseDetailsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ReleaseDetails
+        depth = 1
+        fields = ("__all__")
+
+class SourceCollectionDetailsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SourceCollectionDetails
+        depth = 1
+        fields = ("__all__")
+

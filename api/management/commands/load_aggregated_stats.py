@@ -18,16 +18,22 @@ class Command(BaseCommand):
 
         load_data()
 
+# get the distinct count by providing a table name and a column
+
 
 def get_distinct_count(table_name, column_name):
     distinct_count = table_name.objects.values(
         column_name).annotate(count=Count(column_name)).count()
     return distinct_count
 
+# get a sum  by providing a table name and a column
+
 
 def get_column_sum(table_name, column_name):
     column_sum = table_name.objects.aggregate(sum=Sum(column_name))['sum']
     return column_sum
+
+# get largest number of book (word count) table name and a column or max of any column
 
 
 def get_largest_number(table_name, column_name):
@@ -56,10 +62,12 @@ def get_top_10_books():
     return top_books
 
 
+# load data from the databse in aggregated format for the insight page
 def load_data():
-    print(get_top_10_books())
+    # print(get_top_10_books())
     # print(textMeta.objects.annotate(Count('text_uri', distinct=True)).query)
-    print(versionMeta.objects.aggregate(sum=Sum('tok_length'))['sum'])
+    # print(versionMeta.objects.aggregate(sum=Sum('tok_length'))['sum'])
+
     CorpusInsights.objects.get_or_create(
 
         number_of_unique_authors=authorMeta.objects.count(),
