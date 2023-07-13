@@ -14,7 +14,8 @@ urlpatterns = [
     path('version/',views.versionListView.as_view(), name='version-list-all'),
     path('version/all/',views.versionListView.as_view(), name='version-list-all'),
     path('version/<str:version_id>/', views.getVersion, name='version'),
-    path('relations/all/', views.relationsListView.as_view(), name='rel')
+    path('relations/all/', views.relationsListView.as_view(), name='rel'), 
+    path('relations/', views.relationsListView.as_view(), name='rel')
 
     #path('book-list/', views.bookList, name='book-list'),
     #path('book-detail/<str:pk>/', views.bookDetail, name='book-detail'),

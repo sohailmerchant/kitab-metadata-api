@@ -1,7 +1,9 @@
 from django_filters import rest_framework as django_filters
 from rest_framework import filters
+from django.db.models import Q
 
-from .models import authorMeta, personName, textMeta, versionMeta, AggregatedStats
+
+from .models import authorMeta, personName, textMeta, versionMeta, AggregatedStats, a2bRelation
 
 class NumberInFilter(django_filters.BaseInFilter, django_filters.NumberFilter):
     """
@@ -159,3 +161,99 @@ class textFilter(django_filters.FilterSet):
         # additional fields with the default lookup ("exact"):
         #fields = ["author_uri", "author_lat", "author_ar", "authorDateAH"]
         fields = ["text_uri", "id"]
+
+
+
+class RelationFilter(django_filters.FilterSet):
+    """Define the filter fields that can be looked up for relations
+
+    The variable name will be used in the query in the URL;
+    the field name is the name of the field in the model;
+    and the lookup_expr defines which lookup method must be used (lt = less than, gt = greater than,
+        icontains = case insensitive substring)
+
+    E.g., 
+    http://127.0.0.1:8000/text/?died_after_AH=309&died_before_AH=310
+    http://127.0.0.1:8000/author/?text_title_ar=تاريخ
+    http://127.0.0.1:8000/author/?authorDateAH=310
+    http://127.0.0.1:8000/author/?author_uri=0310Tabari
+
+    """
+    #author_ar_contains = django_filters.CharFilter(field_name="author_ar", lookup_expr='icontains')
+    #author_lat_contains = django_filters.CharFilter(field_name="author_lat", lookup_expr='icontains')
+    text_a_uri = django_filters.CharFilter(field_name="text_a_id__text_uri", lookup_expr='icontains')
+    text_a_id = django_filters.CharFilter(field_name="text_a_id__id", lookup_expr='exact')
+    text_a_title_ar = django_filters.CharFilter(field_name="text_a_id__title_ar", lookup_expr='icontains')
+    text_a_title_lat = django_filters.CharFilter(field_name="text_a_id__title_lat", lookup_expr='icontains')
+    text_a_title = django_filters.CharFilter(method='filter_text_a_title', label="Search")
+
+    text_b_uri = django_filters.CharFilter(field_name="text_b_id__text_uri", lookup_expr='icontains')
+    text_b_id = django_filters.CharFilter(field_name="text_b_id__id", lookup_expr='exact')
+    text_b_title_ar = django_filters.CharFilter(field_name="text_b_id__title_ar", lookup_expr='icontains')
+    text_b_title_lat = django_filters.CharFilter(field_name="text_b_id__title_lat", lookup_expr='icontains')
+    text_b_title = django_filters.CharFilter(method='filter_text_b_title', label="Search")
+
+
+    person_a_uri = django_filters.CharFilter(field_name="person_a_id__person_uri", lookup_expr='icontains')
+    person_a_id = django_filters.CharFilter(field_name="person_a_id__id", lookup_expr='exact')
+    person_a_name_ar = django_filters.CharFilter(field_name="person_a_id__author_ar", lookup_expr='icontains')
+    person_a_name_lat = django_filters.CharFilter(field_name="person_a_id__author_lat", lookup_expr='icontains')
+    person_a = django_filters.CharFilter(method='filter_person_a_name', label="Search")
+
+    person_b_uri = django_filters.CharFilter(field_name="person_b_id__person_uri", lookup_expr='icontains')
+    person_b_id = django_filters.CharFilter(field_name="person_b_id__id", lookup_expr='exact')
+    person_b_name_ar = django_filters.CharFilter(field_name="person_b_id__author_ar", lookup_expr='icontains')
+    person_b_name_lat = django_filters.CharFilter(field_name="person_b_id__author_lat", lookup_expr='icontains')
+    person_b = django_filters.CharFilter(method='filter_person_b_name', label="Search")
+
+    #relation_type_name = django_filters.CharFilter(field_name="relation_type__name", lookup_expr='icontains')
+    relation_type_name = django_filters.CharFilter(method='filter_relation_name', label="Search")
+    relation_type_code = django_filters.CharFilter(field_name="relation_type__code", lookup_expr='icontains')
+
+
+
+    class Meta:
+        model = a2bRelation
+        # additional fields with the default lookup ("exact"):
+        #fields = ["author_uri", "author_lat", "author_ar", "authorDateAH"]
+        fields = ["id",]
+
+    def filter_relation_name(self, queryset, name, value):
+        return queryset.filter(
+            Q(relation_type__name__icontains=value) |
+            Q(relation_type__name_inverted__icontains=value)
+        )
+    
+    def filter_text_a_title(self, queryset, name, value):
+        return queryset.filter(
+            Q(text_a_id__title_ar__icontains=value)      |
+            Q(text_a_id__title_lat__icontains=value)     |
+            Q(text_a_id__title_ar_norm__icontains=value) |
+            Q(text_a_id__title_lat_norm__icontains=value)
+        )
+    
+    def filter_text_b_title(self, queryset, name, value):
+        return queryset.filter(
+            Q(text_b_id__title_ar__icontains=value)      |
+            Q(text_b_id__title_lat__icontains=value)     |
+            Q(text_b_id__title_ar_norm__icontains=value) |
+            Q(text_b_id__title_lat_norm__icontains=value)
+        )
+
+    def filter_person_a_name(self, queryset, name, value):
+        return queryset.filter(
+            Q(person_a_id__name_ar__icontains=value)      |
+            Q(person_a_id__name_lat__icontains=value)       |
+            Q(person_a_id__name_ar_norm__icontains=value)   |
+            Q(person_a_id__name_lat_norm__icontains=value)  |
+            Q(person_a_id__uri__icontains=value)
+        )
+    
+    def filter_person_b_name(self, queryset, name, value):
+        return queryset.filter(
+            Q(person_b_id__name_ar__icontains=value)      |
+            Q(person_b_id__name_lat__icontains=value)       |
+            Q(person_b_id__name_ar_norm__icontains=value)   |
+            Q(person_b_id__name_lat_norm__icontains=value)  |
+            Q(person_b_id__uri__icontains=value)
+        )

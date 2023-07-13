@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     'django_filters',
     'rest_flex_fields',
     "corsheaders",
+    "django_extensions"
 ]
 REST_FRAMEWORK = {
 
@@ -171,3 +172,27 @@ STATIC_URL = '/static/'
 # https://docs.djangoproject.com/en/3.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+# enable SQL logging while in debug mode (see https://www.neilwithdata.com/django-sql-logging)
+LOGGING = {
+    'version': 1,
+    'filters': {
+        'require_debug_true': {
+            '()': 'django.utils.log.RequireDebugTrue',
+        }
+    },
+    'handlers': {
+        'console': {
+            'level': 'DEBUG',
+            'filters': ['require_debug_true'],
+            'class': 'logging.StreamHandler',
+        }
+    },
+    'loggers': {
+        'django.db.backends': {
+            'level': 'DEBUG',
+            'handlers': ['console'],
+        }
+    }
+}

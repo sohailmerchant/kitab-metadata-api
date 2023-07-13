@@ -63,10 +63,12 @@ class textMeta(models.Model):
     # Create a relationship between two texts (e.g., text A is a commentary on text B)
     # using a many-to-many field:
     related_texts = models.ManyToManyField(
-        "self",  # see https://docs.djangoproject.com/en/4.0/ref/models/fields/#django.db.models.ManyToManyField.symmetrical
+        #"self",  # see https://docs.djangoproject.com/en/4.0/ref/models/fields/#django.db.models.ManyToManyField.symmetrical
+        "textMeta",
         through="a2bRelation",  # see https://docs.djangoproject.com/en/4.0/ref/models/fields/#django.db.models.ManyToManyField.through
         through_fields=("text_a_id", "text_b_id"),  # see https://docs.djangoproject.com/en/4.0/ref/models/fields/#django.db.models.ManyToManyField.through_fields
-        symmetrical=True,  # see https://docs.djangoproject.com/en/4.0/ref/models/fields/#django.db.models.ManyToManyField.symmetrical
+        #symmetrical=True,  # see https://docs.djangoproject.com/en/4.0/ref/models/fields/#django.db.models.ManyToManyField.symmetrical
+        symmetrical=False,
         related_name="texts_related",
         related_query_name="text_related"
     )
@@ -162,7 +164,7 @@ class relationType(models.Model):
     entities = models.CharField(max_length=50,blank=True) # person_person, place_place, person_place, ...
 
     def __str__(self):
-        return self.relation_name
+        return self.name
 
 # class subRelationType(models.Model):
 #     sub_relation_type_id = models.IntegerField(unique=True, null=False)
@@ -184,8 +186,14 @@ class a2bRelation (models.Model):
     
     """
     # define A and B (pick two, depending on the type of relationship): 
-    person_a_id = models.ForeignKey(authorMeta,related_name="related_persons_a",related_query_name="related_person_a",
-                                    on_delete=models.DO_NOTHING,null=True,blank=True)
+    person_a_id = models.ForeignKey(
+        authorMeta,
+        related_name="related_persons_a",
+        related_query_name="related_person_a",
+        on_delete=models.DO_NOTHING,
+        null=True, # "null has no effect since there is no way to require a relation at database level": https://docs.djangoproject.com/en/4.0/ref/models/fields/#django.db.models.ManyToManyField.through
+        blank=True
+        )
     person_b_id = models.ForeignKey(authorMeta,related_name="related_persons_b",related_query_name="related_person_b",
                                     on_delete=models.DO_NOTHING,null=True,blank=True)
     text_a_id = models.ForeignKey(textMeta,related_name="related_texts_a",related_query_name="related_text_a",
@@ -195,7 +203,9 @@ class a2bRelation (models.Model):
     place_a_id = models.ForeignKey(placeMeta,related_name="related_places_a",related_query_name="related_place_a",
                                    on_delete=models.DO_NOTHING,null=True,blank=True)
     place_b_id = models.ForeignKey(placeMeta,related_name="related_places_b",related_query_name="related_place_b",
-                                   on_delete=models.DO_NOTHING,null=True,blank=True)
+                                   on_delete=models.DO_NOTHING,
+                                   null=True, 
+                                   blank=True)
     #region_id = models.ForeignKey(regionMeta,on_delete=models.DO_NOTHING,null=True,blank=True)
     
     # define the type of relationship between A and B:

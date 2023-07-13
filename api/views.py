@@ -11,8 +11,8 @@ from rest_framework import filters
 
 
 from .models import authorMeta, personName, textMeta, versionMeta, AggregatedStats,a2bRelation
-from .serializers import TextSerializer,VersionMetaSerializer,personNameSerializer,AuthorMetaSerializer, AggregatedStatsSerializer,AllRelationSerializer
-from .filters import authorFilter, versionFilter, textFilter
+from .serializers import TextSerializer,VersionMetaSerializer,personNameSerializer,AuthorMetaSerializer, AggregatedStatsSerializer, AllRelationSerializer
+from .filters import authorFilter, versionFilter, textFilter, RelationFilter
 
 @api_view(['GET'])
 def apiOverview(request):
@@ -231,16 +231,33 @@ class versionListView(generics.ListAPIView):
     ordering_fields = ['title_lat', 'title_ar', "text_id__author_id__date"]
     ordering_fields = (ordering_fields)
 
+from rest_framework.generics import RetrieveAPIView
+class textListView2(RetrieveAPIView):
+     def get(self, request, *args, **kwargs):
+          instance = textMeta.objects.get(pk=["pk"])
+          text_serializer = TextSerializer(instance)
+          text_data = text_serializer.data
+
+          rel_serializer = allRelationSerializer(instance)
+          rel_data = rel_serializer.data
+
+          
+
+
+
 class textListView(generics.ListAPIView):
-    queryset = textMeta.objects.all()
+    textMeta.objects.prefetch_related("related_texts") # https://docs.djangoproject.com/en/4.2/ref/models/querysets/
+    textMeta.objects.prefetch_related("texts_related")
+    queryset = textMeta.objects.all()  
     #filter_fields = ['title_lat', 'book_id', 'title_ar', 'annotation_status']
     search_fields = [field.name for field in textMeta._meta.get_fields() if (field.name not in excl_flds)] \
         + ["author_id__"+ field.name for field in authorMeta._meta.get_fields() if (field.name not in excl_flds)] \
         + ["author_id__personName__"+ field.name for field in personName._meta.get_fields() if (field.name not in excl_flds)] \
         + ["version__"+ field.name for field in versionMeta._meta.get_fields() if (field.name not in excl_flds)]
-        
-    #print(search_fields)
+    # search_fields = "__all__"
 
+    print("TEXT SEARCH FIELDS:")
+    print(search_fields)
 
     #ordering_fields = ['title_lat', 'title_ar']
     serializer_class = TextSerializer 
@@ -257,3 +274,4 @@ class relationsListView(generics.ListAPIView):
     #for q in queryset:
     #    print(q.text_a_id)
     serializer_class = AllRelationSerializer 
+    filterset_class = RelationFilter
