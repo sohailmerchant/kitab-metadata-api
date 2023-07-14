@@ -122,7 +122,8 @@ class ReleaseDetailsSerializer(serializers.ModelSerializer):
     class Meta:
         model = ReleaseDetails
         depth = 1
-        fields = ("__all__")
+        fields = ('__all__')
+       
 
 class SourceCollectionDetailsSerializer(serializers.ModelSerializer):
     class Meta:

@@ -275,6 +275,21 @@ class getTextReuseStats(generics.ListAPIView):
 class getReleaseMeta(generics.ListAPIView):
 
     queryset = ReleaseMeta.objects.all()
+    
+    search_fields = [field.name for field in ReleaseMeta._meta.get_fields() if (field.name not in excl_flds)] \
+        + ["version_uri__" + field.name for field in versionMeta._meta.get_fields() if (field.name not in excl_flds)] 
+        # + ["version_uri__text_id__" + field.name for field in textMeta._meta.get_fields() if (field.name not in excl_flds)] \
+        # + ["version_uri__text_id__author_id__" + field.name for field in authorMeta._meta.get_fields() if (field.name not in excl_flds)] \
+        # + ["version_uri__text_id__author_id__personName__" +
+        #     field.name for field in personName._meta.get_fields() if (field.name not in excl_flds)]
+
+         ## had to put the list mannualy as above function add these two field which makes the code 'version_uri', 'version_uri__release' 
+    search_fields = ['release_code', 'url', 'analysis_priority', 'annotation_status', 'version_uri__version_uri', 'version_uri__url', 'version_uri__editor', 'version_uri__edition_place', 'version_uri__publisher', 'version_uri__edition_date', 'version_uri__ed_info', 'version_uri__version_lang', 'version_uri__tags', 'version_uri__notes', 'version_uri__status', 'version_uri__annotation_status', 'version_uri__text_id__text_uri', 'version_uri__text_id__title_ar', 'version_uri__text_id__title_lat', 'version_uri__text_id__title_ar_prefered', 'version_uri__text_id__title_lat_prefered', 'version_uri__text_id__text_type', 'version_uri__text_id__tags', 'version_uri__text_id__notes', 'version_uri__text_id__author_id__author_uri', 'version_uri__text_id__author_id__author_ar', 'version_uri__text_id__author_id__author_lat', 'version_uri__text_id__author_id__author_ar_prefered', 'version_uri__text_id__author_id__author_lat_prefered', 'version_uri__text_id__author_id__authorDateString', 'version_uri__text_id__author_id__notes', 'version_uri__text_id__author_id__personName__language', 'version_uri__text_id__author_id__personName__shuhra', 'version_uri__text_id__author_id__personName__nasab', 'version_uri__text_id__author_id__personName__kunya', 'version_uri__text_id__author_id__personName__ism', 'version_uri__text_id__author_id__personName__laqab', 'version_uri__text_id__author_id__personName__nisba']
+
+    
+    print("RELEASE SEARCH FIELDS:")
+    print(search_fields)
+
     serializer_class = ReleaseMetaSerializer
     pagination_class = CustomPagination
 
@@ -283,9 +298,9 @@ class getReleaseMeta(generics.ListAPIView):
     filterset_class = releaseFilter
 
     ordering_fields = ['tok_length',
-                       'analysis_priority']
-    ordering_fields = (ordering_fields)
+                       'analysis_priority', 'version_uri__text_id__author_id__date', 'version_uri__text_id__title_lat_prefered', 'version_uri__text_id__author_id__author_lat_prefered']
 
+    
 class getReleaseDetails(generics.ListAPIView):
 
     queryset = ReleaseDetails.objects.all()
