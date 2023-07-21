@@ -219,9 +219,10 @@ class textFilter(django_filters.FilterSet):
 
 class textReuseFilter(django_filters.FilterSet):
     book_1 = django_filters.CharFilter(
-        field_name="book_1", lookup_expr='icontains')
-    book_1 = django_filters.CharFilter(
-        field_name="book_2", lookup_expr='icontains')
+        field_name="book_1__version_id", lookup_expr='icontains')
+    book_2 = django_filters.CharFilter(
+        field_name="book_2__version_id", lookup_expr='icontains')
+    
     instances_count_gt = django_filters.NumberFilter(
         field_name="instances_count", lookup_expr="gt")
     instances_count_lt = django_filters.NumberFilter(
