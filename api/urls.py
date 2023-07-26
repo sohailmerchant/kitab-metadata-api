@@ -17,9 +17,11 @@ urlpatterns = [
     path('text-reuse-stats/all/', views.getTextReuseStats.as_view(), name='rel'),
     path('release/all/', views.getReleaseMeta.as_view(), name='release'),
     path('release-details/all/', views.getReleaseDetails.as_view(), name='release-details'),
-    path('source-collections/all/', views.getSourceCollectionDetails.as_view(), name='source-collections')
+    path('source-collections/all/', views.getSourceCollectionDetails.as_view(), name='source-collections'),
     #path('book-list/', views.bookList, name='book-list'),
     #path('book-detail/<str:pk>/', views.bookDetail, name='book-detail'),
     #path('book-create/', views.bookCreate, name='book-create')
+    path('<str:release_code>/version/<str:version_id>/', views.getReleaseVersion, name='release-version'),
+    path('<str:release_code>/text/<str:text_uri>/', views.getReleaseText, name='release-text'),
 
 ]

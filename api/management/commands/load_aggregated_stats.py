@@ -73,10 +73,9 @@ def load_data():
         number_of_unique_authors=authorMeta.objects.count(),
         number_of_books=get_distinct_count(textMeta, 'text_uri'),
         number_of_versions=versionMeta.objects.count(),
-        total_word_count=get_column_sum(versionMeta, 'tok_length'),
+        total_word_count=get_column_sum(versionMeta, 'tok_length'), # TO DO: moved to releaseMeta
         largest_book=get_largest_number(versionMeta, 'tok_length'),
-        total_word_count_pri=versionMeta.objects.filter(
-            status='pri').aggregate(sum=Sum('tok_length'))['sum'],
+        total_word_count_pri=versionMeta.objects.filter(status='pri').aggregate(sum=Sum('tok_length'))['sum'], # TO DO: moved to releaseMeta
         top_10_book_by_word_count=json.dumps(get_top_10_books())
 
     )

@@ -24,15 +24,15 @@ def bulk_load(record):
         Book(
             book_id = record['book_id'],
             book_uri = record['book_uri'],
-            char_length = record['char_length'],
-            tok_length = record['tok_length'],
+            #char_length = record['char_length'],  # TO DO: moved to releaseMeta
+            #tok_length = record['tok_length'],
+            #analysis_priority = record['status'] 
+            #url = record['url'],
             date = record['date'],
-            title_ar = record['title_ar'],
-            title_lat = record['title_lat'],
+            titles_ar = record['title_ar'],
+            titles_lat = record['title_lat'],
             author_lat= record['author_lat'], 
             version_uri = record['version_uri'],
-            url = record['url'],
-            status = record['status'] 
         )
     ]
     print(instance)

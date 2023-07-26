@@ -54,7 +54,7 @@ def load_name_elements(fp):
     with open(fp, mode="r", encoding="utf-8") as file:
         data = json.load(file)
     for author_uri in data:
-        author_id, created = authorMeta.objects.get_or_create(
+        am, created = authorMeta.objects.get_or_create(
             author_uri=author_uri
         )
         print(author_uri, "created:", created)
@@ -63,7 +63,7 @@ def load_name_elements(fp):
             d = data[author_uri][lang]
             print(d)
             name, created = personName.objects.get_or_create(
-                author_id=author_id,
+                author_meta=am,
                 language=lang_code,
                 shuhra=d["shuhra"],
                 nasab=d["nasab"],
@@ -117,8 +117,8 @@ def load_book_relations(fp):
                     text_uri=b
                 )
                 a2bRelation.objects.get_or_create(
-                    text_a_id=a_obj,
-                    text_b_id=b_obj,
+                    text_a=a_obj,
+                    text_b=b_obj,
                     relation_type=rt
                 )
             elif a_type == "person" and b_type == "book":
@@ -129,8 +129,8 @@ def load_book_relations(fp):
                     text_uri=b
                 )
                 a2bRelation.objects.get_or_create(
-                    person_a_id=a_obj,
-                    text_b_id=b_obj,
+                    person_a=a_obj,
+                    text_b=b_obj,
                     relation_type=rt
                 )
             elif a_type == "book" and b_type == "person":
@@ -141,8 +141,8 @@ def load_book_relations(fp):
                     author_uri=b
                 )
                 a2bRelation.objects.get_or_create(
-                    text_a_id=a_obj,
-                    person_b_id=b_obj,
+                    text_a=a_obj,
+                    person_b=b_obj,
                     relation_type=rt
                 )
 
@@ -270,9 +270,9 @@ def load_records(records):
                 author_ar=record['author_ar'],
                 author_lat=record['author_lat'],
                 date=record['date'],
-                authorDateAH=get_authorDateAH(record['date'], record['type']),
-                authorDateCE=get_authorDateCE(record['date'], record['type']),
-                authorDateString=str(record['date'])
+                date_AH=get_authorDateAH(record['date'], record['type']),
+                date_CE=get_authorDateCE(record['date'], record['type']),
+                date_str=str(record['date'])
             )
         else:
             am = authorMeta.objects.filter(
@@ -281,7 +281,7 @@ def load_records(records):
 
         if not textMeta.objects.filter(text_uri=record['text_uri']).exists():
             item, created = textMeta.objects.get_or_create(
-                author_id=am,
+                author_meta=am,
                 text_uri=record['text_uri'],
                 title_ar=record['title_ar'],
                 title_lat=record['title_lat'],
@@ -292,18 +292,18 @@ def load_records(records):
             item = textMeta.objects.filter(text_uri=record['text_uri']).first()
 
         versionMeta.objects.get_or_create(
-            text_id=item,
+            text_meta=item,
             version_id=record['version_id'],
             version_uri=record['version_uri'],
-            char_length=record['char_length'],
-            tok_length=record['tok_length'],
-            url=record['url'],
-            ed_info=record['ed_info'],
+            #char_length=record['char_length'],  # TO DO: moved to ReleaseMeta
+            #tok_length=record['tok_length'],
+            #url=record['url'],
+            #annotation_status=record['annotation_status'],
+            #analysis_priority=record['status'],
+            #ed_info=record['ed_info'], # TO DO: moved to editionMeta
             tags=record['tags'],
-            annotation_status=record['annotation_status'],
-            status=record['status'],
             #language = record['version_lang']
-            version_lang=record['version_lang']
+            language=record['version_lang']
         )
         # name elements are not separately in the metadata file as it is now;
         # loading bogus data for now!
@@ -315,7 +315,7 @@ def load_records(records):
                 random.shuffle(name_elements)
 
                 personName.objects.get_or_create(
-                    author_id=am,
+                    author_meta=am,
                     language=lan,
                     shuhra=name_elements[0],
                     kunya=name_elements[1],
@@ -332,17 +332,18 @@ def bulk_load(record):
         textMeta(
             book_id=record['book_id'],
             book_uri=record['book_uri'],
-            char_length=record['char_length'],
-            tok_length=record['tok_length'],
+            #char_length=record['char_length'], # TO DO: moved to ReleaseMeta
+            #tok_length=record['tok_length'],
+            #url=record['url'],
+            #analysis_priority=record['status'],
+            #annotation_status=record['annotation_status']
             date=record['date'],
             title_ar=record['title_ar'],
             title_lat=record['title_lat'],
             version_uri=record['version_uri'],
-            url=record['url'],
-            status=record['status'],
             author_lat=record['author_lat'],
             author_ar=record['author_ar'],
-            annotation_status=record['annotation_status']
+            
         )
     ]
     print(instance)

@@ -11,7 +11,7 @@ from rest_framework import filters
 
 
 from .models import authorMeta, personName, textMeta, versionMeta, CorpusInsights, TextReuseStats, a2bRelation, ReleaseMeta, SourceCollectionDetails, ReleaseDetails
-from .serializers import TextSerializer, VersionMetaSerializer, personNameSerializer, ReleaseMetaSerializer, AuthorMetaSerializer, TextReuseStatsSerializer, CorpusInsightsSerializer, AllRelationSerializer,  SourceCollectionDetailsSerializer, ReleaseDetailsSerializer
+from .serializers import TextSerializer, VersionMetaSerializer, PersonNameSerializer, ReleaseMetaSerializer, AuthorMetaSerializer, TextReuseStatsSerializer, CorpusInsightsSerializer, AllRelationSerializer,  SourceCollectionDetailsSerializer, ReleaseDetailsSerializer
 from .filters import authorFilter, versionFilter, textFilter, textReuseFilter, releaseFilter
 
 
@@ -64,6 +64,32 @@ def getVersion(request, version_id):
         return Response(serializer.data)
     except textMeta.DoesNotExist:
         raise Http404
+
+
+
+@api_view(['GET'])
+def getReleaseVersion(request, release_code, version_id):
+    """Get a text version by its version_id and release_id"""
+
+    try:
+        release_version = ReleaseMeta.objects.get(release__release_code=release_code, version_meta__version_id=version_id)
+        serializer = ReleaseMetaSerializer(release_version, many=False)
+        return Response(serializer.data)
+    except textMeta.DoesNotExist:
+        raise Http404
+    
+
+@api_view(['GET'])
+def getReleaseText(request, release_code, text_uri):
+    """Get a text version by its version_id and release_id"""
+
+    try:
+        text = textMeta.objects.filter(text_uri=text_uri, version__release__release__release_code=release_code).first()
+        serializer = TextSerializer(text, many=False)
+        return Response(serializer.data)
+    except textMeta.DoesNotExist:
+        raise Http404
+
 
 # Get an author record by its author_uri
 @api_view(['GET'])
@@ -130,16 +156,16 @@ class CustomPagination(PageNumberPagination):
 
 
 # fields to be excluded from search (because they are not string fields):
-# excl_flds = ["id", "date", "authorDateAH", "authorDateCE", "tok_length", "char_length",  # numeric fields
-#             "text", "personName", "version", "author_id", "version_id", "text_id"]      # foreign key fields
+# excl_flds = ["id", "date", "date_AH", "date_CE", "tok_length", "char_length",  # numeric fields
+#             "text", "name_element", "version", "author_meta", "version_id", "text_meta"]      # foreign key fields
 excl_flds = [
     # numeric fields:
-    "id", "date", "authorDateAH", "authorDateCE", "tok_length", "char_length",
+    "id", "date", "date_AH", "date_CE", "tok_length", "char_length",
     # foreign key fields:
-    "text", "personName", "version", "author_id", "version_id", "text_id",
+    "text", "name_element", "version", "author_meta", "version_id", "text_meta",
     "related_persons", "related_places", "related_texts", "place_relations",
-    "person_a_id", "person_b_id", "text_a_id", "text_b_id",
-    "place_a_id", "place_b_id", "relation_type", "parent_type",
+    "person_a", "person_b", "text_a", "text_b",
+    "place_a", "place_b", "relation_type", "parent_type",
     # related fields:
     'authormeta', 'textmeta', 'related_person_a', 'related_person_b',
     "related_text_a", "related_text_b"]
@@ -148,7 +174,7 @@ excl_flds = [
 class authorListView(generics.ListAPIView):
     """
     Return a paginated list of author metadata objects
-    (each containing metadata on an author, his texts and versions of his texts)
+    (each containing metadata on an author, their texts and versions of their texts)
     """
     queryset = authorMeta.objects.all()
     serializer_class = AuthorMetaSerializer
@@ -159,7 +185,7 @@ class authorListView(generics.ListAPIView):
     search_fields = [field.name for field in authorMeta._meta.get_fields() if (field.name not in excl_flds)] \
         + ["text__" + field.name for field in textMeta._meta.get_fields() if (field.name not in excl_flds)] \
         + ["text__version__" + field.name for field in versionMeta._meta.get_fields() if (field.name not in excl_flds)] \
-        + ["personName__" + field.name for field in personName._meta.get_fields()
+        + ["name_element__" + field.name for field in personName._meta.get_fields()
            if (field.name not in excl_flds)]
     print("AUTHOR SEARCH FIELDS:")
     print(search_fields)
@@ -182,15 +208,15 @@ class authorListView(generics.ListAPIView):
     # filter_fields ={
     #     #'annotation_status': ['in', 'exact'], # note the 'in'
     #     'text__text_uri': ['exact'],
-    #     'text__title_ar':['exact'] ,
-    #     'text__title_lat':['exact'],
+    #     'text__titles_ar':['exact'] ,
+    #     'text__titles_lat':['exact'],
     #     'text__version__version_id':['exact']
     # }
 
     # print(filter_fields)
-    #filter_fields = ['title_lat', 'book_id', 'title_ar', 'annotation_status']
+    #filter_fields = ['titles_lat', 'book_id', 'titles_ar', 'annotation_status']
     # filter_fields = (filter_fields)
-    #ordering_fields = ['title_lat', 'title_ar']
+    #ordering_fields = ['titles_lat', 'titles_ar']
     #ordering_fields = (ordering_fields)
 
 
@@ -199,16 +225,16 @@ class versionListView(generics.ListAPIView):
     serializer_class = VersionMetaSerializer
     pagination_class = CustomPagination
 
-    # search_fields = [field.name for field in authorMeta._meta.get_fields() if(field.name not in ["text","author_names", 'date', 'authorDateAH', 'authorDateCE', 'id'])]+ \
+    # search_fields = [field.name for field in authorMeta._meta.get_fields() if(field.name not in ["text","author_names", 'date', 'date_AH', 'date_CE', 'id'])]+ \
     #["version__"+ field.name for field in textMeta._meta.get_fields() if(field.name not in ["version","id", 'authorMeta'])]\
     #+ ["text__version__"+ field.name for field in versionMeta._meta.get_fields() if(field.name not in ["id", 'textMeta','tok_length','char_length'])]\
     #+ ["author_names__"+ field.name for field in personName._meta.get_fields() if(field.name not in ["id", 'authorMeta'])]
-    print("FEILD", versionMeta._meta.get_fields())
+    print("FIELD", versionMeta._meta.get_fields())
     search_fields = [field.name for field in versionMeta._meta.get_fields() if (field.name not in excl_flds)] \
-        + ["text_id__" + field.name for field in textMeta._meta.get_fields() if (field.name not in excl_flds)] \
-        + ["text_id__author_id__" + field.name for field in authorMeta._meta.get_fields() if (field.name not in excl_flds)] \
-        + ["text_id__author_id__personName__" +
-            field.name for field in personName._meta.get_fields() if (field.name not in excl_flds)]
+        + ["text_meta__" + field.name for field in textMeta._meta.get_fields() if (field.name not in excl_flds)] \
+        + ["text_meta__author_meta__" + field.name for field in authorMeta._meta.get_fields() if (field.name not in excl_flds)] \
+        + ["text_meta__author_meta__name_element__" + field.name for field in personName._meta.get_fields() if (field.name not in excl_flds)] \
+        + ["release__" + field.name for field in ReleaseMeta._meta.get_fields() if (field.name not in excl_flds)] \
 
     print("VERSION SEARCH FIELDS:")
     print(search_fields)
@@ -219,23 +245,23 @@ class versionListView(generics.ListAPIView):
                        filters.SearchFilter, filters.OrderingFilter)
     filterset_class = versionFilter
 
-    ordering_fields = ['text_id__title_lat', 'text_id__title_ar',
-                       "text_id__author_id__date", 'tok_length']
+    ordering_fields = ['text_meta__titles_lat', 'text_meta__titles_ar',
+                       "text_meta__author_meta__date", 'tok_length']
     ordering_fields = (ordering_fields)
 
 
 class textListView(generics.ListAPIView):
     queryset = textMeta.objects.all()
-    #filter_fields = ['title_lat', 'book_id', 'title_ar', 'annotation_status']
+    #filter_fields = ['titles_lat', 'book_id', 'titles_ar', 'annotation_status']
     search_fields = [field.name for field in textMeta._meta.get_fields() if (field.name not in excl_flds)] \
-        + ["author_id__" + field.name for field in authorMeta._meta.get_fields() if (field.name not in excl_flds)] \
-        + ["author_id__personName__" + field.name for field in personName._meta.get_fields() if (field.name not in excl_flds)] \
-        + ["version__" + field.name for field in versionMeta._meta.get_fields()
-           if (field.name not in excl_flds)]
+        + ["author_meta__" + field.name for field in authorMeta._meta.get_fields() if (field.name not in excl_flds)] \
+        + ["author_meta__name_element__" + field.name for field in personName._meta.get_fields() if (field.name not in excl_flds)] \
+        + ["version_meta__" + field.name for field in versionMeta._meta.get_fields() if (field.name not in excl_flds)] \
+        + ["version_meta__version_meta__" + field.name for field in ReleaseMeta._meta.get_fields() if (field.name not in excl_flds)]
 
     # print(search_fields)
 
-    #ordering_fields = ['title_lat', 'title_ar']
+    #ordering_fields = ['titles_lat', 'titles_ar']
     serializer_class = TextSerializer
     pagination_class = CustomPagination
     filter_backends = (django_filters.DjangoFilterBackend,
@@ -250,7 +276,7 @@ class textListView(generics.ListAPIView):
 class relationsListView(generics.ListAPIView):
     queryset = a2bRelation.objects.all()
     # for q in queryset:
-    #    print(q.text_a_id)
+    #    print(q.text_a)
     serializer_class = AllRelationSerializer
 
 # Text Reuse Stats
@@ -277,14 +303,28 @@ class getReleaseMeta(generics.ListAPIView):
     queryset = ReleaseMeta.objects.all()
     
     search_fields = [field.name for field in ReleaseMeta._meta.get_fields() if (field.name not in excl_flds)] \
-        + ["version_uri__" + field.name for field in versionMeta._meta.get_fields() if (field.name not in excl_flds)] 
-        # + ["version_uri__text_id__" + field.name for field in textMeta._meta.get_fields() if (field.name not in excl_flds)] \
-        # + ["version_uri__text_id__author_id__" + field.name for field in authorMeta._meta.get_fields() if (field.name not in excl_flds)] \
-        # + ["version_uri__text_id__author_id__personName__" +
+        + ["version_meta__" + field.name for field in versionMeta._meta.get_fields() if (field.name not in excl_flds)] 
+        # + ["version_meta__text_meta__" + field.name for field in textMeta._meta.get_fields() if (field.name not in excl_flds)] \
+        # + ["version_meta__text_meta__author_meta__" + field.name for field in authorMeta._meta.get_fields() if (field.name not in excl_flds)] \
+        # + ["version_meta__text_meta__author_meta__name_element__" +
         #     field.name for field in personName._meta.get_fields() if (field.name not in excl_flds)]
 
-         ## had to put the list mannualy as above function add these two field which makes the code 'version_uri', 'version_uri__release' 
-    search_fields = ['release_code', 'url', 'analysis_priority', 'annotation_status', 'version_uri__version_uri', 'version_uri__url', 'version_uri__editor', 'version_uri__edition_place', 'version_uri__publisher', 'version_uri__edition_date', 'version_uri__ed_info', 'version_uri__version_lang', 'version_uri__tags', 'version_uri__notes', 'version_uri__status', 'version_uri__annotation_status', 'version_uri__text_id__text_uri', 'version_uri__text_id__title_ar', 'version_uri__text_id__title_lat', 'version_uri__text_id__title_ar_prefered', 'version_uri__text_id__title_lat_prefered', 'version_uri__text_id__text_type', 'version_uri__text_id__tags', 'version_uri__text_id__notes', 'version_uri__text_id__author_id__author_uri', 'version_uri__text_id__author_id__author_ar', 'version_uri__text_id__author_id__author_lat', 'version_uri__text_id__author_id__author_ar_prefered', 'version_uri__text_id__author_id__author_lat_prefered', 'version_uri__text_id__author_id__authorDateString', 'version_uri__text_id__author_id__notes', 'version_uri__text_id__author_id__personName__language', 'version_uri__text_id__author_id__personName__shuhra', 'version_uri__text_id__author_id__personName__nasab', 'version_uri__text_id__author_id__personName__kunya', 'version_uri__text_id__author_id__personName__ism', 'version_uri__text_id__author_id__personName__laqab', 'version_uri__text_id__author_id__personName__nisba']
+         ## had to put the list manualy as above function add these two field which makes the code 'version_uri', 'version_uri__release' 
+    search_fields = ['release__release_code', 'url', 'analysis_priority', 'annotation_status', 'version_meta__version_uri',  
+                     'version_meta__editor', 'version_meta__edition_place', 'version_meta__publisher', 'version_meta__edition_date', 
+                     'version_meta__ed_info', 'version_meta__language', 'version_meta__tags', 'notes', 
+                     'analysis_priority', 'annotation_status', 'version_meta__text_meta__text_uri', 
+                     'version_meta__text_meta__titles_ar', 'version_meta__text_meta__titles_lat', 
+                     'version_meta__text_meta__title_ar_prefered', 'version_meta__text_meta__title_lat_prefered', 
+                     'version_meta__text_meta__text_type', 'version_meta__text_meta__tags', 'version_meta__text_meta__notes', 
+                     'version_meta__text_meta__author_meta__author_uri', 
+                     'version_meta__text_meta__author_meta__author_ar', 'version_meta__text_meta__author_meta__author_lat', 
+                     'version_meta__text_meta__author_meta__author_ar_prefered', 'version_meta__text_meta__author_meta__author_lat_prefered', 
+                     'version_meta__text_meta__author_meta__date_str', 'version_meta__text_meta__author_meta__notes', 
+                     'version_meta__text_meta__author_meta__name_element__language', 
+                     'version_meta__text_meta__author_meta__name_element__shuhra', 'version_meta__text_meta__author_meta__name_element__nasab', 
+                     'version_meta__text_meta__author_meta__name_element__kunya', 'version_meta__text_meta__author_meta__name_element__ism', 
+                     'version_meta__text_meta__author_meta__name_element__laqab', 'version_meta__text_meta__author_meta__name_element__nisba']
 
     
     print("RELEASE SEARCH FIELDS:")
@@ -297,14 +337,16 @@ class getReleaseMeta(generics.ListAPIView):
                        filters.SearchFilter, filters.OrderingFilter)
     filterset_class = releaseFilter
 
-    ordering_fields = ['tok_length',
-                       'analysis_priority', 'version_uri__text_id__author_id__date', 'version_uri__text_id__title_lat_prefered', 'version_uri__text_id__author_id__author_lat_prefered']
+    ordering_fields = ['tok_length', 'analysis_priority', 'version_meta__text_meta__author_meta__date', 
+                       'version_meta__text_meta__title_lat_prefered', 'version_meta__text_meta__author_meta__author_lat_prefered']
 
     
 class getReleaseDetails(generics.ListAPIView):
 
     queryset = ReleaseDetails.objects.all()
     serializer_class = ReleaseDetailsSerializer
+
+
     
 class getSourceCollectionDetails(generics.ListAPIView):
 
