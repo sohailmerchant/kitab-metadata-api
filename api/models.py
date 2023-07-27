@@ -14,6 +14,7 @@ class authorMeta(models.Model):
     date_CE = models.IntegerField(null=True, blank=True)
     date_str = models.CharField(max_length=255, blank=True)
     tags =  models.CharField(max_length=255, blank=True)
+    bibliography = models.TextField(null=False, blank=True)
     notes = models.TextField(null=False, blank=True)
 
     # Create a relationship between two persons (e.g., person A is a student of person B)
@@ -47,6 +48,7 @@ class textMeta(models.Model):
     title_lat_prefered = models.CharField(max_length=255, blank=True)
     text_type = models.CharField(max_length=15, blank=True)  # document, inscription, ...
     tags =  models.CharField(max_length=255, blank=True)
+    bibliography = models.TextField(null=False, blank=True)
     notes = models.TextField(null=False, blank=True)
 
     # Create a relationship between two texts (e.g., text A is a commentary on text B)

@@ -72,7 +72,7 @@ class ShallowAuthorMetaSerializer(FlexFieldsModelSerializer):
         model = authorMeta
         fields = ("id", "author_uri", "author_ar", "author_ar_prefered", 
                   "author_lat", "author_lat_prefered", "name_elements", 
-                  "texts", "date", "date_AH", "date_CE", "date_str", "tags", "notes")
+                  "texts", "date", "date_AH", "date_CE", "date_str", "tags", "bibliography", "notes")
         depth = 1
 
 
@@ -187,7 +187,7 @@ class TextSerializer(FlexFieldsModelSerializer):
     class Meta:
         model = textMeta
         fields = ("text_uri", "title_ar_prefered", "title_lat_prefered", "titles_ar", "titles_lat", "tags", 
-                  "versions", "author_meta")
+                  "versions", "author_meta", "bibliography")
                   #"versions", "related_texts", "related_persons")
         depth = 1
 
@@ -339,7 +339,7 @@ class AuthorMetaSerializer(FlexFieldsModelSerializer):
         model = authorMeta
         fields = ("id", "author_uri", "author_ar", "author_ar_prefered", 
                   "author_lat", "author_lat_prefered", "name_elements", 
-                  "texts", "date", "date_AH", "date_CE", "date_str", "tags", "notes")
+                  "texts", "date", "date_AH", "date_CE", "date_str", "tags", "bibliography", "notes")
         depth = 3
 
 
