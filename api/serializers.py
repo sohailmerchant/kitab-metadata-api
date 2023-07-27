@@ -352,12 +352,20 @@ class CorpusInsightsSerializer(serializers.ModelSerializer):
                   "total_word_count", "largest_book", "total_word_count_pri", "top_10_book_by_word_count", "release"]
 
 
+class ShallowTextReuseStatsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TextReuseStats
+        depth = 1
+        fields = ["id", "book_1", "book_2", "release", "instances_count",
+                  "book1_word_match", "book2_word_match", "tsv_url"]
+        
 class TextReuseStatsSerializer(serializers.ModelSerializer):
     class Meta:
         model = TextReuseStats
-        depth = 2
-        fields = ["id", "book_1", "book_2", "instances_count",
-                  "book1_word_match", "book2_word_match"]
+        depth = 4
+        fields = ["id", "book_1", "book_2", "release", "instances_count",
+                  "book1_word_match", "book2_word_match", "tsv_url"]
+
 
 
 class ReleaseMetaSerializer(serializers.ModelSerializer):

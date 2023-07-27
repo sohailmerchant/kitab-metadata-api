@@ -11,7 +11,7 @@ from rest_framework import filters
 
 
 from .models import authorMeta, personName, textMeta, versionMeta, CorpusInsights, TextReuseStats, a2bRelation, ReleaseMeta, SourceCollectionDetails, ReleaseDetails
-from .serializers import TextSerializer, VersionMetaSerializer, PersonNameSerializer, ReleaseMetaSerializer, AuthorMetaSerializer, TextReuseStatsSerializer, CorpusInsightsSerializer, AllRelationSerializer,  SourceCollectionDetailsSerializer, ReleaseDetailsSerializer
+from .serializers import TextSerializer, VersionMetaSerializer, PersonNameSerializer, ReleaseMetaSerializer, AuthorMetaSerializer, TextReuseStatsSerializer, CorpusInsightsSerializer, AllRelationSerializer,  SourceCollectionDetailsSerializer, ReleaseDetailsSerializer, ShallowTextReuseStatsSerializer
 from .filters import authorFilter, versionFilter, textFilter, textReuseFilter, releaseFilter
 
 
@@ -282,20 +282,70 @@ class relationsListView(generics.ListAPIView):
 # Text Reuse Stats
 
 
-class getTextReuseStats(generics.ListAPIView):
-
-    queryset = TextReuseStats.objects.all()
-    serializer_class = TextReuseStatsSerializer
-    #serializer = TextReuseStatsSerializer(queryset, many=True)
+class getAllTextReuseStats(generics.ListAPIView):
+    serializer_class = ShallowTextReuseStatsSerializer
     pagination_class = CustomPagination
 
     filter_backends = (django_filters.DjangoFilterBackend,
                        filters.SearchFilter, filters.OrderingFilter)
     filterset_class = textReuseFilter
 
-    ordering_fields = ['instances_count',
-                       'book1_word_match', 'book2_word_match']
+    ordering_fields = ['instances_count', 'book1_word_match', 'book2_word_match']
     ordering_fields = (ordering_fields)
+
+    def get_queryset(self):
+        """Get the queryset, based on arguments provided in the URL"""
+        try:
+            release_code = self.kwargs['release_code']
+        except: 
+            release_code = None
+        try:
+            book1 = self.kwargs['book1']
+        except: 
+            book1 = None
+        print(release_code, book1)
+        if release_code:
+            if book1:
+                queryset = TextReuseStats.objects\
+                    .select_related("release", "book_1")\
+                    .filter(release__release_code=release_code, book_1__version_uri__contains=book1)\
+                    .all()
+            else:
+                queryset = TextReuseStats.objects\
+                    .select_related("release")\
+                    .filter(release__release_code=release_code)\
+                    .all()
+        else:
+            if book1:
+                queryset = TextReuseStats.objects\
+                    .select_related("book_1")\
+                    .filter(book_1__version_uri__contains=book1)\
+                    .all()
+            else:
+                print("book1 nor release defined")
+                queryset = TextReuseStats.objects.all()
+        return queryset
+
+# Get an author record by its author_uri
+@api_view(['GET'])
+def getPairTextReuseStats(request, book1, book2, release_code=None):
+    print(book1, book2, release_code)
+
+    try:
+        if release_code:
+            stats = TextReuseStats.objects.get(book_1__version_uri__contains=book1, 
+                                                  book_2__version_uri__contains=book2, 
+                                                  release__release_code=release_code)
+            serializer = TextReuseStatsSerializer(stats, many=False)
+        else:
+            stats = TextReuseStats.objects.filter(book_1__version_uri__contains=book1, 
+                                                  book_2__version_uri__contains=book2)
+            serializer = TextReuseStatsSerializer(stats, many=True)
+        print(stats)
+        
+        return Response(serializer.data)  
+    except TextReuseStats.DoesNotExist:
+        raise Http404
 
 
 class getReleaseMeta(generics.ListAPIView):

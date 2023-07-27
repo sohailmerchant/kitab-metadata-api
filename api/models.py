@@ -199,6 +199,12 @@ class TextReuseStats(models.Model):
                                related_name='textreuse_b1', related_query_name="textreuse_b1")
     book_2 = models.ForeignKey(versionMeta, to_field='version_id', on_delete=models.DO_NOTHING, 
                                related_name='textreuse_b2', related_query_name="textreuse_b2")
+    tsv_url = models.CharField(max_length=100, null=False, blank=True)
+    release = models.ForeignKey("ReleaseDetails", related_name="reuse_statistics", 
+                                related_query_name="reuse_statistics", on_delete=models.DO_NOTHING)
+    
+    def __str__(self):
+        return f"{self.release}_{self.book_1}_{self.book_2}"
 
 
 class CorpusInsights(models.Model):
@@ -212,7 +218,7 @@ class CorpusInsights(models.Model):
     total_word_count_pri = models.IntegerField(null=True, blank=True)
     top_10_book_by_word_count = models.JSONField(null=True, blank=True)
     release = models.ForeignKey("ReleaseDetails", related_name="corpus_statistics", 
-                                related_query_name="corpus_statistic", on_delete=models.DO_NOTHING)
+                                related_query_name="corpus_statistics", on_delete=models.DO_NOTHING)
 
 class ReleaseMeta(models.Model):
     """Describes metadata of a digital text version in a specific OpenITI release"""
@@ -234,6 +240,10 @@ class ReleaseDetails(models.Model):
     release_date = models.DateField(auto_now=False, auto_now_add=False, null=True, blank=True)
     zenodo_link = models.CharField(max_length=200, null=False, blank=True)
     release_notes = models.TextField(null=False, blank=True)
+
+    def __str__(self):
+        return self.release_code
+
 
 class SourceCollectionDetails(models.Model):
     """Describes the source collection from where texts entered into the OpenITI corpus"""
