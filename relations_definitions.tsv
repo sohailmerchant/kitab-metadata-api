@@ -47,3 +47,9 @@ CONT	mustadrak	is a continuation (mustadrak) of	has continuation (mustadrak)
 CONT	tamam	is a continuation (tamām) of	has continuation (tamām) 
 TRANSL		is a translation of	has translation 
 TRANSL	paraphrase	is a translation (paraphrase) of	has translation (paraphrase) 
+WRITTEN		was written in 	is writing place of 
+STUDENT		was a student of 	had as student 
+BORN		was born in 	is birth place of 
+DIED		died in 	is death place of 
+RESID		resided in 	was residence of 
+VISIT		visited	was visited by 

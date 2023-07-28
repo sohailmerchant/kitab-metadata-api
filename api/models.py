@@ -86,8 +86,8 @@ class personName(models.Model):
 
 class versionMeta(models.Model):
     """Describes a digital version of a text in the database."""
-    version_id = models.CharField(max_length=50, unique=True, null=False)
-    version_uri = models.CharField(max_length=100, blank=True)
+    version_id = models.CharField(max_length=50, null=False)
+    version_uri = models.CharField(max_length=100, unique=True, blank=True)
     text_meta = models.ForeignKey(textMeta, related_name='versions',
                                   related_query_name="version", on_delete=models.DO_NOTHING)
     language = models.CharField(max_length=9, blank=True)
@@ -193,13 +193,17 @@ class TextReuseStats(models.Model):
     # book_1 = models.CharField(max_length=50, null=False)
     # book_2 = models.CharField(max_length=50, null=False)
     instances_count = models.IntegerField(null=True, blank=True)
-    book1_word_match = models.IntegerField(null=True, blank=True)
-    book2_word_match = models.IntegerField(null=True, blank=True)
-    book1_match_book2_per = models.DecimalField(null=True, blank=True, max_digits=5, decimal_places=2)
-    book2_match_book1_per = models.DecimalField(null=True, blank=True, max_digits=5, decimal_places=2)
-    book_1 = models.ForeignKey(versionMeta, to_field='version_id', on_delete=models.DO_NOTHING,
+    book1_words_matched = models.IntegerField(null=True, blank=True)
+    book2_words_matched = models.IntegerField(null=True, blank=True)
+    book1_pct_words_matched = models.DecimalField(null=True, blank=True, max_digits=5, decimal_places=2)
+    book2_pct_words_matched = models.DecimalField(null=True, blank=True, max_digits=5, decimal_places=2)
+    # book_1 = models.ForeignKey(versionMeta, to_field='version_id', on_delete=models.DO_NOTHING,
+    #                            related_name='textreuse_b1', related_query_name="textreuse_b1")
+    # book_2 = models.ForeignKey(versionMeta, to_field='version_id', on_delete=models.DO_NOTHING, 
+    #                            related_name='textreuse_b2', related_query_name="textreuse_b2")
+    book_1 = models.ForeignKey("releaseMeta", on_delete=models.DO_NOTHING,
                                related_name='textreuse_b1', related_query_name="textreuse_b1")
-    book_2 = models.ForeignKey(versionMeta, to_field='version_id', on_delete=models.DO_NOTHING, 
+    book_2 = models.ForeignKey("releaseMeta", on_delete=models.DO_NOTHING, 
                                related_name='textreuse_b2', related_query_name="textreuse_b2")
     tsv_url = models.CharField(max_length=100, null=False, blank=True)
     release = models.ForeignKey("ReleaseDetails", related_name="reuse_statistics", 

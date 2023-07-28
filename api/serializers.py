@@ -255,7 +255,7 @@ class VersionMetaSerializer(FlexFieldsModelSerializer):
     class Meta:
         model = versionMeta
         #fields = ("__all__")
-        fields = ("id", "version_id", "version_uri", "edition_meta", "text_meta", "language", "tags", "releases")
+        fields = ("id", "version_id", "version_uri", "releases", "edition_meta", "text_meta", "language", "tags")
         depth = 3  # expand text and author metadata
 
 

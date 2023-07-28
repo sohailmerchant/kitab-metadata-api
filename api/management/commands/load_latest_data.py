@@ -9,8 +9,7 @@ import re
 import random
 import itertools
 
-from openiti.helper.uri import URI, check_yml_files
-from openiti.git import get_issues
+from openiti.git import get_issues   # TO DO: add issues!
 from openiti.helper.yml import readYML, dicToYML, fix_broken_yml
 from openiti.helper.ara import deNoise, ar_cnt_file
 
@@ -22,7 +21,7 @@ VERBOSE = False
 geo_URIs = dict()
 version_ids = dict()
 text_rel_d = dict()
-all_header_meta = dict()
+#all_header_meta = dict()
 
 
 lunar_months = """\
@@ -143,6 +142,11 @@ def main(corpus_folder, relations_definitions_fp, tags_fp, base_url, release_cod
     print("tags loaded for", len(text_tags), "files")
     # load the corpus metadata:
     load_corpus_meta(corpus_folder, base_url, text_tags, release_code)
+    # check for duplicate version_ids:
+    for version_id, fn_list in version_ids.items():
+        if len(fn_list) > 1:
+            print("DUPLICATE ID:", version_id)
+            print(fn_list)
 
 
 def ah2ce(date):
@@ -184,6 +188,7 @@ def load_tags(tags_fp):
 def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
     statusDic = {}
     split_files = dict()
+    all_relation_types = dict()
     for ah_folder in os.listdir(corpus_folder):
         if not re.findall("^\d{4}AH$", ah_folder):
             continue # skip anythin that's not an xxxxAH folder
@@ -272,7 +277,7 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
             # 0. RELEASE METADATA
 
             # create the release (if it doesn't exist yet):
-            release_id, created = ReleaseDetails.objects.update_or_create(
+            release_obj, created = ReleaseDetails.objects.update_or_create(
                 release_code = release_code
             )
 
@@ -320,10 +325,14 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
                 )
 
                 # then, add the relation type if it doesn't exist yet:
-                rt, rt_created = relationType.objects.get_or_create(
-                    code=d["code"], 
-                    subtype_code=d["subtype_code"]
-                )
+                if not f'd["code"]_d["subtype_code"]' in all_relation_types:  # avoid extra lookup in database
+                    rt, rt_created = relationType.objects.get_or_create(
+                        code=d["code"], 
+                        subtype_code=d["subtype_code"]
+                    )
+                    all_relation_types[f'd["code"]_d["subtype_code"]'] = rt
+                else:
+                    rt = all_relation_types[f'd["code"]_d["subtype_code"]']
 
                 # then, add the relation: 
                 rel, created = a2bRelation.objects.get_or_create(
@@ -348,10 +357,14 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
                     pb = am
 
                 # then, add the relation type if it doesn't exist yet:
-                rt, rt_created = relationType.objects.get_or_create(
-                    code=d["code"], 
-                    subtype_code=d["subtype_code"]
-                )
+                if not f'd["code"]_d["subtype_code"]' in all_relation_types:  # avoid extra lookup in database
+                    rt, rt_created = relationType.objects.get_or_create(
+                        code=d["code"], 
+                        subtype_code=d["subtype_code"]
+                    )
+                    all_relation_types[f'd["code"]_d["subtype_code"]'] = rt
+                else:
+                    rt = all_relation_types[f'd["code"]_d["subtype_code"]']
 
                 # then, add the relation: 
                 rel, created = a2bRelation.objects.get_or_create(
@@ -362,52 +375,214 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
 
             # 2. TEXT METADATA
 
-            for text_d in texts:
+            for text_uri, text_d in texts.items():
+                # prepare title fields before upload:
                 text_meta = text_d["text_meta"]
-                titles_ar = list(set(text_meta["titles_ar"] + text_meta["titles_ar_from_header"]))
-                titles_ar = " :: ".join(titles_ar)
-
-                # TO DO / TO BE CONTINUED: check if we need to change title_ar_prefered?
-
-
+                if "titles_ar_from_header" in text_meta and text_meta["titles_ar_from_header"]:
+                    titles_ar = list(set(text_meta["titles_ar"] + text_meta["titles_ar_from_header"]))
+                    text_meta['titles_ar'] = " :: ".join(titles_ar)
+                if not text_meta["title_ar_prefered"] and text_meta["titles_ar"]:
+                    text_meta["title_ar_prefered"] = text_meta["titles_ar"][0]
+                
+                # upload text meta to the database:
                 tm, tm_created = textMeta.objects.update_or_create(
                     text_uri=text_meta["text_uri"],
                     author_meta=am,
                     defaults=dict(
-                        titles_ar=titles_ar,
+                        titles_ar=text_meta['titles_ar'],
                         titles_lat=text_meta['titles_lat'],
                         title_ar_prefered = text_meta['title_ar_prefered'],
                         title_lat_prefered = text_meta['title_lat_prefered'],
                         text_type=text_meta["text_type"],
-                        tags=" :: ".join(text_meta["tags"])
+                        tags=" :: ".join(text_meta["tags"]),
+                        bibliography=text_meta["bibliography"],
+                        notes=text_meta["notes"],
                     )
                 )
 
-    # text_meta = dict(
-    #     text_uri=text_uri,
-    #     author_meta="",
-    #     titles_ar=" :: ".join(title_ar),
-    #     titles_lat=" :: ".join(title_lat),
-    #     title_ar_prefered=title_ar_prefered,
-    #     title_lat_prefered=title_lat_prefered,
-    #     text_type="text",
-    #     tags=tags,
-    #     bibliography=bibliography,
-    #     notes=notes,
-    #     place_relations=place_relations,
-    #     text_relations=text_relations
-    # )
+                # upload book relations to the database:
 
+                for d in text_meta["text_relations"]:
+                    # first, add the other text if it doesn't exist yet:
+                    if d["text_a"] == text_uri:
+                        ta = tm
+                        pb, created = authorMeta.objects.get_or_create(
+                            author_uri=d["text_b"].split(".")[0]
+                        )
+                        tb, created = textMeta.objects.get_or_create(
+                            text_uri=d["text_b"],
+                            author_meta=pb
+                        )
+                    else:
+                        pa, created = authorMeta.objects.get_or_create(
+                            author_uri=d["text_a"].split(".")[0]
+                        )
+                        ta, created = textMeta.objects.get_or_create(
+                            text_uri=d["text_a"],
+                            author_meta=pa
+                        )
+                        tb = tm
+
+                    # then, add the relation type if it doesn't exist yet:
+                    if not f'd["code"]_d["subtype_code"]' in all_relation_types:  # avoid extra lookup in database
+                        rt, rt_created = relationType.objects.get_or_create(
+                            code=d["code"], 
+                            subtype_code=d["subtype_code"]
+                        )
+                        all_relation_types[f'd["code"]_d["subtype_code"]'] = rt
+                    else:
+                        rt = all_relation_types[f'd["code"]_d["subtype_code"]']
+
+                    # then, add the relation: 
+                    rel, created = a2bRelation.objects.get_or_create(
+                        text_a=ta,
+                        text_b=tb,
+                        relation_type=rt
+                    )
+
+                # upload person relations to the database:
+
+                for d in text_meta["person_relations"]:
+                    # first, add the place if it doesn't exist yet
+                    pb, created = authorMeta.objects.get_or_create(
+                        author_uri=d["person_b"]
+                    )
+
+                    # then, add the relation type if it doesn't exist yet:
+                    if not f'd["code"]_d["subtype_code"]' in all_relation_types:  # avoid extra lookup in database
+                        rt, rt_created = relationType.objects.get_or_create(
+                            code=d["code"], 
+                            subtype_code=d["subtype_code"]
+                        )
+                        all_relation_types[f'd["code"]_d["subtype_code"]'] = rt
+                    else:
+                        rt = all_relation_types[f'd["code"]_d["subtype_code"]']
+
+                    # then, add the relation: 
+                    rel, created = a2bRelation.objects.get_or_create(
+                        text_a=tm,
+                        person_b=pb,
+                        relation_type=rt
+                    )
+
+                # upload place/date relations to the database:
+
+                for d in text_meta["place_relations"]:
+                    # first, add the place if it doesn't exist yet
+                    pb, created = placeMeta.objects.get_or_create(
+                        thuraya_uri=d["place_b"]
+                    )
+
+                    # then, add the relation type if it doesn't exist yet:
+                    if not f'd["code"]_d["subtype_code"]' in all_relation_types:  # avoid extra lookup in database
+                        rt, rt_created = relationType.objects.get_or_create(
+                            code=d["code"], 
+                            subtype_code=d["subtype_code"]
+                        )
+                        all_relation_types[f'd["code"]_d["subtype_code"]'] = rt
+                    else:
+                        rt = all_relation_types[f'd["code"]_d["subtype_code"]']
+
+                    # then, add the relation: 
+                    rel, created = a2bRelation.objects.get_or_create(
+                        text_a=tm,
+                        place_b=pb,
+                        relation_type=rt
+                    )
+                    
 
             # 3. VERSION METADATA
-                for version_d in text_d["versions"]:
-                    pass
+                # set the analysis priority ("pri", "sec") for all versions:
+                text_d["versions"] = set_analysis_priority(text_d["versions"])
+
+                for version_meta in text_d["versions"]:
+
+                    # upload edition meta :
+                    # NB: the edition meta comes mostly from the text files' metadata headers,
+                    # except for the worldcat_url and pdf_url.
+                    # The way we create these editionMeta objects,
+                    # the same edition may be created multiple times if one or more
+                    # fields are different; the alternative is that they overwrite each other,
+                    # which is probably even less desirable:
+
+                    em, em_created = editionMeta.objects.get_or_create(
+                        text_meta=tm,
+                        editor=version_meta["editor"],
+                        edition_place=version_meta["edition_place"],
+                        publisher=version_meta["publisher"],
+                        edition_date=version_meta["edition_date"],
+                        ed_info=version_meta["ed_info"],
+                        worldcat_url=version_meta["worldcat_url"],
+                        pdf_url=version_meta["pdf_url"]
+                    )
+
+                    # upload version metadata:
+
+                    vm, vm_created = versionMeta.objects.update_or_create(
+                        version_id=version_meta["version_id"],
+                        version_uri=version_meta["version_uri"],
+                        text_meta=tm,
+                        language=version_meta["language"],
+                        defaults=dict(
+                            tags=version_meta["tags"],  # this is a string
+                            edition_meta=em,
+                        )
+                    )                    
+
+                    # upload release version meta
+
+                    rvm, rvm_created = ReleaseMeta.objects.update_or_create(
+                        release=release_obj,
+                        version_meta=vm,
+                        defaults=dict(
+                            url=version_meta["url"],
+                            char_length=version_meta["char_length"],
+                            tok_length=version_meta["tok_length"],
+                            analysis_priority=version_meta["analysis_priority"],
+                            annotation_status=version_meta["annotation_status"],
+                            notes=version_meta["notes"]
+                        )
+                    )
 
             
+def set_analysis_priority(version_list):
+    """Check which of the versions of the text should get primary status
+    
+    Args:
+        version_list (list): list of version_meta dictionaries
+    """
+    # do not process empty version lists:
+    if len(version_list) < 1:
+        return version_list
+    # if there's only one version, it should automatically be the primary version:
+    if len(version_list) == 1:
+        version_list[0]["analysis_priority"] = "pri"
+    # if one or more texts already have primary status because of a flag in the yml file: stick to that:
+    if "pri" in [d["analysis_priority"] for d in version_list]:
+        return version_list
+    else:
+        # check if any text has a more advanced annotation status than the others; if so, pick that one as primary text:
+        annotation_statuses = [d["annotation_status"] for d in version_list]
+        if "mARkdown" in annotation_statuses:
+            mARkdown_indexes = [i for i, status in enumerate(annotation_statuses) if status=="mARkdown"]
+            for i in mARkdown_indexes:
+                version_list[i]["analysis_priority"] = "pri"
+            return version_list
+        elif "completed" in annotation_statuses:
+            completed_indexes = [i for i, status in enumerate(annotation_statuses) if status=="completed"]
+            for i in completed_indexes:
+                version_list[i]["analysis_priority"] = "pri"
+            return version_list
+        else:
+            # sort the version list by length of the text (from long to short):
+            version_list = sorted(version_list, key=lambda el:el["char_length"], reverse=True)
+            # take the longest text as primary text:
+            version_list[0]["analysis_priority"] = "pri"
+            return version_list
 
 
-
-
+    
+    
 
 def date_from_string(s):
     """Convert a date string YEAR-MON-DA (X+ for unknown) to a date"""
@@ -495,6 +670,8 @@ def collect_version_yml_data(version_yml_fp, version_uri, corpus_folder, base_ur
     primary_yml = ""
     if "PRIMARY_VERSION" in vers_d["90#VERS#ISSUES###:"]:
         primary_yml = "pri"
+    else:
+        primary_yml = "sec"
 
     # - most developed text version:
 
@@ -509,7 +686,8 @@ def collect_version_yml_data(version_yml_fp, version_uri, corpus_folder, base_ur
 
     # - url:
 
-    url = version_fp.replace(corpus_folder, base_url)
+    url = version_fp.replace(corpus_folder, base_url).replace("\\","/")
+    url = url.replace("AH/data", "AH/master/data")
 
     # annotation status:
 
@@ -534,26 +712,26 @@ def collect_version_yml_data(version_yml_fp, version_uri, corpus_folder, base_ur
             vers_d["00#VERS#LENGTH###:"] = tok_length
         # store the recalculated lengths in the yml file:
         ymlS = dicToYML(vers_d)
-        with open(versF, mode="w", encoding="utf-8") as file:
+        with open(version_yml_fp, mode="w", encoding="utf-8") as file:
             file.write(ymlS)
 
     # - edition_link:
 
-    world_cat_link = ""
+    worldcat_url = ""
     if "80#VERS#BASED####:" in vers_d:
         if vers_d["80#VERS#BASED####:"] and not vers_d["80#VERS#BASED####:"].strip().startswith("permalink"):
-            world_cat_link = vers_d["80#VERS#BASED####:"].strip()
-            world_cat_link = re.sub(r"[\s¶]*,[\s¶]", ",", world_cat_link)
+            worldcat_url = vers_d["80#VERS#BASED####:"].strip()
+            worldcat_url = re.sub(r"[\s¶]*,[\s¶]", ",", worldcat_url)
     else:
         print("MISSING KEY: 80#VERS#BASED####: in", version_uri)
         print(json.dumps(vers_d, indent=2, ensure_ascii=False))
         input()
     
-    pdf_link = ""
+    pdf_url = ""
     if "80#VERS#LINKS####:" in vers_d:
         if vers_d["80#VERS#LINKS####:"] and not vers_d["80#VERS#LINKS####:"].strip().startswith("all@id"):
-            pdf_link = vers_d["80#VERS#LINKS####:"].strip()
-            pdf_link = re.sub(r"[\s¶]*,[\s¶]", ",", pdf_link)
+            pdf_url = vers_d["80#VERS#LINKS####:"].strip()
+            pdf_url = re.sub(r"[\s¶]*,[\s¶]", ",", pdf_url)
     else:
         print("MISSING KEY: 80#VERS#LINKS####: in", version_uri)
         print(json.dumps(vers_d, indent=2, ensure_ascii=False))
@@ -566,8 +744,8 @@ def collect_version_yml_data(version_yml_fp, version_uri, corpus_folder, base_ur
             notes = vers_d["90#VERS#COMMENT##:"].strip()
             notes = re.sub(r"    ", "", notes)
     else:
-        print("MISSING KEY: 90#BOOK#COMMENT##: in", text_uri)
-        print(json.dumps(text_d, indent=2, ensure_ascii=False))
+        print("MISSING KEY: 90#VERS#COMMENT##: in", version_uri)
+        print(json.dumps(vers_d, indent=2, ensure_ascii=False))
         input()
 
     # - issues: 
@@ -589,8 +767,8 @@ def collect_version_yml_data(version_yml_fp, version_uri, corpus_folder, base_ur
         annotation_status=annotation_status,
         notes=notes,
         # edition_meta:
-        world_cat_link=world_cat_link,
-        pdf_link=pdf_link
+        worldcat_url=worldcat_url,
+        pdf_url=pdf_url
     )
 
     return version_fp, version_meta
@@ -656,19 +834,23 @@ def collect_text_yml_data(text_yml_fp, text_uri):
 
     # - text relations:
     text_relations = []
+    person_relations = []
     if not "40#BOOK#RELATED##:" in text_d:
         print("MISSING KEY 40#BOOK#RELATED##: in", text_uri)
     else:
         if text_d["40#BOOK#RELATED##:"].strip() and not text_d["40#BOOK#RELATED##:"].strip().startswith("URI of"):
+            # get the book relations string and split it into relations (rels):
             rels = text_d["40#BOOK#RELATED##:"].strip()
             rels = re.sub(" *[\r\n¶]+ *", " ", rels)
             rels = re.split(" *[;:]+ *", rels)
+
+            # add each relation to the relevant list:
             for rel in rels:
                 rel = re.sub(" +", " ", rel)
-                if "@" in rel:
+                if "@" in rel:  # new format: COMM.sharh@0255Jahiz.Hayawan
                     rel_types = rel.split("@")[0]
                     rel_text = rel.split("@")[1]
-                else:
+                else:           # old format: 0255Jahiz.Hayawan (COMM.sharh)
                     try:
                         rel_types = re.findall("\(([^\)]+)", rel)[0]
                     except:
@@ -677,11 +859,13 @@ def collect_text_yml_data(text_yml_fp, text_uri):
                         continue
                     rel_text = re.sub(" *\(.+", "", rel).strip()
                 
-                
+                # prepare to store the relations in both directions
                 if not text_uri in text_rel_d:
                     text_rel_d[text_uri] = []
                 if not rel_text in text_rel_d:
                     text_rel_d[rel_text] = []
+
+                # 
                 for rel_type in re.split(" *, *", rel_types):
                     if "." in rel_type:
                         main_rel_type = re.split(" *\. *", rel_type)[0]
@@ -691,9 +875,15 @@ def collect_text_yml_data(text_yml_fp, text_uri):
                         sec_rel_type = ""
                     rel = {"text_a": text_uri,
                            "code": main_rel_type,
-                           "subtype_code": sec_rel_type,
-                           "text_b": rel_text}
-                    text_relations.append(rel)
+                           "subtype_code": sec_rel_type
+                           }
+                    if rel_text.count(".") == 0:  # AUTHOR URI instead of text URI!
+                        rel["person_b"] = rel_text
+                        person_relations.append(rel)
+                    else:
+                        rel["text_b"] = rel_text
+                        text_relations.append(rel)
+                    # store ther relation in both directions in the dictionary (not used later)
                     if not rel in  text_rel_d[text_uri]:
                         text_rel_d[text_uri].append(rel)
                     if not rel in text_rel_d[rel_text]:
@@ -732,7 +922,8 @@ def collect_text_yml_data(text_yml_fp, text_uri):
         bibliography=bibliography,
         notes=notes,
         place_relations=place_relations,
-        text_relations=text_relations
+        text_relations=text_relations,
+        person_relations=person_relations
     )
 
     return text_meta
@@ -847,7 +1038,7 @@ def collect_author_yml_data(author_yml_fp, author_uri):
                 if student_uri:
                     if not student.strip() == student_uri[0]:
                         print("Additional information in student field?", student)
-                    person_relations.append(dict(code="STUD", subtype_code="", person_a=student_uri[0], person_b=author_uri))
+                    person_relations.append(dict(code="STUDENT", subtype_code="", person_a=student_uri[0], person_b=author_uri))
     else:
         print("MISSING KEY 40#AUTH#STUDENTS# in", author_uri)
         print(json.dumps(auth_d, indent=2, ensure_ascii=False))
@@ -858,7 +1049,7 @@ def collect_author_yml_data(author_yml_fp, author_uri):
             if teacher_uri:
                 if not re.sub("[\s¶]+", "", teacher) == teacher_uri[0]:
                     print("Additional information in teacher field?", teacher)
-                person_relations.append(dict(code="STUD", subtype_code="", person_a=author_uri, person_b=teacher_uri[0]))
+                person_relations.append(dict(code="STUDENT", subtype_code="", person_a=author_uri, person_b=teacher_uri[0]))
 
     # collect bibliography:
     bibliography = ""
@@ -967,7 +1158,7 @@ def extract_metadata_from_header(fp):
             input("press enter to continue")
 
     
-    all_header_meta[os.path.split(fp)[0]] = all_meta
+    #all_header_meta[os.path.split(fp)[0]] = all_meta
     return meta
 
 def insert_spaces(s):
