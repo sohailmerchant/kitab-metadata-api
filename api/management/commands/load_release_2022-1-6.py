@@ -124,25 +124,30 @@ def read_csv(meta_fp, base_url, release_info):
                     version_uri=record['version_uri']
                 )
             except versionMeta.DoesNotExist:
+                print(record['version_uri'], "does not exist in the database")
                 # if not, check if the text author_uri is in the database:
                 try:
                     am = authorMeta.objects.get(
                         author_uri=record['author_uri']
                     )
+                    print("but author does:", record['author_uri'])
                 except:
                     # the author is not yet in the database! Create a new author object:
                     # TO DO
                     # am = authorMeta.object.create()
+                    print("Auhtor URI not in database either:", record['author_uri'])
 
                 # the author is already in the database, check if the text exists:
                 try:
                     tm = textMeta.objects.get(
                         text_uri=record['text_uri']
                     )
+                    print("but text does:", record['text_uri'])
                 except: 
                     # the text is not yet in the database! Create a new text object:
                     # TO DO
                     # tm = textMeta.object.create()
+                    print("Text URI not in database either:", record['text_uri'])
 
                 # now we are sure the author and text exist in the database, create a new version object:
                 # TO DO: 
@@ -161,128 +166,128 @@ def read_csv(meta_fp, base_url, release_info):
             # print(authorMeta.objects.filter(author_uri = "0001AbuTalibCabdManaf").exists())
             # never create duplicate author data, except for Anonymous authors:
 
-            author_uri = record['version_uri'].split(".")[0]
-            if re.findall('\d{4}Anonymous\.', author_uri):
-                create_new = True
-            else:
-                if not authorMeta.objects.filter(author_uri=author_uri).exists():
-                    create_new = True
-                else:
-                    create_new = False
-            if create_new:
-                am, am_created = authorMeta.objects.get_or_create(
+            # author_uri = record['version_uri'].split(".")[0]
+            # if re.findall('\d{4}Anonymous\.', author_uri):
+            #     create_new = True
+            # else:
+            #     if not authorMeta.objects.filter(author_uri=author_uri).exists():
+            #         create_new = True
+            #     else:
+            #         create_new = False
+            # if create_new:
+            #     am, am_created = authorMeta.objects.get_or_create(
 
-                    author_uri=record['version_uri'].split(".")[0],
-                    author_ar=record['author_ar'],
-                    author_lat=record['author_lat'],
-                    author_ar_prefered =record['author_ar_prefered'],
-                    author_lat_prefered =record['author_lat_prefered'],
-                    date=record['date'],
-                    authorDateAH=get_authorDateAH(
-                        record['date'], record['type']),
-                    authorDateCE=get_authorDateCE(
-                        record['date'], record['type']),
-                    authorDateString=str(record['date'])
+            #         author_uri=record['version_uri'].split(".")[0],
+            #         author_ar=record['author_ar'],
+            #         author_lat=record['author_lat'],
+            #         author_ar_prefered =record['author_ar_prefered'],
+            #         author_lat_prefered =record['author_lat_prefered'],
+            #         date=record['date'],
+            #         authorDateAH=get_authorDateAH(
+            #             record['date'], record['type']),
+            #         authorDateCE=get_authorDateCE(
+            #             record['date'], record['type']),
+            #         authorDateString=str(record['date'])
 
-                )
-            else:
+            #     )
+            # else:
                
-                # am = authorMeta.objects.filter(author_uri=author_uri).update(
+            #     # am = authorMeta.objects.filter(author_uri=author_uri).update(
 
-                #     #author_uri=record['version_uri'].split(".")[0],
+            #     #     #author_uri=record['version_uri'].split(".")[0],
                  
-                #     author_ar=record['author_ar'],
-                #     author_lat=record['author_lat'],
-                #     date=record['date'],
-                #     authorDateAH=get_authorDateAH(
-                #         record['date'], record['type']),
-                #     authorDateCE=get_authorDateCE(
-                #         record['date'], record['type']),
-                #     authorDateString=str(record['date'])
+            #     #     author_ar=record['author_ar'],
+            #     #     author_lat=record['author_lat'],
+            #     #     date=record['date'],
+            #     #     authorDateAH=get_authorDateAH(
+            #     #         record['date'], record['type']),
+            #     #     authorDateCE=get_authorDateCE(
+            #     #         record['date'], record['type']),
+            #     #     authorDateString=str(record['date'])
                     
               
-                # )
-                am = authorMeta.objects.filter(
-                author_uri=record['version_uri'].split(".")[0]).first()
-                am_created = False
-                # am = authorMeta.objects.filter(id=am)
-                # print(am)
-            if not textMeta.objects.filter(text_uri=record['text_uri']).exists():
+            #     # )
+            #     am = authorMeta.objects.filter(
+            #     author_uri=record['version_uri'].split(".")[0]).first()
+            #     am_created = False
+            #     # am = authorMeta.objects.filter(id=am)
+            #     # print(am)
+            # if not textMeta.objects.filter(text_uri=record['text_uri']).exists():
                 
-                item, created = textMeta.objects.get_or_create(
-                    #author_uri=am,
-                    author_id =am,
-                    text_uri=record['text_uri'],
-                    title_ar=record['title_ar'],
-                    title_lat=record['title_lat'],
-                    title_ar_prefered = record['title_ar_prefered'],
-                    title_lat_prefered = record['title_lat_prefered'],
-                    text_type=record["type"],
-                    tags=record["tags"]
-                )
-                print(item, created)
-            else:
-                created = False
-                item = textMeta.objects.filter(
-                    text_uri=record['text_uri']).first()
-                # item = textMeta.objects.filter(text_uri=record['text_uri']).update(
-                #     #author_uri=am,
-                #     author_id =am,
+            #     item, created = textMeta.objects.get_or_create(
+            #         #author_uri=am,
+            #         author_id =am,
+            #         text_uri=record['text_uri'],
+            #         title_ar=record['title_ar'],
+            #         title_lat=record['title_lat'],
+            #         title_ar_prefered = record['title_ar_prefered'],
+            #         title_lat_prefered = record['title_lat_prefered'],
+            #         text_type=record["type"],
+            #         tags=record["tags"]
+            #     )
+            #     print(item, created)
+            # else:
+            #     created = False
+            #     item = textMeta.objects.filter(
+            #         text_uri=record['text_uri']).first()
+            #     # item = textMeta.objects.filter(text_uri=record['text_uri']).update(
+            #     #     #author_uri=am,
+            #     #     author_id =am,
                 
-                #     text_uri=record['text_uri'],
-                #     title_ar=record['title_ar'],
-                #     title_lat=record['title_lat'],
-                #     title_ar_prefered = record['title_ar_prefered'],
-                #     title_lat_prefered = record['title_lat_prefered'],
-                #     text_type=record["type"],
-                #     tags=record["tags"]
+            #     #     text_uri=record['text_uri'],
+            #     #     title_ar=record['title_ar'],
+            #     #     title_lat=record['title_lat'],
+            #     #     title_ar_prefered = record['title_ar_prefered'],
+            #     #     title_lat_prefered = record['title_lat_prefered'],
+            #     #     text_type=record["type"],
+            #     #     tags=record["tags"]
                 
-                # )
-                # item = textMeta.objects.filter(id=item)
-                # print(item)
+            #     # )
+            #     # item = textMeta.objects.filter(id=item)
+            #     # print(item)
 
 
-            if not versionMeta.objects.filter(version_uri=record['version_uri']).exists():
-                item, created = versionMeta.objects.get_or_create(
-                    text_id=item,
-                    version_id=record['version_id'],
-                    version_uri=record['version_uri'],
-                    ed_info=record['ed_info'],
-                    tags=record['tags'],
-                    version_lang=record['version_lang']
-                )
-                print(item, created)
-            else:
-                item = versionMeta.objects.filter(
-                    version_uri=record['version_uri']).first()
+            # if not versionMeta.objects.filter(version_uri=record['version_uri']).exists():
+            #     item, created = versionMeta.objects.get_or_create(
+            #         text_id=item,
+            #         version_id=record['version_id'],
+            #         version_uri=record['version_uri'],
+            #         ed_info=record['ed_info'],
+            #         tags=record['tags'],
+            #         version_lang=record['version_lang']
+            #     )
+            #     print(item, created)
+            # else:
+            #     item = versionMeta.objects.filter(
+            #         version_uri=record['version_uri']).first()
 
-            ReleaseMeta.objects.get_or_create(
-                release_code = '2022.2.7',
-                version_uri= item,
-                char_length=record['char_length'],
-                tok_length=record['tok_length'],
-                url=record['url'],
-                annotation_status=record['annotation_status'],
-                analysis_priority=record['analysis_priority']
+            # ReleaseMeta.objects.get_or_create(
+            #     release_code = '2022.2.7',
+            #     version_uri= item,
+            #     char_length=record['char_length'],
+            #     tok_length=record['tok_length'],
+            #     url=record['url'],
+            #     annotation_status=record['annotation_status'],
+            #     analysis_priority=record['analysis_priority']
 
-            )
+            # )
 
-            # name elements are not separately in the metadata file as it is now;
-            # loading bogus data for now!
-            if am_created:
-                for lan in ("ar", "lat"):
-                    name_elements = re.split(" *:: *", record['author_'+lan])
-                    while len(name_elements) < 5:
-                        name_elements.append("")
-                    random.shuffle(name_elements)
+            # # name elements are not separately in the metadata file as it is now;
+            # # loading bogus data for now!
+            # if am_created:
+            #     for lan in ("ar", "lat"):
+            #         name_elements = re.split(" *:: *", record['author_'+lan])
+            #         while len(name_elements) < 5:
+            #             name_elements.append("")
+            #         random.shuffle(name_elements)
 
-                    personName.objects.get_or_create(
-                        author_id=am,
-                        language=lan,
-                        shuhra=name_elements[0],
-                        kunya=name_elements[1],
-                        ism=name_elements[2],
-                        laqab=name_elements[3],
-                        nisba=name_elements[4],
-                    )
+            #         personName.objects.get_or_create(
+            #             author_id=am,
+            #             language=lan,
+            #             shuhra=name_elements[0],
+            #             kunya=name_elements[1],
+            #             ism=name_elements[2],
+            #             laqab=name_elements[3],
+            #             nisba=name_elements[4],
+            #         )
  
