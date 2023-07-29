@@ -106,6 +106,8 @@ class versionFilter(django_filters.FilterSet):
         field_name="release__tok_length", lookup_expr="lte")
     tok_count_gte = django_filters.NumberFilter(
         field_name="release__tok_length", lookup_expr="gte")
+    tags = django_filters.CharFilter(
+        field_name="release__tags", lookup_expr='icontains')  # /?tags=_SHICR
     editor = django_filters.CharFilter(
         field_name="edition_meta__editor", lookup_expr='icontains')
     edition_place = django_filters.CharFilter(
@@ -118,8 +120,6 @@ class versionFilter(django_filters.FilterSet):
         field_name="edition_meta__ed_info", lookup_expr='icontains')
     # this field is currently always null
     language = CharInFilter(field_name="language", lookup_expr='in')
-    tags = django_filters.CharFilter(
-        field_name="tags", lookup_expr='icontains')  # /?tags=_SHICR
     analysis_priority = CharInFilter(field_name="release__analysis_priority", lookup_expr='in')
     annotation_status = CharInFilter(field_name="release__annotation_status", lookup_expr='in')
     title_ar = django_filters.CharFilter(
@@ -302,7 +302,7 @@ class releaseFilter(django_filters.FilterSet):
     language = CharInFilter(
         field_name="version_meta__language", lookup_expr='in')
     tags = django_filters.CharFilter(
-        field_name="version_meta__tags", lookup_expr='icontains')  # /?tags=_SHICR
+        field_name="version_meta__release__tags", lookup_expr='icontains')  # /?tags=_SHICR
     analysis_priority = CharInFilter(
         field_name="analysis_priority", lookup_expr='in')
     annotation_status = CharInFilter(

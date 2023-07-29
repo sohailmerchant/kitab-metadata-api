@@ -91,7 +91,6 @@ class versionMeta(models.Model):
     text_meta = models.ForeignKey(textMeta, related_name='versions',
                                   related_query_name="version", on_delete=models.DO_NOTHING)
     language = models.CharField(max_length=9, blank=True)
-    tags = models.CharField(max_length=100, blank=True)
     edition_meta = models.ForeignKey("editionMeta", related_name='editions',
                                      related_query_name="edition", on_delete=models.DO_NOTHING)
     # NB: - notes, char_lenght, tok length, url, status and annotation status were moved to Release table
@@ -237,6 +236,7 @@ class ReleaseMeta(models.Model):
     url = models.CharField(max_length=255, null=False, blank=True)
     analysis_priority = models.CharField(max_length=3, null=False, blank=True)  # previous called status option could be pri, sec, tr
     annotation_status = models.CharField(max_length=50, null=False, blank=True) # mARkdown, completed, ...
+    tags = models.CharField(max_length=100, blank=True)
     notes = models.TextField(null=False, blank=True)
 
 class ReleaseDetails(models.Model):

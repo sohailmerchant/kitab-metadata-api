@@ -47,7 +47,7 @@ class ShallowVersionSerializer(FlexFieldsModelSerializer):
 
     class Meta:
         model = versionMeta
-        fields = ("id", "version_id", "version_uri", "edition_meta", "language", "tags")
+        fields = ("id", "version_id", "version_uri", "edition_meta", "language")
         depth = 0  # exclude text and author metadata
 
 
@@ -255,7 +255,7 @@ class VersionMetaSerializer(FlexFieldsModelSerializer):
     class Meta:
         model = versionMeta
         #fields = ("__all__")
-        fields = ("id", "version_id", "version_uri", "releases", "edition_meta", "text_meta", "language", "tags")
+        fields = ("id", "version_id", "version_uri", "releases", "edition_meta", "text_meta", "language")
         depth = 3  # expand text and author metadata
 
 
@@ -375,7 +375,7 @@ class ReleaseMetaSerializer(serializers.ModelSerializer):
         model = ReleaseMeta
         depth = 6
         fields = ("id", "char_length", "tok_length", "url", "analysis_priority", 
-                  "annotation_status", "notes", "release", "version_meta")
+                  "annotation_status", "tags", "notes", "release", "version_meta")
 
 
 class ReleaseDetailsSerializer(serializers.ModelSerializer):
