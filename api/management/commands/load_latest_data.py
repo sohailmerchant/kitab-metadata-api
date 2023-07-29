@@ -8,6 +8,7 @@ import os
 import re
 import random
 import itertools
+import datetime
 
 from openiti.git import get_issues   # TO DO: add issues!
 from openiti.helper.yml import readYML, dicToYML, fix_broken_yml
@@ -278,7 +279,11 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
 
             # create the release (if it doesn't exist yet):
             release_obj, created = ReleaseDetails.objects.update_or_create(
-                release_code = release_code
+                release_code=release_code,
+                defaults=dict(
+                    release_date=datetime.date.today(),
+                    release_notes="Not yet released. Reflects the current status of the corpus on GitHub"
+                )
             )
 
             # 1. AUTHOR METADATA
