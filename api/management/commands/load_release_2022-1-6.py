@@ -44,9 +44,9 @@ class Command(BaseCommand):
         base_url = "https://raw.githubusercontent.com/OpenITI/RELEASE/v2022.1.6/data"
         release_info = dict(
             release_code="2022.1.6",
-            release_date=datetime.date(2022, 7, 8), # YYYY M D
+            release_date=datetime.date(2022, 7, 8), # YYYY, M, D
             zenodo_link="https://zenodo.org/record/6808108",
-            release_notes=release_notes
+            release_notes=release_notes,
         )
 
         main(meta_fp, base_url, release_info)
@@ -54,60 +54,118 @@ class Command(BaseCommand):
 
 def main(meta_fp, base_url, release_info):
     # load the release metadata:
-    read_csv(meta_fp, base_url, release_info)
+    upload_from_csv(meta_fp, base_url, release_info)
     # check for duplicate version_ids:
     for version_id, fn_list in version_ids.items():
         if len(fn_list) > 1:
             print("DUPLICATE ID:", version_id)
             print(fn_list)
 
-def read_csv(meta_fp, base_url, release_info):
+def get_version_lang(version_uri):
+    try:
+        return re.findall("-([a-z]{3})", version_uri)[0]
+    except:
+        return ""
+    
+def get_annotation_status(value):
+    if value == 'mARkdown' or value == 'completed' or value == 'inProgress':
+        return value
+    else:
+        #return 'notYetAnnotated'
+        return "(not yet annotated)"
+
+def ah2ce(date):
+    """convert AH date to CE date"""
+    return 622 + (int(date) * 354 / 365.25)
+
+def split_tag_list(tag_list):
+    version_tags = []
+    text_tags = []
+    author_tags = []
+ 
+    for tag in tag_list:
+        if "MARKDOWN" in tag:
+            version_tags.append("MARKDOWN")
+        elif "COMPLETED" in tag:
+            version_tags.append("COMPLETED")
+        elif "INPROGRESS" in tag:
+            version_tags.append("INPROGRESS")
+        elif "NO_MAJOR_ISSUES" in tag:
+            version_tags.append("NO_MAJOR_ISSUES")
+        elif "born@" in tag or "died@" in tag or "resided@" in tag or "visited@" in tag:
+            author_tags.append(tag)
+        elif "@" in tag or tag.startswith("_"):
+            text_tags.append(tag)
+        else:
+            version_tags.append(tag)
+    return version_tags, text_tags, author_tags
+        
+def format_fields(data, base_url):
+    record = dict()
+    
+    record['version_uri'] = data['versionUri']
+    record['version_lang'] = get_version_lang(record['version_uri'])
+    record['date'] = int(data['date'])
+    record['date_AH'] = int(data['date'])
+    record['date_CE'] = ah2ce(data['date'])
+    record['date_str'] = int(data['date'])
+    record['author_ar'] = data['author_ar']
+    record['author_lat'] = data['author_lat']
+    record['author_ar_prefered'] = re.split(' *:: *| *, *| *; *',data['author_ar'])[0]
+
+    if data['author_lat_shuhra']:
+        record['author_lat_prefered'] = re.split(' *:: *| *, *| *; *',data['author_lat_shuhra'])[0]
+    else:
+        record['author_lat_prefered'] = re.split(' *:: *| *, *| *; *',data['author_lat'])[0]
+
+    record['text_uri'] = data['book']
+    record['author_uri'] = data['book'].split(".")[0]
+    record['titles_ar'] = data['title_ar']
+    record['titles_lat'] = data['title_lat']
+    record['title_ar_prefered'] = re.split(' *:: *| *, *| *; *',data['title_ar'])[0]
+    record['title_lat_prefered'] = re.split(' *:: *| *, *| *; *',data['title_lat'])[0]
+    record['ed_info'] = data['ed_info']
+    record['version_id'] = data['id']
+    version_tags, text_tags, author_tags = split_tag_list(data['tags'].split(" :: "))
+    record["version_tags"] = " :: ".join(version_tags)
+    record["text_tags"] = " :: ".join(text_tags)
+    record["author_tags"] = " :: ".join(author_tags)
+    
+
+    record['author_from_uri'] = data['author_from_uri']
+    record['author_lat_shuhra'] = data['author_lat_shuhra']
+    record['author_lat_full_name'] = data['author_lat_full_name']
+
+    ##releasefields
+    record['char_length'] = data['char_length']
+    record['tok_length'] = data['tok_length']
+    record['url'] = data['url'].replace("../data", base_url)
+    record['analysis_priority'] = data['status']
+    record['annotation_status'] = get_annotation_status(data['url'].split('.')[-1])
+    if "type" in data:
+        record["type"] = data["type"]
+    else:
+        record["type"] = "book"
+
+    return record
+
+
+def upload_from_csv(meta_fp, base_url, release_info):
+    fieldnames = ['versionUri', 'date', 'author_ar', 'author_lat', 'book', 'title_ar', 'title_lat', 'ed_info', 'id', 'status', 'tok_length', 'url', 'tags', 'author_from_uri', 'author_lat_shuhra', 'author_lat_full_name', 'char_length']
     with open(meta_fp, 'r', encoding='utf-8') as f:
-        reader = csv.DictReader(f, delimiter='\t')
-        for data in reader:
+        reader = csv.DictReader(f, fieldnames=fieldnames, delimiter='\t')
+        header = next(reader)
+
+        for version_data in reader:
 
             # read in the metadata for a version and format it:
+            record = format_fields(version_data, base_url)
 
-            record = dict()
-            
-            record['version_uri'] = data['versionUri']
-            record['version_lang'] = get_version_lang(record['version_uri'])
-            record['date'] = data['date']
-            record['author_ar'] = data['author_ar']
-            record['author_lat'] = data['author_lat']
-            record['author_ar_prefered'] = re.split(' *:: *| *, *| *; *',data['author_ar'])[0]
+            if record["version_uri"] == "0775IbnAbiWafa.JawahirMudiya.JK000806-ara1":
+                print("0775IbnAbiWafa.JawahirMudiya.JK000806-ara1")
+                print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 
-            if data['author_lat_shuhra']:
-                record['author_lat_prefered'] = re.split(' *:: *| *, *| *; *',data['author_lat_shuhra'])[0]
-            else:
-                record['author_lat_prefered'] = re.split(' *:: *| *, *| *; *',data['author_lat'])[0]
-
-            record['text_uri'] = data['book']
-            record['author_uri'] = data['book'].split(".")[0]
-            record['title_ar'] = data['title_ar']
-            record['title_lat'] = data['title_lat']
-            record['title_ar_prefered'] = re.split(' *:: *| *, *| *; *',data['title_ar'])[0]
-            record['title_lat_prefered'] = re.split(' *:: *| *, *| *; *',data['title_lat'])[0]
-            record['ed_info'] = data['ed_info']
-            record['version_id'] = data['id']
-            record['tags'] = data['tags']
-            record['author_from_uri'] = data['author_from_uri']
-            record['author_lat_shuhra'] = data['author_lat_shuhra']
-            record['author_lat_full_name'] = data['author_lat_full_name']
-
-            ##releasefields
-            record['tok_length'] = check_null(data['tok_length'])
-            record['url'] = data['url']
-            record['analysis_priority'] = data['status']
-            record['char_length'] = check_null(data['char_length'])
-            record['annotation_status'] = get_annotation_status(
-                data['url'].split('.')[-1])
-            if "type" in data:
-                record["type"] = data["type"]
-            else:
-                record["type"] = "book"
-
-            # load the metadata into the database: 
+            # first, create the new release itself in the database:
 
             release_obj, created = ReleaseDetails.objects.update_or_create(
                 release_code=release_info["release_code"],
@@ -118,26 +176,46 @@ def read_csv(meta_fp, base_url, release_info):
                 )
             )
 
+            # check if the version uri is already in the database:
+
             try:
-                # check if the version uri is already in the database:
                 vm = versionMeta.objects.get(
-                    version_uri=record['version_uri']
+                    version_uri=record['version_uri'],
+                    language=record["version_lang"]
                 )
             except versionMeta.DoesNotExist:
                 print(record['version_uri'], "does not exist in the database")
+
                 # if not, check if the text author_uri is in the database:
+
                 try:
                     am = authorMeta.objects.get(
                         author_uri=record['author_uri']
                     )
                     print("but author does:", record['author_uri'])
                 except:
-                    # the author is not yet in the database! Create a new author object:
-                    # TO DO
-                    # am = authorMeta.object.create()
-                    print("Auhtor URI not in database either:", record['author_uri'])
+                    print("Author URI not in database either:", record['author_uri'])
 
-                # the author is already in the database, check if the text exists:
+                    # the author is not yet in the database! Create a new author object:
+
+                    am, am_created = authorMeta.objects.get_or_create(
+                        author_uri=record['author_uri'],
+                        author_ar=record['author_ar'],
+                        author_lat=record['author_lat'],
+                        author_ar_prefered =record['author_ar_prefered'],
+                        author_lat_prefered =record['author_lat_prefered'],
+                        date=record['date'],
+                        date_AH=record['date_AH'],
+                        date_CE=record['date_CE'],
+                        date_str=record['date_str'],
+                        tags=record['author_tags']
+                        # do not upload bibliography and notes
+                    )
+                    if am_created:
+                        print("-> created", record['author_uri'])
+
+                # the author is now in the database, check if the text exists:
+
                 try:
                     tm = textMeta.objects.get(
                         text_uri=record['text_uri']
@@ -145,149 +223,73 @@ def read_csv(meta_fp, base_url, release_info):
                     print("but text does:", record['text_uri'])
                 except: 
                     # the text is not yet in the database! Create a new text object:
-                    # TO DO
-                    # tm = textMeta.object.create()
                     print("Text URI not in database either:", record['text_uri'])
+                    tm, tm_created = textMeta.objects.update_or_create(
+                        text_uri=record["text_uri"],
+                        author_meta=am,
+                        defaults=dict(
+                            titles_ar=record['titles_ar'],
+                            titles_lat=record['titles_lat'],
+                            title_ar_prefered = record['title_ar_prefered'],
+                            title_lat_prefered = record['title_lat_prefered'],
+                            text_type="book",
+                            tags=record["text_tags"],
+                        )
+                    )
+                    if tm_created:
+                        print("-> created", record['text_uri'])
+
 
                 # now we are sure the author and text exist in the database, create a new version object:
-                # TO DO: 
-                # vm = versionMeta.object.create()
-                # rm = ReleaseMeta.object.create()
+
+                # (but first, we check if the edition meta object exists or create it)
+
+                try:
+                    em = editionMeta.objects.filter(
+                        text_meta=tm,
+                        ed_info=record['ed_info']
+                    )[0]  # more than one edition with the same query criteria may exist!; 
+                    # NB: .first() returns None if none exists, so it will not trigger the exception
+                    print("Edition does exist")
+                    print("em:", em)
+                    print()
+                except: 
+                    print("Neither does the edition exist")
+
+                    em, em_created = editionMeta.objects.update_or_create(
+                        text_meta=tm,
+                        ed_info=record["ed_info"],
+                    )
+                    if em_created:
+                        print("-> Created Edition object")
+
+                # now create the new version object:
+
+                vm, vm_created = versionMeta.objects.update_or_create(
+                    version_id=record["version_id"],
+                    version_uri=record["version_uri"],
+                    text_meta=tm,
+                    language=record["version_lang"],
+                    defaults=dict(
+                        edition_meta=em,
+                    )
+                )     
+                if vm_created:
+                    print("-> created", record['version_uri'])              
+
 
             # now that we know that the version object is in the database, create or update the ReleaseMeta object:
             # TO DO: 
-            # rm, created = ReleaseMeta.object.update_or_create(
-            #     ...,
-            #     defaults=dict(
-            #         ...
-            #     )
-            # )
-
-            # print(authorMeta.objects.filter(author_uri = "0001AbuTalibCabdManaf").exists())
-            # never create duplicate author data, except for Anonymous authors:
-
-            # author_uri = record['version_uri'].split(".")[0]
-            # if re.findall('\d{4}Anonymous\.', author_uri):
-            #     create_new = True
-            # else:
-            #     if not authorMeta.objects.filter(author_uri=author_uri).exists():
-            #         create_new = True
-            #     else:
-            #         create_new = False
-            # if create_new:
-            #     am, am_created = authorMeta.objects.get_or_create(
-
-            #         author_uri=record['version_uri'].split(".")[0],
-            #         author_ar=record['author_ar'],
-            #         author_lat=record['author_lat'],
-            #         author_ar_prefered =record['author_ar_prefered'],
-            #         author_lat_prefered =record['author_lat_prefered'],
-            #         date=record['date'],
-            #         authorDateAH=get_authorDateAH(
-            #             record['date'], record['type']),
-            #         authorDateCE=get_authorDateCE(
-            #             record['date'], record['type']),
-            #         authorDateString=str(record['date'])
-
-            #     )
-            # else:
-               
-            #     # am = authorMeta.objects.filter(author_uri=author_uri).update(
-
-            #     #     #author_uri=record['version_uri'].split(".")[0],
-                 
-            #     #     author_ar=record['author_ar'],
-            #     #     author_lat=record['author_lat'],
-            #     #     date=record['date'],
-            #     #     authorDateAH=get_authorDateAH(
-            #     #         record['date'], record['type']),
-            #     #     authorDateCE=get_authorDateCE(
-            #     #         record['date'], record['type']),
-            #     #     authorDateString=str(record['date'])
-                    
-              
-            #     # )
-            #     am = authorMeta.objects.filter(
-            #     author_uri=record['version_uri'].split(".")[0]).first()
-            #     am_created = False
-            #     # am = authorMeta.objects.filter(id=am)
-            #     # print(am)
-            # if not textMeta.objects.filter(text_uri=record['text_uri']).exists():
-                
-            #     item, created = textMeta.objects.get_or_create(
-            #         #author_uri=am,
-            #         author_id =am,
-            #         text_uri=record['text_uri'],
-            #         title_ar=record['title_ar'],
-            #         title_lat=record['title_lat'],
-            #         title_ar_prefered = record['title_ar_prefered'],
-            #         title_lat_prefered = record['title_lat_prefered'],
-            #         text_type=record["type"],
-            #         tags=record["tags"]
-            #     )
-            #     print(item, created)
-            # else:
-            #     created = False
-            #     item = textMeta.objects.filter(
-            #         text_uri=record['text_uri']).first()
-            #     # item = textMeta.objects.filter(text_uri=record['text_uri']).update(
-            #     #     #author_uri=am,
-            #     #     author_id =am,
-                
-            #     #     text_uri=record['text_uri'],
-            #     #     title_ar=record['title_ar'],
-            #     #     title_lat=record['title_lat'],
-            #     #     title_ar_prefered = record['title_ar_prefered'],
-            #     #     title_lat_prefered = record['title_lat_prefered'],
-            #     #     text_type=record["type"],
-            #     #     tags=record["tags"]
-                
-            #     # )
-            #     # item = textMeta.objects.filter(id=item)
-            #     # print(item)
-
-
-            # if not versionMeta.objects.filter(version_uri=record['version_uri']).exists():
-            #     item, created = versionMeta.objects.get_or_create(
-            #         text_id=item,
-            #         version_id=record['version_id'],
-            #         version_uri=record['version_uri'],
-            #         ed_info=record['ed_info'],
-            #         tags=record['tags'],
-            #         version_lang=record['version_lang']
-            #     )
-            #     print(item, created)
-            # else:
-            #     item = versionMeta.objects.filter(
-            #         version_uri=record['version_uri']).first()
-
-            # ReleaseMeta.objects.get_or_create(
-            #     release_code = '2022.2.7',
-            #     version_uri= item,
-            #     char_length=record['char_length'],
-            #     tok_length=record['tok_length'],
-            #     url=record['url'],
-            #     annotation_status=record['annotation_status'],
-            #     analysis_priority=record['analysis_priority']
-
-            # )
-
-            # # name elements are not separately in the metadata file as it is now;
-            # # loading bogus data for now!
-            # if am_created:
-            #     for lan in ("ar", "lat"):
-            #         name_elements = re.split(" *:: *", record['author_'+lan])
-            #         while len(name_elements) < 5:
-            #             name_elements.append("")
-            #         random.shuffle(name_elements)
-
-            #         personName.objects.get_or_create(
-            #             author_id=am,
-            #             language=lan,
-            #             shuhra=name_elements[0],
-            #             kunya=name_elements[1],
-            #             ism=name_elements[2],
-            #             laqab=name_elements[3],
-            #             nisba=name_elements[4],
-            #         )
+            rvm, rvm_created = ReleaseMeta.objects.update_or_create(
+                release=release_obj,
+                version_meta=vm,
+                defaults=dict(
+                    url=record["url"],
+                    char_length=record["char_length"],
+                    tok_length=record["tok_length"],
+                    analysis_priority=record["analysis_priority"],
+                    annotation_status=record["annotation_status"],
+                    tags=record["version_tags"]
+                )
+            )
  

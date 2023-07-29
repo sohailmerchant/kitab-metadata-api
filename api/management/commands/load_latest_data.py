@@ -529,7 +529,6 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
                         text_meta=tm,
                         language=version_meta["language"],
                         defaults=dict(
-                            tags=version_meta["tags"],  # this is a string
                             edition_meta=em,
                         )
                     )                    
@@ -545,6 +544,7 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
                             tok_length=version_meta["tok_length"],
                             analysis_priority=version_meta["analysis_priority"],
                             annotation_status=version_meta["annotation_status"],
+                            tags=version_meta["tags"],  # this is a string
                             notes=version_meta["notes"]
                         )
                     )
