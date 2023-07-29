@@ -362,7 +362,7 @@ class getReleaseMeta(generics.ListAPIView):
          ## had to put the list manualy as above function add these two field which makes the code 'version_uri', 'version_uri__release' 
     search_fields = ['release__release_code', 'url', 'analysis_priority', 'annotation_status', 'version_meta__version_uri',  
                      'version_meta__editor', 'version_meta__edition_place', 'version_meta__publisher', 'version_meta__edition_date', 
-                     'version_meta__ed_info', 'version_meta__language', 'version_meta__tags', 'notes', 
+                     'version_meta__ed_info', 'version_meta__language', 'version_meta__release__tags', 'notes', 
                      'analysis_priority', 'annotation_status', 'version_meta__text_meta__text_uri', 
                      'version_meta__text_meta__titles_ar', 'version_meta__text_meta__titles_lat', 
                      'version_meta__text_meta__title_ar_prefered', 'version_meta__text_meta__title_lat_prefered', 
