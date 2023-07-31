@@ -108,6 +108,7 @@ class TextReuseStatsSerializer(serializers.ModelSerializer):
     class Meta:
         model = TextReuseStats
         depth = 4
+        
         fields = ["id", "book_1", "book_2", "instances_count",
                   "book1_word_match", "book2_word_match"]
 
