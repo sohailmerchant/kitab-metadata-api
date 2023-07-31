@@ -123,9 +123,9 @@ headings_dict = {
 
 class Command(BaseCommand):
     def handle(self, **options):
-        relations_definitions_fp = "relations_definitions.tsv"
+        relations_definitions_fp = "meta/relations_definitions.tsv"
         corpus_folder = r"D:/AKU/OpenITI/25Y_repos"
-        tags_fp = "ID_TAGS.txt"
+        tags_fp = "meta/ID_TAGS.txt"
         base_url = "https://raw.githubusercontent.com/OpenITI"
         release_code = "post-release"
 
