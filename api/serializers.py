@@ -469,11 +469,10 @@ class TextReuseStatsSerializer(serializers.ModelSerializer):
     class Meta:
         model = TextReuseStats
         depth = 4
+        
         fields = ["id", "book_1", "book_2", "release", "instances_count",
                   "book1_words_matched", "book2_words_matched", 
                   "book1_pct_words_matched", "book2_pct_words_matched", "tsv_url"]
-
-
 
 class ReleaseMetaSerializer(serializers.ModelSerializer):
     version_meta = VersionMetaSerializer(read_only=True)
