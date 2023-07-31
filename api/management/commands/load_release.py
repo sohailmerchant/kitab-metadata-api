@@ -15,6 +15,9 @@ version_ids = dict()
 
 class Command(BaseCommand):
     def handle(self, **options):
+        # if testing, only upload text reuse data for Tabari.Tarikh and MalikIbnAnas.Muwatta
+        test = True
+
         # provide the release details here:
 
         # release_code = "2022.2.7"
@@ -64,10 +67,10 @@ class Command(BaseCommand):
             release_notes=release_notes,
         )
 
-        main(meta_fp, base_url, release_info, reuse_data_fp, reuse_data_base_url)
+        main(meta_fp, base_url, release_info, reuse_data_fp, reuse_data_base_url, test=test)
 
 
-def main(meta_fp, base_url, release_info, reuse_data_fp, reuse_data_base_url):
+def main(meta_fp, base_url, release_info, reuse_data_fp, reuse_data_base_url, test=False):
     # load the release metadata:
     release_obj = upload_release_meta(meta_fp, base_url, release_info)
     # check for duplicate version_ids:
@@ -80,7 +83,7 @@ def main(meta_fp, base_url, release_info, reuse_data_fp, reuse_data_base_url):
     if no_duplicates:
         print("No duplicate version IDs found")
     # upload the text reuse stats:
-    upload_reuse_stats(reuse_data_fp, release_info["release_code"], release_obj, reuse_data_base_url)
+    upload_reuse_stats(reuse_data_fp, release_info["release_code"], release_obj, reuse_data_base_url, test=test)
     # create the corpus insights data:
     
 
@@ -318,14 +321,15 @@ def upload_release_meta(meta_fp, base_url, release_info):
 
     return release_obj
  
-def upload_reuse_stats(reuse_data_fp, release_code, release_obj, reuse_data_base_url):
+def upload_reuse_stats(reuse_data_fp, release_code, release_obj, reuse_data_base_url, test=False):
     with open(reuse_data_fp, 'r', encoding='utf-8') as f:
         reader = csv.DictReader(f, delimiter='\t')
         for data in reader:
-            # as a test: only load 0179MalikIbnAnas.Muwatta and 0310Tabari.Tarikh stats:
-            if not ("Shamela0009783" in data['_T1'] or "Shamela0009783" in data['_T2']) \
-                or not ("Shamela0028107" in data['_T1'] or "Shamela0028107" in data['_T1']):  # 0179MalikIbnAnas.Muwatta
-                continue
+            if test:
+                # for testing: only load 0179MalikIbnAnas.Muwatta and 0310Tabari.Tarikh stats:
+                if not ("Shamela0009783" in data['_T1'] or "Shamela0009783" in data['_T2']) \
+                    or not ("Shamela0028107" in data['_T1'] or "Shamela0028107" in data['_T1']):  # 0179MalikIbnAnas.Muwatta
+                    continue
             version_id1 = data['_T1'].split("-")[0].split(".")[0]
             version_id2 = data['_T2'].split("-")[0].split(".")[0]
             b1 = ReleaseMeta.objects.get(
