@@ -354,32 +354,118 @@ class CorpusInsightsSerializer(serializers.ModelSerializer):
                   "total_word_count", "total_word_count_pri", 
                   "largest_book", "largest_10_books"]
 
-class ShallowTextReuseStatsSerializer(serializers.ModelSerializer):
+class ReleaseCodeOnlySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ReleaseDetails
+        fields = ["release_code",]
+
+class SelectiveVersionMetaSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = versionMeta
+        fields = ["id", "version_uri"]
+
+class SelectiveReleaseMetaSerializer(serializers.ModelSerializer):
+    version_meta = SelectiveVersionMetaSerializer(many=False, read_only=True)
+    class Meta:
+        model = ReleaseMeta
+        fields = ["id", "tok_length", "version_meta"]
+
+class TextReuseStatsSerializerB1(FlexFieldsModelSerializer):
+    """Serialize the text reuse statistics for a single Book1"""
+    release = ReleaseCodeOnlySerializer(many=False, read_only=True)
+
+    def serialize_relations(self, text_reuse_instance):
+        """serialize a text reuse instance with minimal fields"""
+        # version2_instance = versionMeta.objects\
+        #     .select_related("text_meta__author_meta")\
+        #     .get(id=text_reuse_instance.book_2.version_meta.id)
+
+        # d = {
+        #     "author_ar_prefered": version2_instance.text_meta.author_meta.author_ar_prefered,
+        #     "author_lat_prefered": version2_instance.text_meta.author_meta.author_lat_prefered, 
+        #     "title_ar_prefered": version2_instance.text_meta.title_ar_prefered,
+        #     "title_lat_prefered": version2_instance.text_meta.title_lat_prefered,
+        #     "version_uri": version2_instance.version_uri,
+        #     "tok_length": text_reuse_instance.book_2.tok_length
+        #     }
+        d = {
+            "book2": {
+                "author_ar_prefered": text_reuse_instance.book_2.version_meta.text_meta.author_meta.author_ar_prefered,
+                "author_lat_prefered": text_reuse_instance.book_2.version_meta.text_meta.author_meta.author_lat_prefered, 
+                "title_ar_prefered": text_reuse_instance.book_2.version_meta.text_meta.title_ar_prefered,
+                "title_lat_prefered": text_reuse_instance.book_2.version_meta.text_meta.title_lat_prefered,
+                "version_uri": text_reuse_instance.book_2.version_meta.version_uri,
+                "tok_length": text_reuse_instance.book_2.tok_length
+            }
+        }
+        return d
+
+    def to_representation(self, instance):
+        # create the default json representation of the author metadata
+        json_rep = super().to_representation(instance)
+        # add the relationships to the default representation:
+        d = {**json_rep, **self.serialize_relations(instance)}
+        d["release"] = d["release"]["release_code"]
+        return d
+
     class Meta:
         model = TextReuseStats
         depth = 1
-        fields = ["id", "book_1", "book_2", "release", "instances_count",
+        fields = ["id", "release", "instances_count",
                   "book1_words_matched", "book2_words_matched", 
                   "book1_pct_words_matched", "book2_pct_words_matched", "tsv_url"]
 
-    # instances_count = models.IntegerField(null=True, blank=True)
-    # book1_words_matched = models.IntegerField(null=True, blank=True)
-    # book2_words_matched = models.IntegerField(null=True, blank=True)
-    # book1_pct_words_matched = models.DecimalField(null=True, blank=True, max_digits=5, decimal_places=2)
-    # book2_pct_words_matched = models.DecimalField(null=True, blank=True, max_digits=5, decimal_places=2)
-    # # book_1 = models.ForeignKey(versionMeta, to_field='version_id', on_delete=models.DO_NOTHING,
-    # #                            related_name='textreuse_b1', related_query_name="textreuse_b1")
-    # # book_2 = models.ForeignKey(versionMeta, to_field='version_id', on_delete=models.DO_NOTHING, 
-    # #                            related_name='textreuse_b2', related_query_name="textreuse_b2")
-    # book_1 = models.ForeignKey("releaseMeta", on_delete=models.DO_NOTHING,
-    #                            related_name='textreuse_b1', related_query_name="textreuse_b1")
-    # book_2 = models.ForeignKey("releaseMeta", on_delete=models.DO_NOTHING, 
-    #                            related_name='textreuse_b2', related_query_name="textreuse_b2")
-    # tsv_url = models.CharField(max_length=100, null=False, blank=True)
-    # release = models.ForeignKey("ReleaseDetails", related_name="reuse_statistics", 
+class ShallowTextReuseStatsSerializer(FlexFieldsModelSerializer):
+    """"""
+    release = ReleaseCodeOnlySerializer(many=False, read_only=True)
+    #book_2 = SelectiveReleaseMetaSerializer(many=False, read_only=True)
+
+    def serialize_relations(self, text_reuse_instance):
+        """serialize a text reuse instance with minimal fields"""
+        version1_instance = versionMeta.objects\
+            .select_related("text_meta__author_meta")\
+            .get(id=text_reuse_instance.book_1.version_meta.id)
+        version2_instance = versionMeta.objects\
+            .select_related("text_meta__author_meta")\
+            .get(id=text_reuse_instance.book_2.version_meta.id)
+
+        d = {
+            "book1": {
+                "author_ar_prefered": version1_instance.text_meta.author_meta.author_ar_prefered,
+                "author_lat_prefered": version1_instance.text_meta.author_meta.author_lat_prefered, 
+                "title_ar_prefered": version1_instance.text_meta.title_ar_prefered,
+                "title_lat_prefered": version1_instance.text_meta.title_lat_prefered,
+                "version_uri": version1_instance.version_uri
+                },
+            "book2": {
+                "author_ar_prefered": version2_instance.text_meta.author_meta.author_ar_prefered,
+                "author_lat_prefered": version2_instance.text_meta.author_meta.author_lat_prefered, 
+                "title_ar_prefered": version2_instance.text_meta.title_ar_prefered,
+                "title_lat_prefered": version2_instance.text_meta.title_lat_prefered,
+                "version_uri": version2_instance.version_uri
+                }
+            }
+        return d
+
+    def to_representation(self, instance):
+        # create the default json representation of the author metadata
+        json_rep = super().to_representation(instance)
+        # add the relationships to the default representation:
+        json_rep = {**json_rep, **self.serialize_relations(instance)}
+        # flatten the release dictionary:
+        json_rep["release"] = json_rep["release"]["release_code"]
+        return json_rep
+
+    class Meta:
+        model = TextReuseStats
+        depth = 1
+        fields = ["id", "release", "instances_count",
+                  "book1_words_matched", "book2_words_matched", 
+                  "book1_pct_words_matched", "book2_pct_words_matched", "tsv_url"]
 
 
 class TextReuseStatsSerializer(serializers.ModelSerializer):
+    release = ReleaseCodeOnlySerializer(many=False, read_only=True)
     class Meta:
         model = TextReuseStats
         depth = 4

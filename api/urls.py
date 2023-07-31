@@ -15,7 +15,7 @@ urlpatterns = [
     path('<str:release_code>/version/', views.getReleaseMeta.as_view(), name='one-release-all-versions'),
     path('<str:release_code>/version/<str:version_id>/', views.getReleaseVersion, name='one-release-one-version'),
 
-    # text endpoints:
+    # text endpoints:  # TO DO: use other view for the texts
 
     path('all-releases/text/', views.textListView.as_view(), name='all-releases-all-texts'),
     path('all-releases/text/all/', views.textListView.as_view(), name='all-releases-all-texts'),
@@ -60,15 +60,11 @@ urlpatterns = [
 
     path('all-releases/text-reuse-stats/<str:book1>_<str:book2>/', views.getPairTextReuseStats, name='text-reuse-pair'),
     path('all-releases/text-reuse-stats/all/', views.getAllTextReuseStats.as_view(), name='all-text-reuse'),
-    path('all-releases/text-reuse-stats/<str:book1>/', views.getAllTextReuseStats.as_view(), name='all-text-reuse'),
-
+    path('all-releases/text-reuse-stats/<str:book1>/', views.getAllTextReuseStatsB1.as_view(), name='all-text-reuse'),
 
     path('<str:release_code>/text-reuse-stats/<str:book1>_<str:book2>/', views.getPairTextReuseStats, name='text-reuse-pair'),
     path('<str:release_code>/text-reuse-stats/all/', views.getAllTextReuseStats.as_view(), name='all-text-reuse'),
-    path('<str:release_code>/text-reuse-stats/<str:book1>/', views.getAllTextReuseStats.as_view(), name='all-text-reuse'),
-
-
-
+    path('<str:release_code>/text-reuse-stats/<str:book1>/', views.getAllTextReuseStatsB1.as_view(), name='all-text-reuse'),
 
     # # version endpoints: (a confusing category - we should use the releaseMeta as starting point!)
 
@@ -79,7 +75,6 @@ urlpatterns = [
     # path('<str:release_code>/version/', views.versionListView.as_view(), name='one-release-all-versions'),
     # path('<str:release_code>/version/all/', views.versionListView.as_view(), name='one-release-all-versions'),
     # path('<str:release_code>/version/<str:version_id>/', views.getVersion, name='one-release-one-version'),
-
 
 
     #path('book-list/', views.bookList, name='book-list'),

@@ -21,23 +21,23 @@ class Command(BaseCommand):
 
         # provide the release details here:
 
-        release_code = "2022.2.7"
-        release_date = datetime.date(2023, 2, 24) # YYYY, M, D
-        meta_fp = "meta/OpenITI_metadata_2022-2-7_merged_wNoor.csv"
-        base_url = "https://raw.githubusercontent.com/OpenITI/RELEASE/v2022.2.7/data"
-        zenodo_link = "https://zenodo.org/record/7687795"
-        release_notes_fp = "meta/release_notes_2022-2-7.txt"
-        reuse_data_fp = "reuse_data/stats-v2022-2-7_bi-dir.csv"
-        reuse_data_base_url = "http://dev.kitab-project.org/passim01122022/"
+        # release_code = "2022.2.7"
+        # release_date = datetime.date(2023, 2, 24) # YYYY, M, D
+        # meta_fp = "meta/OpenITI_metadata_2022-2-7_merged_wNoor.csv"
+        # base_url = "https://raw.githubusercontent.com/OpenITI/RELEASE/v2022.2.7/data"
+        # zenodo_link = "https://zenodo.org/record/7687795"
+        # release_notes_fp = "meta/release_notes_2022-2-7.txt"
+        # reuse_data_fp = "reuse_data/stats-v2022-2-7_bi-dir.csv"
+        # reuse_data_base_url = "http://dev.kitab-project.org/passim01122022-v7/"
 
-        # release_code = "2022.1.6"
-        # release_date = datetime.date(2022, 7, 8) # YYYY, M, D
-        # meta_fp = "meta/OpenITI_metadata_2022-1-6_merged_wNoor.csv"
-        # base_url = "https://raw.githubusercontent.com/OpenITI/RELEASE/v2022.1.6/data"
-        # zenodo_link = "https://zenodo.org/record/6808108"
-        # release_notes_fp = "meta/release_notes_2022-1-6.txt"
-        # reuse_data_fp = "reuse_data/stats-v2022-1-6_bi-dir.csv"
-        # reuse_data_base_url = "http://dev.kitab-project.org/passim01102022/"
+        release_code = "2022.1.6"
+        release_date = datetime.date(2022, 7, 8) # YYYY, M, D
+        meta_fp = "meta/OpenITI_metadata_2022-1-6_merged_wNoor.csv"
+        base_url = "https://raw.githubusercontent.com/OpenITI/RELEASE/v2022.1.6/data"
+        zenodo_link = "https://zenodo.org/record/6808108"
+        release_notes_fp = "meta/release_notes_2022-1-6.txt"
+        reuse_data_fp = "reuse_data/stats-v2022-1-6_bi-dir.csv"
+        reuse_data_base_url = "http://dev.kitab-project.org/passim01102022/"
 
         # release_code = "2021.2.5"
         # release_date = datetime.date(2021, 10, 18) # YYYY, M, D

@@ -699,12 +699,18 @@ def collect_author_yml_data(author_yml_fp, author_uri):
         print(json.dumps(auth_d, indent=2, ensure_ascii=False))
         input()
 
+    try:
+        author_ar_prefered = [x for x in [shuhra_ar, full_name_ar] if x][0]
+    except:
+        author_ar_prefered = ""
+    author_lat_prefered=[x for x in [shuhra, full_name, english_name, name_from_uri] if x][0]
+
     author_meta = dict(
         author_uri=author_uri,
         author_ar=" :: ".join([x for x in [shuhra_ar, full_name_ar] if x]),
         author_lat=" :: ".join([x for x in [shuhra, full_name, english_name, name_from_uri] if x]),
-        author_ar_prefered=shuhra_ar,
-        author_lat_prefered=shuhra,
+        author_ar_prefered=author_ar_prefered,
+        author_lat_prefered=author_lat_prefered,
         date=date,
         date_AH=date_AH,
         date_CE=date_CE,

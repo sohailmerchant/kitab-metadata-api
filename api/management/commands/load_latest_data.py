@@ -334,7 +334,7 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
                     titles_ar = list(set(text_meta["titles_ar"] + text_meta["titles_ar_from_header"]))
                     text_meta['titles_ar'] = " :: ".join(titles_ar)
                 if not text_meta["title_ar_prefered"] and text_meta["titles_ar"]:
-                    text_meta["title_ar_prefered"] = text_meta["titles_ar"][0]
+                    text_meta["title_ar_prefered"] = re.split(" *:: *| *[,;] *", text_meta["titles_ar"])[0]
                 
                 # upload text meta to the database:
                 tm, tm_created = textMeta.objects.update_or_create(

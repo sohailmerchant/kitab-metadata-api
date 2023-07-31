@@ -11,28 +11,94 @@ from rest_framework import filters
 
 
 from .models import authorMeta, personName, textMeta, versionMeta, CorpusInsights, TextReuseStats, a2bRelation, ReleaseMeta, SourceCollectionDetails, ReleaseDetails
-from .serializers import TextSerializer, VersionMetaSerializer, PersonNameSerializer, ReleaseMetaSerializer, AuthorMetaSerializer, TextReuseStatsSerializer, CorpusInsightsSerializer, AllRelationSerializer,  SourceCollectionDetailsSerializer, ReleaseDetailsSerializer, ShallowTextReuseStatsSerializer
+from .serializers import TextSerializer, VersionMetaSerializer, PersonNameSerializer, ReleaseMetaSerializer, AuthorMetaSerializer, TextReuseStatsSerializer, CorpusInsightsSerializer, AllRelationSerializer,  SourceCollectionDetailsSerializer, ReleaseDetailsSerializer, ShallowTextReuseStatsSerializer, TextReuseStatsSerializerB1
 from .filters import authorFilter, versionFilter, textFilter, textReuseFilter, releaseFilter
+
+
+    # path('all-releases/version/all/', views.getReleaseMeta.as_view(), name='all-releases-all-versions'),
+    # path('all-releases/version/', views.getReleaseMeta.as_view(), name='all-releases-all-versions'),
+    # #path('all-releases/version/<str:version_id>/', views.getReleaseMeta.as_view(), name='all-releases-one-version'), # multiple results possible!
+    # path('all-releases/version/<str:version_id>/', views.getVersion, name='all-releases-one-version'),
+    
+    # path('<str:release_code>/version/all/', views.getReleaseMeta.as_view(), name='one-release-all-versions'),
+    # path('<str:release_code>/version/', views.getReleaseMeta.as_view(), name='one-release-all-versions'),
+    # path('<str:release_code>/version/<str:version_id>/', views.getReleaseVersion, name='one-release-one-version'),
+
+    # # text endpoints:  # TO DO: use other view for the texts
+
+    # path('all-releases/text/', views.textListView.as_view(), name='all-releases-all-texts'),
+    # path('all-releases/text/all/', views.textListView.as_view(), name='all-releases-all-texts'),
+    # path('all-releases/text/<str:text_uri>/', views.getText, name='all-releases-one-text'),
+
+    # path('<str:release_code>/text/', views.textListView.as_view(), name='one-release-all-texts'),
+    # path('<str:release_code>/text/all/', views.textListView.as_view(), name='one-release-all-texts'),
+    # path('<str:release_code>/text/<str:text_uri>/', views.getText, name='one-release-one-text'),
+
+    # # author endpoints:
+
+    # path('all-releases/author/', views.authorListView.as_view(), name='all-releases-all-authors'),
+    # path('all-releases/author/all/', views.authorListView.as_view(), name='all-releases-all-authors'),
+    # path('all-releases/author/<str:author_uri>/', views.getAuthor, name='all-releases-one-author'),
+
+    # path('<str:release_code>/author/', views.authorListView.as_view(), name='one-release-all-authors'),
+    # path('<str:release_code>/author/all/', views.authorListView.as_view(), name='one-release-all-authors'),
+    # path('<str:release_code>/author/<str:author_uri>/', views.getAuthor, name='one-release-one-author'),
+
+    # # release info endpoints:
+
+    # path('all-releases/release-details/', views.getReleaseDetailsList.as_view(), name='release-details-all'),
+    # path('<str:release_code>/release-details/', views.getReleaseInfo, name='release-details'),
+
+    # # a2bRelations endpoints (independent of releases):
+
+    # path('all-releases/relation/all/', views.relationsListView.as_view(), name='all-releases-relations'),
+    # path('all-releases/relation/', views.relationsListView.as_view(), name='all-releases-relations'),
+
+    # # source collections info (independent of releases):
+
+    # path('source-collections/all/', views.getSourceCollectionDetailsList.as_view(), name='source-collections'),
+    # path('source-collections/', views.getSourceCollectionDetailsList.as_view(), name='source-collections'),
+    # path('source-collections/<str:code>', views.getSourceCollectionDetailsList.as_view(), name='source-collections'),
+
+    # # corpus insights (statistics on the number of books, largest book, etc. for each release):
+    
+    # path('all-releases/corpusinsights/', views.getCorpusInsights, name='corpusinsights'),
+    # path('<str:release_code>/corpusinsights/', views.getCorpusInsights, name='corpusinsights'),
+
+    # # Text reuse statistics:
+
+    # path('all-releases/text-reuse-stats/<str:book1>_<str:book2>/', views.getPairTextReuseStats, name='text-reuse-pair'),
+    # path('all-releases/text-reuse-stats/all/', views.getAllTextReuseStats.as_view(), name='all-text-reuse'),
+    # path('all-releases/text-reuse-stats/<str:book1>/', views.getAllTextReuseStats.as_view(), name='all-text-reuse'),
+
+    # path('<str:release_code>/text-reuse-stats/<str:book1>_<str:book2>/', views.getPairTextReuseStats, name='text-reuse-pair'),
+    # path('<str:release_code>/text-reuse-stats/all/', views.getAllTextReuseStats.as_view(), name='all-text-reuse'),
+    # path('<str:release_code>/text-reuse-stats/<str:book1>/', views.getAllTextReuseStats.as_view(), name='all-text-reuse'),
+
 
 
 @api_view(['GET'])
 def apiOverview(request):
     api_urls = {
-        # 'List All Books (without filters, will be removed in the future)': '/book-list',
-        # 'List All Books (with pagination and filters)': '/book/all',
-        # 'Book View': '/book/<book_uri:pk>/ e.g.book/JK00001'
-        'List all authors:': 'author/all/',
-        'Search authors:': 'author/?search= e.g., `author/all/?search=الجاحظ 255`',
-        'Filter authors based on a specific field:': 'author/?author_lat= e.g., `author/?author_lat=Jahiz`',
-        'List all texts:': 'text/all/',
-        'Get a text by its URI:': 'text/<str:text_uri>/ e.g. `text/0179MalikIbnAnas.Muwatta`',
-        'Filter texts based on a specific field:': 'text/?author_lat= e.g., `author/?author_lat=Jahiz`',
-        'Search texts:': 'text/all/?search= e.g., `text/all/?search=الجاحظ Hayawan`',
-        'List all text versions:': 'version/all/',
-        'Search text versions:': 'text/all/?search= e.g., `text/all/?search=الجاحظ Hayawan Shamela`',
-        'corpusinsights/':  'gives some overall insights about the corpus',
-        'text-reuse-stats/': 'Text resuse stats'
+        'List all text versions:': '<release_code>/version/all/ e.g., `2022.1.6/version/all/',
+        'List all authors:': '<release_code>/author/all/',
+        'List all texts:': '<release_code>/text/all/',
+
+        'Get a text by its URI:': '<release_code>/text/<str:text_uri>/ e.g. `2022.1.6/text/0179MalikIbnAnas.Muwatta`',
+        'Get an author by their URI:': '<release_code>/author/<str:author_uri>/ e.g. `2022.1.6/author/0179MalikIbnAnas`',
+
+        'Search authors:': '<release_code>/author/all/author/?search= e.g., `2022.1.6/author/all/?search=الجاحظ 255`',
+        'Search texts:': '<release_code>/text/all/?search= e.g., `2022.1.6text/all/?search=الجاحظ Hayawan`',
+        'Search text versions:': '<release_code>/text/all/?search= e.g., `2022.1.6text/all/?search=الجاحظ Hayawan Shamela`',
+
+        'Filter authors based on a specific field:': '<release_code>/author/?author_lat= e.g., `2022.1.6/author/?author_lat=Jahiz`',
+        'Filter texts based on a specific field:': '<release_code>/text/?author_lat= e.g., `2022.1.6author/?author_lat=Jahiz`',
+
+        'Get statistics about the corpus': '<release_code>/corpusinsights/',
+        'Get pairwise text reuse data': '<release_code>/text-reuse-stats/'
     }
+
+
 
     return Response(api_urls)
 
@@ -314,7 +380,7 @@ class versionListView(generics.ListAPIView):
 
 
 class textListView(generics.ListAPIView):
-    queryset = textMeta.objects.all()
+    #queryset = textMeta.objects.all()
     #filter_fields = ['titles_lat', 'book_id', 'titles_ar', 'annotation_status']
     search_fields = [field.name for field in textMeta._meta.get_fields() if (field.name not in excl_flds)] \
         + ["author_meta__" + field.name for field in authorMeta._meta.get_fields() if (field.name not in excl_flds)] \
@@ -357,6 +423,51 @@ class relationsListView(generics.ListAPIView):
     #    print(q.text_a)
     serializer_class = AllRelationSerializer
 
+
+class getAllTextReuseStatsB1(generics.ListAPIView):
+    """Get all text reuse stats for book1"""
+    serializer_class = TextReuseStatsSerializerB1
+    pagination_class = CustomPagination
+
+    filter_backends = (django_filters.DjangoFilterBackend,
+                       filters.SearchFilter, filters.OrderingFilter)
+    filterset_class = textReuseFilter
+
+    ordering_fields = ['instances_count', 'book1_word_match', 'book2_word_match']
+    ordering_fields = (ordering_fields)
+
+    def get_queryset(self):
+        """Get the queryset, based on arguments provided in the URL"""
+        try:
+            release_code = self.kwargs['release_code']
+        except: 
+            release_code = None
+        try:
+            book1 = self.kwargs['book1']
+        except: 
+            book1 = None
+        print(release_code, book1)
+        if release_code:
+            if book1:
+                queryset = TextReuseStats.objects\
+                    .select_related("release", "book_1")\
+                    .filter(release__release_code=release_code, book_1__version_meta__version_uri__contains=book1)\
+                    .distinct()
+            else:
+                queryset = TextReuseStats.objects\
+                    .select_related("release")\
+                    .filter(release__release_code=release_code)\
+                    .distinct()
+        else:
+            if book1:
+                queryset = TextReuseStats.objects\
+                    .select_related("book_1")\
+                    .filter(book_1__version_meta__version_uri__contains=book1)\
+                    .distinct()
+            else:
+                print("book1 nor release defined")
+                queryset = TextReuseStats.objects.all()
+        return queryset
 
 class getAllTextReuseStats(generics.ListAPIView):
     serializer_class = ShallowTextReuseStatsSerializer
