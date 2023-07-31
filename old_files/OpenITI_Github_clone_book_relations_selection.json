@@ -1,0 +1,54 @@
+{
+  "0150AbuHanifa.Wasiyya": [
+    {
+      "dest": "0150AbuHanifa.Wasiyya",
+      "main_rel_type": "COMM",
+      "sec_rel_type": "sharh",
+      "source": "0786IbnMuhammadBabarti.SharhWasiyyatAbiHanifa"
+    }
+  ],
+  "0179MalikIbnAnas.Muwatta": [
+    {
+      "dest": "0179MalikIbnAnas.Muwatta",
+      "main_rel_type": "COMM",
+      "sec_rel_type": "sharh",
+      "source": "0463IbnCabdBarr.IstidhkarJamic"
+    },
+    {
+      "dest": "0179MalikIbnAnas.Muwatta",
+      "main_rel_type": "COMM",
+      "sec_rel_type": "sharh",
+      "source": "0463IbnCabdBarr.TamhidMuwatta"
+    },
+    {
+      "dest": "0179MalikIbnAnas.Muwatta",
+      "main_rel_type": "COMM",
+      "sec_rel_type": "sharh",
+      "source": "0474IbnKhalafBaji.MuntaqaSharhMuwatta"
+    },
+    {
+      "dest": "0179MalikIbnAnas.Muwatta",
+      "main_rel_type": "COMM",
+      "sec_rel_type": "sharh",
+      "source": "0521IbnMuhammadBatalyawsi.MushkilatMuwatta"
+    },
+    {
+      "dest": "0179MalikIbnAnas.Muwatta",
+      "main_rel_type": "COMM",
+      "sec_rel_type": "sharh",
+      "source": "0543IbnCarabiIshbili.MasalikFiSharhMuwatta"
+    },
+    {
+      "dest": "0179MalikIbnAnas.Muwatta",
+      "main_rel_type": "COMM",
+      "sec_rel_type": "sharh",
+      "source": "0543IbnCarabiIshbili.QabasFiSharhMuwatta"
+    },
+    {
+      "dest": "0179MalikIbnAnas.Muwatta",
+      "main_rel_type": "COMM",
+      "sec_rel_type": "sharh",
+      "source": "0911Suyuti.TanwirHawalik"
+    }
+  ]
+}
