@@ -348,23 +348,44 @@ class CorpusInsightsSerializer(serializers.ModelSerializer):
         model = CorpusInsights
         depth = 1
 
-        fields = ["id", "number_of_unique_authors", "number_of_books", "number_of_versions",
-                  "total_word_count", "largest_book", "total_word_count_pri", "top_10_book_by_word_count", "release"]
-
+        fields = ["id", "release_info", "number_of_authors", "number_of_books", "number_of_versions", 
+                  "number_of_pri_versions", "number_of_sec_versions",
+                  "number_of_markdown_versions", "number_of_completed_versions",
+                  "total_word_count", "total_word_count_pri", 
+                  "largest_book", "largest_10_books"]
 
 class ShallowTextReuseStatsSerializer(serializers.ModelSerializer):
     class Meta:
         model = TextReuseStats
         depth = 1
         fields = ["id", "book_1", "book_2", "release", "instances_count",
-                  "book1_word_match", "book2_word_match", "tsv_url"]
-        
+                  "book1_words_matched", "book2_words_matched", 
+                  "book1_pct_words_matched", "book2_pct_words_matched", "tsv_url"]
+
+    # instances_count = models.IntegerField(null=True, blank=True)
+    # book1_words_matched = models.IntegerField(null=True, blank=True)
+    # book2_words_matched = models.IntegerField(null=True, blank=True)
+    # book1_pct_words_matched = models.DecimalField(null=True, blank=True, max_digits=5, decimal_places=2)
+    # book2_pct_words_matched = models.DecimalField(null=True, blank=True, max_digits=5, decimal_places=2)
+    # # book_1 = models.ForeignKey(versionMeta, to_field='version_id', on_delete=models.DO_NOTHING,
+    # #                            related_name='textreuse_b1', related_query_name="textreuse_b1")
+    # # book_2 = models.ForeignKey(versionMeta, to_field='version_id', on_delete=models.DO_NOTHING, 
+    # #                            related_name='textreuse_b2', related_query_name="textreuse_b2")
+    # book_1 = models.ForeignKey("releaseMeta", on_delete=models.DO_NOTHING,
+    #                            related_name='textreuse_b1', related_query_name="textreuse_b1")
+    # book_2 = models.ForeignKey("releaseMeta", on_delete=models.DO_NOTHING, 
+    #                            related_name='textreuse_b2', related_query_name="textreuse_b2")
+    # tsv_url = models.CharField(max_length=100, null=False, blank=True)
+    # release = models.ForeignKey("ReleaseDetails", related_name="reuse_statistics", 
+
+
 class TextReuseStatsSerializer(serializers.ModelSerializer):
     class Meta:
         model = TextReuseStats
         depth = 4
         fields = ["id", "book_1", "book_2", "release", "instances_count",
-                  "book1_word_match", "book2_word_match", "tsv_url"]
+                  "book1_words_matched", "book2_words_matched", 
+                  "book1_pct_words_matched", "book2_pct_words_matched", "tsv_url"]
 
 
 

@@ -9,7 +9,7 @@ import json
 import csv
 from webbrowser import get
 from django.db import models
-from api.models import authorMeta, textMeta, versionMeta, personName, CorpusInsights, ReleaseMeta, ReleaseDetails, editionMeta, a2bRelation, relationType, placeMeta
+from api.models import authorMeta, textMeta, versionMeta, personName, CorpusInsights, ReleaseMeta, ReleaseDetails, editionMeta, a2bRelation, relationType, placeMeta, SourceCollectionDetails
 from django.core.management.base import BaseCommand
 import os
 import re
@@ -37,13 +37,17 @@ class Command(BaseCommand):
         tags_fp = "meta/ID_TAGS.txt"
         base_url = "https://raw.githubusercontent.com/OpenITI"
         release_code = "post-release"
+        source_collections_fp = "meta/source_collections.tsv"
 
-        main(corpus_folder, relations_definitions_fp, tags_fp, base_url, release_code)
+        main(corpus_folder, relations_definitions_fp, source_collections_fp, tags_fp, base_url, release_code)
 
 
-def main(corpus_folder, relations_definitions_fp, tags_fp, base_url, release_code):
+def main(corpus_folder, relations_definitions_fp, source_collections_fp, tags_fp, base_url, release_code):
     # load the relation types into the database:
     load_relations_definitions(relations_definitions_fp)
+
+    # load the (main) source collections into the database:
+    load_source_collections(source_collections_fp)
 
     # load Maxim's tags into a dictionary
     text_tags = tags2dic(tags_fp)
@@ -81,7 +85,23 @@ def load_relations_definitions(relations_definitions_fp):
             )
             print(reltype, created)
 
-
+def load_source_collections(source_collections_fp):
+    """Load the descriptions of the OpenITI corpus's source collections and contributors to the database"""
+    with open(source_collections_fp, mode="r", encoding="utf-8") as file:
+        reader = csv.DictReader(file, delimiter='\t')
+        for row in reader:
+            coll, created = SourceCollectionDetails.objects.update_or_create(
+                # selection keys:
+                code=row["code"],
+                # update keys:
+                defaults = dict(
+                   name=row["name"],
+                   url=row["url"],
+                   description=row["description"],
+                   affiliation=row["affiliation"]
+                )
+            )
+            print(coll, created)    
 
 def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
     """Load the metadata of the current corpus into the database
@@ -121,7 +141,6 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
             author_folder_pth = os.path.join(data_folder_pth, author_uri)
             author_yml_fp = os.path.join(author_folder_pth, author_uri+".yml")
             
-
             # collect most of the author_meta from the author yml file
             # (Arabic names will be taken from the metadata headers 
             # if name information was not found in the yml files):
@@ -449,6 +468,11 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
                         pdf_url=version_meta["pdf_url"]
                     )
 
+                    # upload the collection code if it doesn't exist yet:
+                    cm, cm_created = SourceCollectionDetails.objects.get_or_create(
+                        code=version_meta["collection_code"]
+                    )
+
                     # upload version metadata:
 
                     vm, vm_created = versionMeta.objects.update_or_create(
@@ -458,6 +482,7 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
                         language=version_meta["language"],
                         defaults=dict(
                             edition_meta=em,
+                            source_coll=cm
                         )
                     )                    
 
@@ -510,17 +535,18 @@ def collect_header_meta(version_fp, author_meta, text_meta, version_meta):
     version_meta["ed_info"] = " :: ".join(ed_info)
 
     # - additional genre tags:
-    version_id = version_meta["version_id"]
-    try:
-        coll_id = re.findall(r"^(\w+[a-zA-Z])\d{2,}(?:BK\d+|[A-Z])*", version_id)[0]
-    except:
-        print("no collection ID found in", version_id)
-        input("continue?")
+    # version_id = version_meta["version_id"]
+    # try:
+    #     coll_id = re.findall(r"^([A-Za-z]+?\d*[A-Za-z]+)\d+(?:BK\d+)?(?:Vols)?[A-Z]?$", version_id)[0]
+    # except:
+    #     print("no collection ID found in", version_id)
+    #     input("continue?")
+    collection_code = version_meta["collection_code"]
 
     tags = []
     for el in header_meta["Genre"]:
         for t in el.split(" :: "):
-            if coll_id+"@"+t not in tags:
-                tags.append(coll_id+"@"+t)
+            if collection_code+"@"+t not in tags:
+                tags.append(collection_code+"@"+t)
     
     return author_meta, text_meta, version_meta

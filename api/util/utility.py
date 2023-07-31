@@ -274,6 +274,12 @@ def collect_version_yml_data(version_yml_fp, version_uri, corpus_folder, base_ur
 
     version_id = version_uri.split("-")[0].split(".")[-1]
     language = version_uri.split("-")[1][:3]
+    try:
+        collection_code = re.findall(r"^([A-Za-z]+?\d*[A-Za-z]+)\d+(?:BK\d+)?(?:Vols)?[A-Z]?$", version_id)[0]
+    except:
+        print("no collection code found in", version_id)
+        collection_code = None
+        input("CONTINUE?")
 
     vers_d = readYML(version_yml_fp)
 
@@ -367,6 +373,7 @@ def collect_version_yml_data(version_yml_fp, version_uri, corpus_folder, base_ur
         # version_meta:
         version_id=version_id,
         version_uri=version_uri,
+        collection_code=collection_code,
         text_meta="",
         language=language,
         tags=" :: ".join(version_tags),

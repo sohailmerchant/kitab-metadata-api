@@ -9,8 +9,9 @@ import json
 class Command(BaseCommand):
     def handle(self, **options):
         #release_codes = ["2021.1.4", "2021.2.5", "2022.1.6", "2022.2.7"]
-        release_codes = ["2022.1.6",]
+        release_codes = ["2021.2.5", "2022.1.6", "2022.2.7", "post-release"]
         for release_code in release_codes:
+            print(release_code)
             load_aggregated_data(release_code)
 
 def get_distinct_authors(release_code):
@@ -124,3 +125,4 @@ def load_aggregated_data(release_code):
         largest_book=get_largest_text(release_code),
         largest_10_books=json.dumps(get_largest_books(release_code, 10))
     )
+

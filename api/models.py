@@ -93,6 +93,8 @@ class versionMeta(models.Model):
     language = models.CharField(max_length=9, blank=True)
     edition_meta = models.ForeignKey("editionMeta", related_name='editions',
                                      related_query_name="edition", on_delete=models.DO_NOTHING)
+    source_coll = models.ForeignKey("SourceCollectionDetails", related_name='versions',
+                                     related_query_name="version", on_delete=models.DO_NOTHING, blank=True, null=True)
     # NB: - notes, char_lenght, tok length, url, status and annotation status were moved to Release table
     #     - editor, edition_place, publisher, edition_date, ed_info fields were moved to editionMeta model
 
@@ -189,8 +191,6 @@ class a2bRelation (models.Model):
 
 class TextReuseStats(models.Model):
     id = models.AutoField(primary_key=True)
-    # book_1 = models.CharField(max_length=50, null=False)
-    # book_2 = models.CharField(max_length=50, null=False)
     instances_count = models.IntegerField(null=True, blank=True)
     book1_words_matched = models.IntegerField(null=True, blank=True)
     book2_words_matched = models.IntegerField(null=True, blank=True)
@@ -200,9 +200,9 @@ class TextReuseStats(models.Model):
     #                            related_name='textreuse_b1', related_query_name="textreuse_b1")
     # book_2 = models.ForeignKey(versionMeta, to_field='version_id', on_delete=models.DO_NOTHING, 
     #                            related_name='textreuse_b2', related_query_name="textreuse_b2")
-    book_1 = models.ForeignKey("releaseMeta", on_delete=models.DO_NOTHING,
+    book_1 = models.ForeignKey("ReleaseMeta", on_delete=models.DO_NOTHING,
                                related_name='textreuse_b1', related_query_name="textreuse_b1")
-    book_2 = models.ForeignKey("releaseMeta", on_delete=models.DO_NOTHING, 
+    book_2 = models.ForeignKey("ReleaseMeta", on_delete=models.DO_NOTHING, 
                                related_name='textreuse_b2', related_query_name="textreuse_b2")
     tsv_url = models.CharField(max_length=100, null=False, blank=True)
     release = models.ForeignKey("ReleaseDetails", related_name="reuse_statistics", 
@@ -215,7 +215,7 @@ class TextReuseStats(models.Model):
 class CorpusInsights(models.Model):
     """Describes general statistics on the corpus in a specific release"""
     id = models.AutoField(primary_key=True)
-    number_of_unique_authors = models.IntegerField(null=True, blank=True)
+    number_of_authors = models.IntegerField(null=True, blank=True)
     number_of_books = models.IntegerField(null=True, blank=True)
     number_of_versions = models.IntegerField(null=True, blank=True)
     number_of_pri_versions = models.IntegerField(null=True, blank=True)
@@ -225,8 +225,8 @@ class CorpusInsights(models.Model):
     total_word_count = models.IntegerField(null=True, blank=True)
     total_word_count_pri = models.IntegerField(null=True, blank=True)
     largest_book = models.IntegerField(null=True, blank=True)
-    top_10_book_by_word_count = models.JSONField(null=True, blank=True)
-    release = models.ForeignKey("ReleaseDetails", related_name="corpus_statistics", 
+    largest_10_books = models.JSONField(null=True, blank=True)
+    release_info = models.ForeignKey("ReleaseDetails", related_name="corpus_statistics", 
                                 related_query_name="corpus_statistics", on_delete=models.DO_NOTHING)
 
 class ReleaseMeta(models.Model):
@@ -261,4 +261,8 @@ class SourceCollectionDetails(models.Model):
     code = models.CharField(max_length=10, unique=True)  #Shamela, Shia,  JK, ...
     url = models.CharField(max_length=200, null=False, blank=True)
     name = models.CharField(max_length=200, null=False)
+    affiliation = models.CharField(max_length=200, null=False)
     description = models.TextField(null=False, blank=True)
+
+    def __str__(self):
+        return self.code

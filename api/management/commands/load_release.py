@@ -6,10 +6,11 @@ This script uploads the metadata of the 2022.1.6 release to the database.
 import csv
 from webbrowser import get
 from django.db import models
-from api.models import authorMeta, textMeta, versionMeta, CorpusInsights, ReleaseMeta, ReleaseDetails, editionMeta, TextReuseStats
+from api.models import authorMeta, textMeta, versionMeta, CorpusInsights, ReleaseMeta, ReleaseDetails, editionMeta, TextReuseStats, SourceCollectionDetails
 from django.core.management.base import BaseCommand
 import re
 import datetime
+import json
 
 version_ids = dict()
 
@@ -20,27 +21,27 @@ class Command(BaseCommand):
 
         # provide the release details here:
 
-        # release_code = "2022.2.7"
-        # release_date = datetime.date(2023, 2, 24) # YYYY, M, D
-        # meta_fp = "meta/OpenITI_metadata_2022-2-7_merged.csv"
-        # base_url = "https://raw.githubusercontent.com/OpenITI/RELEASE/v2022.2.7/data"
-        # zenodo_link = "https://zenodo.org/record/7687795"
-        # release_notes_fp = "meta/release_notes_2022-2-7.txt"
-        # reuse_data_fp = "reuse_data/stats-v2022-2-7_bi-dir.csv"
-        # reuse_data_base_url = "http://dev.kitab-project.org/passim01102022/"
+        release_code = "2022.2.7"
+        release_date = datetime.date(2023, 2, 24) # YYYY, M, D
+        meta_fp = "meta/OpenITI_metadata_2022-2-7_merged_wNoor.csv"
+        base_url = "https://raw.githubusercontent.com/OpenITI/RELEASE/v2022.2.7/data"
+        zenodo_link = "https://zenodo.org/record/7687795"
+        release_notes_fp = "meta/release_notes_2022-2-7.txt"
+        reuse_data_fp = "reuse_data/stats-v2022-2-7_bi-dir.csv"
+        reuse_data_base_url = "http://dev.kitab-project.org/passim01122022/"
 
-        release_code = "2022.1.6"
-        release_date = datetime.date(2022, 7, 8) # YYYY, M, D
-        meta_fp = "meta/OpenITI_metadata_2022-1-6_merged.csv"
-        base_url = "https://raw.githubusercontent.com/OpenITI/RELEASE/v2022.1.6/data"
-        zenodo_link = "https://zenodo.org/record/6808108"
-        release_notes_fp = "meta/release_notes_2022-1-6.txt"
-        reuse_data_fp = "reuse_data/stats-v2022-1-6_bi-dir.csv"
-        reuse_data_base_url = "http://dev.kitab-project.org/passim01102022/"
+        # release_code = "2022.1.6"
+        # release_date = datetime.date(2022, 7, 8) # YYYY, M, D
+        # meta_fp = "meta/OpenITI_metadata_2022-1-6_merged_wNoor.csv"
+        # base_url = "https://raw.githubusercontent.com/OpenITI/RELEASE/v2022.1.6/data"
+        # zenodo_link = "https://zenodo.org/record/6808108"
+        # release_notes_fp = "meta/release_notes_2022-1-6.txt"
+        # reuse_data_fp = "reuse_data/stats-v2022-1-6_bi-dir.csv"
+        # reuse_data_base_url = "http://dev.kitab-project.org/passim01102022/"
 
         # release_code = "2021.2.5"
         # release_date = datetime.date(2021, 10, 18) # YYYY, M, D
-        # meta_fp = "meta/OpenITI_metadata_2021-2-5_merged.csv"
+        # meta_fp = "meta/OpenITI_metadata_2021-2-5_merged_wNoor.csv"
         # base_url = "https://raw.githubusercontent.com/OpenITI/RELEASE/v2021.2.5/data"
         # zenodo_link = "https://zenodo.org/record/5550338"
         # release_notes_fp="meta/release_notes_2021-2-5.txt"
@@ -50,11 +51,11 @@ class Command(BaseCommand):
 
         # release_code = "2021.1.4"
         # release_date = datetime.date(2021, 2, 5) # YYYY, M, D
-        # meta_fp = "meta/OpenITI_metadata_2021-1-4_merged.csv"
+        # meta_fp = "meta/OpenITI_metadata_2021-1-4_merged_wNoor.csv"
         # base_url = "https://raw.githubusercontent.com/OpenITI/RELEASE/v2021.1.4/data"
         # zenodo_link = "https://zenodo.org/record/4513723"
         # release_notes_fp="meta/release_notes_2021-1-4.txt"
-        # reuse_data_fp = 
+        # reuse_data_fp = "reuse_data/stats-v2021-1-4_bi-dir.csv"
         # reuse_data_base_url = "http://dev.kitab-project.org/passim01022021/"
 
         with open(release_notes_fp, mode="r", encoding="utf-8") as file:
@@ -72,7 +73,7 @@ class Command(BaseCommand):
 
 def main(meta_fp, base_url, release_info, reuse_data_fp, reuse_data_base_url, test=False):
     # load the release metadata:
-    release_obj = upload_release_meta(meta_fp, base_url, release_info)
+    release_obj, version_ids_d = upload_release_meta(meta_fp, base_url, release_info)
     # check for duplicate version_ids:
     no_duplicates=True
     for version_id, fn_list in version_ids.items():
@@ -83,7 +84,8 @@ def main(meta_fp, base_url, release_info, reuse_data_fp, reuse_data_base_url, te
     if no_duplicates:
         print("No duplicate version IDs found")
     # upload the text reuse stats:
-    upload_reuse_stats(reuse_data_fp, release_info["release_code"], release_obj, reuse_data_base_url, test=test)
+    
+    upload_reuse_stats(reuse_data_fp, release_info["release_code"], release_obj, reuse_data_base_url, version_ids_d, test=test)
     # create the corpus insights data:
     
 
@@ -152,6 +154,12 @@ def format_fields(data, base_url):
     record['title_lat_prefered'] = re.split(' *:: *| *, *| *; *',data['title_lat'])[0]
     record['ed_info'] = data['ed_info']
     record['version_id'] = data['id']
+    try:
+        record["collection_code"] = re.findall(r"^([A-Za-z]+?\d*[A-Za-z]+)\d+(?:BK\d+)?(?:Vols)?[A-Z]?$", data['id'])[0]
+    except:
+        record["collection_code"] = None
+        print("Collection code not found in", data['id'])
+        input("CONTINUE?")
     version_tags, text_tags, author_tags = split_tag_list(data['tags'].split(" :: "))
     record["version_tags"] = " :: ".join(version_tags)
     record["text_tags"] = " :: ".join(text_tags)
@@ -177,19 +185,22 @@ def format_fields(data, base_url):
 
 
 def upload_release_meta(meta_fp, base_url, release_info):
+    version_ids_d = dict()
     fieldnames = ['versionUri', 'date', 'author_ar', 'author_lat', 'book', 'title_ar', 'title_lat', 'ed_info', 'id', 'status', 'tok_length', 'url', 'tags', 'author_from_uri', 'author_lat_shuhra', 'author_lat_full_name', 'char_length']
     with open(meta_fp, 'r', encoding='utf-8') as f:
         reader = csv.DictReader(f, fieldnames=fieldnames, delimiter='\t')
         header = next(reader)
 
         for version_data in reader:
+            # add the version_id + extension to the version_ids_d (to create the url to the text reuse data later)
+            version_id = version_data["id"]
+            try:
+                version_ids_d[version_id] = re.findall(version_id+".*", version_data["url"])[0]
+            except: 
+                print("version_id", version_id, "not found in url", version_data["url"])
 
             # read in the metadata for a version and format it:
             record = format_fields(version_data, base_url)
-
-            if record["version_uri"] == "0775IbnAbiWafa.JawahirMudiya.JK000806-ara1":
-                print("0775IbnAbiWafa.JawahirMudiya.JK000806-ara1")
-                print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 
             # first, create the new release itself in the database:
 
@@ -291,6 +302,11 @@ def upload_release_meta(meta_fp, base_url, release_info):
 
                 # now create the new version object:
 
+                # upload the collection code if it doesn't exist yet:
+                cm, cm_created = SourceCollectionDetails.objects.get_or_create(
+                    code=record["collection_code"]
+                )
+
                 vm, vm_created = versionMeta.objects.update_or_create(
                     version_id=record["version_id"],
                     version_uri=record["version_uri"],
@@ -298,6 +314,7 @@ def upload_release_meta(meta_fp, base_url, release_info):
                     language=record["version_lang"],
                     defaults=dict(
                         edition_meta=em,
+                        source_coll=cm
                     )
                 )     
                 if vm_created:
@@ -319,19 +336,26 @@ def upload_release_meta(meta_fp, base_url, release_info):
                 )
             )
 
-    return release_obj
+    return release_obj, version_ids_d
  
-def upload_reuse_stats(reuse_data_fp, release_code, release_obj, reuse_data_base_url, test=False):
+def upload_reuse_stats(reuse_data_fp, release_code, release_obj, reuse_data_base_url, version_ids_d, test=False):
     with open(reuse_data_fp, 'r', encoding='utf-8') as f:
         reader = csv.DictReader(f, delimiter='\t')
         for data in reader:
             if test:
                 # for testing: only load 0179MalikIbnAnas.Muwatta and 0310Tabari.Tarikh stats:
-                if not ("Shamela0009783" in data['_T1'] or "Shamela0009783" in data['_T2']) \
-                    or not ("Shamela0028107" in data['_T1'] or "Shamela0028107" in data['_T1']):  # 0179MalikIbnAnas.Muwatta
+                if not (("Shamela0009783" in data['_T1'] or "Shamela0009783" in data['_T2']) \
+                    or ("Shamela0028107" in data['_T1'] or "Shamela0028107" in data['_T1'])):  # 0179MalikIbnAnas.Muwatta
                     continue
             version_id1 = data['_T1'].split("-")[0].split(".")[0]
             version_id2 = data['_T2'].split("-")[0].split(".")[0]
+            # get the last part of the filename (version_id + lang + number + extension),
+            # which form part of the URL
+            try:
+                ref1 = version_ids_d[version_id1]
+                ref2 = version_ids_d[version_id2]
+            except:
+                print("FAILED:", version_id1, version_id2)
             b1 = ReleaseMeta.objects.get(
                     release__release_code=release_code,
                     version_meta__version_id=version_id1
@@ -341,10 +365,9 @@ def upload_reuse_stats(reuse_data_fp, release_code, release_obj, reuse_data_base
                     version_meta__version_id=version_id2
                     )
             
-            tsv_url = f"{reuse_data_base_url}{version_id1}/{data['_T1']}_{data['_T2']}.csv"
-            print(tsv_url)
+            tsv_url = f"{reuse_data_base_url}{ref1}/{ref1}_{ref2}.csv"
             
-            TextReuseStats.objects.get_or_create(
+            TextReuseStats.objects.update_or_create(
                 book_1 = b1,
                 book_2 = b2,
                 instances_count=data['instances'],
@@ -353,5 +376,7 @@ def upload_reuse_stats(reuse_data_fp, release_code, release_obj, reuse_data_base
                 book1_pct_words_matched=data['WM_B1inB2'],
                 book2_pct_words_matched=data['WM_B2inB1'],
                 release=release_obj,
-                tsv_url=tsv_url
+                defaults=dict(
+                    tsv_url=tsv_url
+                )
             )
