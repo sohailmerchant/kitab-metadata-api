@@ -91,7 +91,7 @@ class VersionFilter(django_filters.FilterSet):
 
     E.g., 
     http://127.0.0.1:8000/version/all/?died_after_AH=309&died_before_AH=310
-    http://127.0.0.1:8000/version/all/?book_title_ar=تاريخ
+    http://127.0.0.1:8000/version/all/?title_ar=تاريخ
     http://127.0.0.1:8000/version/all/?date_AH=310
     http://127.0.0.1:8000/version/all/?author_uri=0310Tabari
 
@@ -216,45 +216,54 @@ class TextFilter(django_filters.FilterSet):
 
 
 class TextReuseFilter(django_filters.FilterSet):
+    """Filters for views based on the TextReuseStats model"""
+    # filter on version URI: 
     book_1 = django_filters.CharFilter(
-        field_name="book_1__version_code", lookup_expr='icontains')
+        field_name="book_1__version__version_uri", lookup_expr='icontains')
     book_2 = django_filters.CharFilter(
-        field_name="book_2__version_code", lookup_expr='icontains')
+        field_name="book_2__version__version_uri", lookup_expr='icontains')
     
+    # filter on the number of text reuse instances:
     instances_count_gt = django_filters.NumberFilter(
         field_name="instances_count", lookup_expr="gt")
     instances_count_lt = django_filters.NumberFilter(
         field_name="instances_count", lookup_expr="lt")
-    instances_count_range = django_filters.NumberFilter(
+    instances_count_range = django_filters.NumericRangeFilter(
         field_name="instances_count", lookup_expr="range")
+    # NB: example of the range filter in url query string: 
+    # ?instances_count_range_min=10&instances_count_range_max=80
 
-    book1_word_match_gt = django_filters.NumberFilter(
-        field_name="book1_word_match", lookup_expr="gt")
-    book1_word_match_lt = django_filters.NumberFilter(
-        field_name="book1_word_match", lookup_expr="lt")
-    book1_word_match_range = django_filters.NumberFilter(
-        field_name="book1_word_match", lookup_expr="range")
+    # filter on the number of words in book 1 that are matched in book 2:
+    book1_words_matched_gt = django_filters.NumberFilter(
+        field_name="book1_words_matched", lookup_expr="gt")
+    book1_words_matched_lt = django_filters.NumberFilter(
+        field_name="book1_words_matched", lookup_expr="lt")
+    book1_words_matched_range = django_filters.NumericRangeFilter(
+        field_name="book1_words_matched", lookup_expr="range")
 
-    book2_word_match_gt = django_filters.NumberFilter(
-        field_name="book2_word_match", lookup_expr="gt")
-    book2_word_match_lt = django_filters.NumberFilter(
-        field_name="book2_word_match", lookup_expr="lt")
-    book2_word_match_range = django_filters.NumberFilter(
-        field_name="book2_word_match", lookup_expr="range")
+    # filter on the number of words in book 2 that are matched in book 1:
+    book2_words_matched_gt = django_filters.NumberFilter(
+        field_name="book2_words_matched", lookup_expr="gt")
+    book2_words_matched_lt = django_filters.NumberFilter(
+        field_name="book2_words_matched", lookup_expr="lt")
+    book2_words_matched_range = django_filters.NumericRangeFilter(
+        field_name="book2_words_matched", lookup_expr="range")
 
-    book1_match_book2_per_per_gt = django_filters.NumberFilter(
-        field_name="book1_match_book2_per", lookup_expr="gt")
-    book1_match_book2_per_per_lt = django_filters.NumberFilter(
-        field_name="book1_match_book2_per", lookup_expr="lt")
-    book1_match_book2_per_per_range = django_filters.NumberFilter(
-        field_name="book1_match_book2_per", lookup_expr="range")
+    # filter on the percentage of words in book 1 that are matched in book 2:
+    book1_pct_words_matched_gt = django_filters.NumberFilter(
+        field_name="book1_pct_words_matched", lookup_expr="gt")
+    book1_pct_words_matched_lt = django_filters.NumberFilter(
+        field_name="book1_pct_words_matched", lookup_expr="lt")
+    book1_pct_words_matched_range = django_filters.NumericRangeFilter(
+        field_name="book1_pct_words_matched", lookup_expr="range")
 
-    book2_match_book1_per_gt = django_filters.NumberFilter(
-        field_name="book2_match_book1_per", lookup_expr="gt")
-    book2_match_book1_per_lt = django_filters.NumberFilter(
-        field_name="book2_match_book1_per", lookup_expr="lt")
-    book2_match_book1_per_range = django_filters.NumberFilter(
-        field_name="book2_match_book1_per", lookup_expr="range")
+    # filter on the percentage of words in book 2 that are matched in book 1:
+    book2_pct_words_matched_gt = django_filters.NumberFilter(
+        field_name="book2_pct_words_matched", lookup_expr="gt")
+    book2_pct_words_matched_lt = django_filters.NumberFilter(
+        field_name="book2_pct_words_matched", lookup_expr="lt")
+    book2_pct_words_matched_range = django_filters.NumericRangeFilter(
+        field_name="book2_pct_words_matched", lookup_expr="range")
 
     class Meta:
         model = TextReuseStats

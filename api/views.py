@@ -10,8 +10,8 @@ from django_filters import rest_framework as django_filters
 from rest_framework import filters
 
 
-from .models import Author, PersonName, Text, Version, CorpusInsights, TextReuseStats, A2BRelation, ReleaseVersion, SourceCollectionDetails, ReleaseInfo
-from .serializers import TextSerializer, VersionSerializer, PersonNameSerializer, ReleaseVersionSerializer, AuthorSerializer, TextReuseStatsSerializer, CorpusInsightsSerializer, AllRelationSerializer,  SourceCollectionDetailsSerializer, ReleaseInfoSerializer, ShallowTextReuseStatsSerializer, TextReuseStatsSerializerB1
+from .models import Author, PersonName, Text, Version, CorpusInsights, TextReuseStats, A2BRelation, ReleaseVersion, SourceCollectionDetails, ReleaseInfo, RelationType
+from .serializers import TextSerializer, VersionSerializer, PersonNameSerializer, ReleaseVersionSerializer, AuthorSerializer, TextReuseStatsSerializer, CorpusInsightsSerializer, AllRelationSerializer,  SourceCollectionDetailsSerializer, ReleaseInfoSerializer, ShallowTextReuseStatsSerializer, TextReuseStatsSerializerB1, AllRelationTypesSerializer#, RelationTypeSerializer
 from .filters import AuthorFilter, VersionFilter, TextFilter, TextReuseFilter, ReleaseVersionFilter
 
 
@@ -135,6 +135,8 @@ def getText(request, text_uri, release_code=None):
 def getVersion(request, version_code, release_code=None):
     if "-" in version_code:
         version_code = version_code.split("-")[0].split(".")[-1]
+    print("VERSION_CODE:", version_code)
+    print("RELEASE_CODE:", release_code)
 
     try:
         if release_code:
@@ -142,9 +144,11 @@ def getVersion(request, version_code, release_code=None):
                 .filter(version_code=version_code, release_version__release_info__release_code=release_code)\
                 .distinct().first()
             print(version)
+            serializer = VersionSerializer(version, many=False, context=dict(release_code=release_code))
         else:
+            #version = Version.objects.prefetch_related("divisions", "part_of").get(version_code=version_code).all()
             version = Version.objects.get(version_code=version_code)
-        serializer = VersionSerializer(version, many=False)
+            serializer = VersionSerializer(version, many=False)
         return Response(serializer.data)
     except Text.DoesNotExist:
         raise Http404
@@ -365,18 +369,40 @@ class VersionListView(generics.ListAPIView):
                        "text__author__date", 'tok_length']
     ordering_fields = (ordering_fields)
 
+    def get_serializer_context(self):
+        """Send the release code to the serializer
+        
+        See https://stackoverflow.com/a/38723709/4045481"""
+        context = super().get_serializer_context()
+        try: 
+            release_code = self.kwargs['release_code']
+        except:
+            release_code = None
+        context["release_code"] = release_code
+        return context
+
     def get_queryset(self):
         """Get the queryset, based on arguments provided in the URL"""
         try:
             release_code = self.kwargs['release_code']
         except: 
             release_code = None
+        try:
+            version_code = self.kwargs['version_code']
+        except:
+            version_code = None
+        print("VERSION_CODE:", version_code)
         if release_code:
             queryset = Version.objects\
                 .filter(release_version__release_info__release_code=release_code)\
                 .distinct()
         else:
-            queryset = Version.objects.all()
+            if version_code:
+                queryset = Version.objects\
+                    .filter(version_code=version_code)\
+                    .distinct()
+            else:
+                queryset = Version.objects.all()
         return queryset
 
 
@@ -425,61 +451,49 @@ class RelationsListView(generics.ListAPIView):
     serializer_class = AllRelationSerializer
 
 
-class GetAllTextReuseStatsB1(generics.ListAPIView):
-    """Get all text reuse stats for book1"""
-    serializer_class = TextReuseStatsSerializerB1
-    pagination_class = CustomPagination
+class RelationTypesListView(generics.ListAPIView):
+    """Get all relation types in the database (independent of releases)"""
+    queryset = RelationType.objects.all()
+    serializer_class = AllRelationTypesSerializer
 
-    filter_backends = (django_filters.DjangoFilterBackend,
-                       filters.SearchFilter, filters.OrderingFilter)
-    filterset_class = TextReuseFilter
+@api_view(['GET'])
+def getRelationType(request, code):
+    """Get the text reuse statistics for a pair of texts."""
+    
+    try:
+        rel = RelationType.objects.get(code=code)
+        print(rel)
+        serializer = AllRelationTypesSerializer(rel, many=False)
+        
+        return Response(serializer.data)  
+    except TextReuseStats.DoesNotExist:
+        raise Http404
 
-    ordering_fields = ['instances_count', 'book1_word_match', 'book2_word_match']
-    ordering_fields = (ordering_fields)
-
-    def get_queryset(self):
-        """Get the queryset, based on arguments provided in the URL"""
-        try:
-            release_code = self.kwargs['release_code']
-        except: 
-            release_code = None
-        try:
-            book1 = self.kwargs['book1']
-        except: 
-            book1 = None
-        print(release_code, book1)
-        if release_code:
-            if book1:
-                queryset = TextReuseStats.objects\
-                    .select_related("release_info", "book_1")\
-                    .filter(release_info__release_code=release_code, book_1__version__version_uri__contains=book1)\
-                    .distinct()
-            else:
-                queryset = TextReuseStats.objects\
-                    .select_related("release_info")\
-                    .filter(release_info__release_code=release_code)\
-                    .distinct()
-        else:
-            if book1:
-                queryset = TextReuseStats.objects\
-                    .select_related("book_1")\
-                    .filter(book_1__version__version_uri__contains=book1)\
-                    .distinct()
-            else:
-                print("book1 nor release defined")
-                queryset = TextReuseStats.objects.all()
-        return queryset
 
 class GetAllTextReuseStats(generics.ListAPIView):
+    """Get all text reuse stats for a specific release or all releases 
+    (include selected metadata for book 1 and book 2)"""
+
     serializer_class = ShallowTextReuseStatsSerializer
     pagination_class = CustomPagination
 
     filter_backends = (django_filters.DjangoFilterBackend,
                        filters.SearchFilter, filters.OrderingFilter)
+    
+    # allow additional query parameters like ?book_1=Tabari.Tarikh
     filterset_class = TextReuseFilter
 
+    # allow additional query parameters like ?ordering=instances_count
     ordering_fields = ['instances_count', 'book1_word_match', 'book2_word_match']
     ordering_fields = (ordering_fields)
+
+    # allow searching these fields using ?search=
+    search_fields = ["book_1__version__text__author__author_ar", 
+                     "book_2__version__text__author__author_ar", 
+                     "book_1__version__text__titles_ar", 
+                     "book_2__version__text__titles_ar", 
+                     "book_1__version__version_uri", 
+                     "book_2__version__version_uri"]
 
     def get_queryset(self):
         """Get the queryset, based on arguments provided in the URL"""
@@ -491,7 +505,7 @@ class GetAllTextReuseStats(generics.ListAPIView):
             book1 = self.kwargs['book1']
         except: 
             book1 = None
-        print(release_code, book1)
+        print("---", release_code, book1)
         if release_code:
             if book1:
                 queryset = TextReuseStats.objects\
@@ -505,6 +519,7 @@ class GetAllTextReuseStats(generics.ListAPIView):
                     .distinct()
         else:
             if book1:
+                print("book1:", book1)
                 queryset = TextReuseStats.objects\
                     .select_related("book_1")\
                     .filter(book_1__version__version_uri__contains=book1)\
@@ -514,22 +529,25 @@ class GetAllTextReuseStats(generics.ListAPIView):
                 queryset = TextReuseStats.objects.all()
         return queryset
 
-# Get an author record by its author_uri
+class GetAllTextReuseStatsB1(GetAllTextReuseStats):
+    """Get all text reuse stats for book1 (include only metadata for book 2)"""
+    # NB: this view class inherits its get_queryset() and filters from GetAllTextReuseStats
+    serializer_class = TextReuseStatsSerializerB1
+
+
 @api_view(['GET'])
 def getPairTextReuseStats(request, book1, book2, release_code=None):
-    print(book1, book2, release_code)
-
+    """Get the text reuse statistics for a pair of texts."""
     try:
         if release_code:
-            stats = TextReuseStats.objects.get(book_1__version_uri__contains=book1, 
-                                                  book_2__version_uri__contains=book2, 
-                                                  release_info__release_code=release_code)
-            serializer = TextReuseStatsSerializer(stats, many=False)
+            stats = TextReuseStats.objects.get(book_1__version__version_uri__contains=book1, 
+                                               book_2__version__version_uri__contains=book2, 
+                                               release_info__release_code=release_code)
+            serializer = ShallowTextReuseStatsSerializer(stats, many=False)
         else:
-            stats = TextReuseStats.objects.filter(book_1__version_uri__contains=book1, 
-                                                  book_2__version_uri__contains=book2)
-            serializer = TextReuseStatsSerializer(stats, many=True)
-        print(stats)
+            stats = TextReuseStats.objects.filter(book_1__version__version_uri__contains=book1, 
+                                                  book_2__version__version_uri__contains=book2)
+            serializer = ShallowTextReuseStatsSerializer(stats, many=True)
         
         return Response(serializer.data)  
     except TextReuseStats.DoesNotExist:

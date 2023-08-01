@@ -114,7 +114,6 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
             (key: version_code (str), value: list of tag strings)
         release_code (str): the release code (e.g., 2021.2.5; for the current GitHub repo, the release code is "post-release")
     """
-    split_files = dict()  # TO DO: deal with split files!
     all_relation_types = dict()
 
     # create the release in the database (if it doesn't exist yet):
@@ -128,7 +127,8 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
 
     for ah_folder in os.listdir(corpus_folder):
         # skip irrelevant folders: 
-        if not re.findall("^\d{4}AH$", ah_folder):
+        #if not re.findall("^\d{4}AH$", ah_folder):
+        if not re.findall("^1125AH$", ah_folder):
             continue # skip anything that's not an xxxxAH folder
         if ah_folder == "9001AH":  # TO DO: load 9001AH folder!
             continue
@@ -141,6 +141,7 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
             texts = dict()
             author_folder_pth = os.path.join(data_folder_pth, author_uri)
             author_yml_fp = os.path.join(author_folder_pth, author_uri+".yml")
+            split_files = dict() # text files split because of their size!
             
             # collect most of the author_meta from the author yml file
             # (Arabic names will be taken from the metadata headers 
@@ -174,7 +175,7 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
                     
                     for fn in os.listdir(text_folder_pth):
                         fp = os.path.join(text_folder_pth, fn)
-                        split_files = dict() # text files split because of their size!
+                        
 
                         # check how many periods the file contains
                         # (easy proxy for whether a text file has an extension, 
@@ -190,6 +191,7 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
                         elif fn.endswith("yml") and n_periods == 3:
                             text_yml_fp = fp  # the metadata from the text yml file has already been loaded above
                         elif fn.endswith("yml") and n_periods == 4:
+                            print(fn)
                             version_yml_fp = fp
                             # collect the version metadata from the version yml file:
                             version_fp, version_meta = collect_version_yml_data(version_yml_fp, fn.strip(".yml"), 
@@ -208,11 +210,15 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
                             texts[text_uri]["text_meta"] = text_meta  
                             
                             # check whether the text file was split because of its size:
-                            if re.findall("[A-Z]\.yml", fn):
-                                whole_fn = fn[:-5]
+                            if re.findall("[A-Z]-", fn):
+                                print("SPLIT FILE:", fn)
+                                whole_fn = fn.split("-")[0][:-1]
                                 if whole_fn not in split_files:
                                     split_files[whole_fn] = []
+                                print("whole_fn:", whole_fn)
                                 split_files[whole_fn].append(version_meta)
+                                print(len(split_files[whole_fn]))
+                                #print(json.dumps(split_files, indent=2, ensure_ascii=False))
                             else:
                                 # add the version_meta dictionary to the texts dictionary:
                                 texts[text_uri]["versions"].append(version_meta)
@@ -236,11 +242,84 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
                         else:
                             print(text_uri)
                             print("UNEXPECTED FILE:", fp)
+
+                    # deal with texts split because of their size:
+                    new_split_files = dict()
+                    for whole_fn in split_files:
+                        new_split_files[whole_fn] = []
+                        # create a dictionary to contain the joined metadata:
+                        print(whole_fn)
+                        print(json.dumps(split_files[whole_fn], indent=2, ensure_ascii=False))
+                        combined_meta = copy.deepcopy(split_files[whole_fn][0])
+                        combined_meta["version_code"] = combined_meta["version_code"][:-1]
+                        combined_meta["version_uri"] = whole_fn
+                        combined_meta["char_length"] = 0
+                        combined_meta["tok_length"] = 0
+                        combined_meta["url"] = []
+                        combined_meta["worldcat_url"] = []
+                        combined_meta["pdf_url"] = []
+
+                        # combine the metadata from the parts:
+                        for part_meta in split_files[whole_fn]:
+                            combined_meta["char_length"] += int(part_meta["char_length"])
+                            combined_meta["tok_length"] += int(part_meta["tok_length"])
+                            if part_meta["url"]:
+                                urls = re.split(r"[ ¶\n\r]*[;,][ ¶\n\r]*", part_meta["url"].strip())
+                                urls = [re.sub(r"[ ¶\n\r]+", "", url) for url in urls]
+                                for url in urls:
+                                    if url not in combined_meta["url"]:
+                                        combined_meta["url"].append(url)
+                            if part_meta["worldcat_url"]:
+                                urls = re.split(r"[ ¶\n\r]*[;,][ ¶\n\r]*", part_meta["worldcat_url"].strip())
+                                urls = [re.sub(r"[ ¶\n\r]+", "", url) for url in urls]
+                                for url in urls:
+                                    if url not in combined_meta["worldcat_url"]:
+                                        combined_meta["worldcat_url"].append(url)
+                            if part_meta["pdf_url"]:
+                                urls = re.split(r"[ ¶\n\r]*[;,][ ¶\n\r]*", part_meta["pdf_url"].strip())
+                                urls = [re.sub(r"[ ¶\n\r]+", "", url) for url in urls]
+                                for url in urls:
+                                    if url not in combined_meta["pdf_url"]:
+                                        combined_meta["pdf_url"].append(url)
+                            combined_meta["text_meta"] = part_meta["text_meta"]
+                            if not combined_meta["edition_meta"]:
+                                combined_meta["edition_meta"] = part_meta["edition_meta"]
+                            if part_meta["analysis_priority"] and "pri" in part_meta["analysis_priority"]:
+                                combined_meta["edition_meta"] = "pri"
+                            # add a link to the whole in the part dictionary:
+                            part_meta["part_of"] = whole_fn
+                            # append the updated dictionary to the new list:
+                            new_split_files[whole_fn].append(part_meta)
+                            print(part_meta)
+                        # convert the lists to comma-separated strings:
+                        combined_meta["url"] = ",".join(combined_meta["url"])
+                        combined_meta["worldcat_url"] = ",".join(combined_meta["worldcat_url"])
+                        combined_meta["pdf_url"] = ",".join(combined_meta["pdf_url"])
+
+                        # # get the updated part dictionaries:
+                        # split_files = new_split_files
+
                         
+                        # if a single part has primary status, give the primary status to all parts:
+                        if combined_meta["analysis_priority"] and "pri" in combined_meta["analysis_priority"]:
+                            for part_meta in split_files[whole_fn]:
+                                part_meta["analysis_priority"] = combined_meta["analysis_priority"]
+                        
+                        # add the parts to the text_d:
+                        texts[text_uri]["versions"].append(combined_meta)
+                        texts[text_uri]["versions"] += split_files[whole_fn]
+                        print("---------------")
+                        print(json.dumps(text_d["versions"], indent=2, ensure_ascii=False))
+                    split_files = dict()
+
+
+
                 elif fp.endswith(".yml"):
                     author_yml_fp = fp  # do nothing; author yml data has already been extracted
                 else:
                     print(fp, "is not a folder nor an author yml file!")
+
+
 
             # ADD TO DATABASE !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
             # add all metadata related to this author (incl. texts and versions) to the database:
@@ -456,60 +535,7 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
                     
 
             # 3. VERSION METADATA
-                # deal with texts split because of their size:
-                for whole_fn in split_files:
-                    # create a dictionary to contain the joined metadata:
-                    combined_meta = copy.deepcopy(split_files[whole_fn][0])
-                    combined_meta["version_code"] = combined_meta["version_code"][:-1]
-                    combined_meta["version_uri"] = whole_fn
-                    combined_meta["char_length"] = 0
-                    combined_meta["tok_length"] = 0
-                    combined_meta["url"] = []
-                    combined_meta["worldcat_url"] = []
-                    combined_meta["pdf_url"] = []
 
-                    # combine the metadata from the parts:
-                    for part_meta in split_files[whole_fn]:
-                        combined_meta["char_length"] += part_meta["char_length"]
-                        combined_meta["tok_length"] += part_meta["tok_length"]
-                        if part_meta["url"]:
-                            urls = re.split(r"[ ¶\n\r]*[;,][ ¶\n\r]*", part_meta["url"].strip())
-                            urls = [re.sub(r"[ ¶\n\r]+", "", url) for url in urls]
-                            for url in urls:
-                                if url not in combined_meta["url"]:
-                                    combined_meta["url"].append(url)
-                        if part_meta["worldcat_url"]:
-                            urls = re.split(r"[ ¶\n\r]*[;,][ ¶\n\r]*", part_meta["worldcat_url"].strip())
-                            urls = [re.sub(r"[ ¶\n\r]+", "", url) for url in urls]
-                            for url in urls:
-                                if url not in combined_meta["worldcat_url"]:
-                                    combined_meta["worldcat_url"].append(url)
-                        if part_meta["pdf_url"]:
-                            urls = re.split(r"[ ¶\n\r]*[;,][ ¶\n\r]*", part_meta["pdf_url"].strip())
-                            urls = [re.sub(r"[ ¶\n\r]+", "", url) for url in urls]
-                            for url in urls:
-                                if url not in combined_meta["pdf_url"]:
-                                    combined_meta["pdf_url"].append(url)
-                        combined_meta["text_meta"] = part_meta["text_meta"]
-                        if not combined_meta["edition_meta"]:
-                            combined_meta["edition_meta"] = part_meta["edition_meta"]
-                        if part_meta["analysis_priority"] and "pri" in part_meta["analysis_priority"]:
-                            combined_meta["edition_meta"] = "pri"
-                        # add a link to the whole in the part dictionary:
-                        part_meta["part_of"] = whole_fn
-                    # convert the lists to comma-separated strings:
-                    combined_meta["url"] = ",".join(combined_meta["url"])
-                    combined_meta["worldcat_url"] = ",".join(combined_meta["worldcat_url"])
-                    combined_meta["pdf_url"] = ",".join(combined_meta["pdf_url"])
-                    
-                    # if a single part has primary status, give the primary status to all parts:
-                    if combined_meta["analysis_priority"] and "pri" in combined_meta["analysis_priority"]:
-                        for part_meta in split_files[whole_fn]:
-                            part_meta["analysis_priority"] = combined_meta["analysis_priority"]
-                    
-                    # add the parts to the text_d:
-                    text_d["versions"].append(combined_meta)
-                    text_d["versions"] += split_files[whole_fn]
 
 
                 # set the analysis priority ("pri", "sec") for all versions:
@@ -546,6 +572,7 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
 
                     if "part_of" in version_meta:
                         whole_obj = Version.objects.get(version_uri=version_meta["part_of"])
+                        print("part of", whole_obj)
                     else:
                         whole_obj = None
 

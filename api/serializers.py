@@ -37,7 +37,7 @@ class ShallowEditionSerializer(FlexFieldsModelSerializer):
         model = Edition
         fields = ("id", "editor", "edition_place", "publisher", 
                   "edition_date", "ed_info", "pdf_url", "worldcat_url")
-        depth = 0
+        depth = 1
 
 
 class ShallowVersionSerializer(FlexFieldsModelSerializer):
@@ -47,7 +47,7 @@ class ShallowVersionSerializer(FlexFieldsModelSerializer):
 
     class Meta:
         model = Version
-        fields = ("id", "version_code", "version_uri", "edition", "language")
+        fields = ("id", "version_code", "version_uri", "edition", "language", "release_versions")
         depth = 0  # exclude text and author metadata
 
 
@@ -98,6 +98,13 @@ class AllRelationSerializer(FlexFieldsModelSerializer):
 
     class Meta:
         model = A2BRelation
+        fields = ("__all__")
+        depth = 2
+
+class AllRelationTypesSerializer(FlexFieldsModelSerializer):
+
+    class Meta:
+        model = RelationType
         fields = ("__all__")
         depth = 2
 
@@ -251,12 +258,27 @@ class VersionSerializer(FlexFieldsModelSerializer):
     and includes the text and author metadata"""
     text = TextSerializer(read_only=True)
     edition = ShallowEditionSerializer(read_only=True)
-    releases = ShallowReleaseVersionSerializer(read_only=True, many=True)
+    release_versions = ShallowReleaseVersionSerializer(read_only=True, many=True)
+
+    def to_representation(self, instance):
+        json_rep = super().to_representation(instance)
+        # remove the nested list of all versions of the text:
+        del json_rep["text"]["versions"]
+        # remove the nested list of all texts by the same author:
+        for i in range(len(json_rep["text"]["author"])):
+            del json_rep["text"]["author"][i]["texts"]
+        # remove the release_versions dictionary if a specific release was requested:
+        release_code = self.context.get('release_code')
+        if release_code:
+            requested_release = [d for d in json_rep["release_versions"] if d["release_code"] == release_code]
+            del json_rep["release_versions"]
+            json_rep["release_version"] = requested_release
+        return json_rep
 
     class Meta:
         model = Version
         #fields = ("__all__")
-        fields = ("id", "version_code", "version_uri", "releases", "edition", "text", "language")
+        fields = ("id", "version_code", "version_uri", "language", "text", "edition", "divisions", "part_of", "release_versions")
         depth = 3  # expand text and author metadata
 
 
@@ -437,14 +459,16 @@ class ShallowTextReuseStatsSerializer(FlexFieldsModelSerializer):
                 "author_lat_prefered": version1_instance.text.author.author_lat_prefered, 
                 "title_ar_prefered": version1_instance.text.title_ar_prefered,
                 "title_lat_prefered": version1_instance.text.title_lat_prefered,
-                "version_uri": version1_instance.version_uri
+                "version_uri": version1_instance.version_uri,
+                "tok_length": text_reuse_instance.book_1.tok_length
                 },
             "book2": {
                 "author_ar_prefered": version2_instance.text.author.author_ar_prefered,
                 "author_lat_prefered": version2_instance.text.author.author_lat_prefered, 
                 "title_ar_prefered": version2_instance.text.title_ar_prefered,
                 "title_lat_prefered": version2_instance.text.title_lat_prefered,
-                "version_uri": version2_instance.version_uri
+                "version_uri": version2_instance.version_uri,
+                "tok_length": text_reuse_instance.book_2.tok_length
                 }
             }
         return d
@@ -480,6 +504,18 @@ class TextReuseStatsSerializer(serializers.ModelSerializer):
 
 class ReleaseVersionSerializer(serializers.ModelSerializer):
     version = VersionSerializer(read_only=True)
+    
+    def to_representation(self, instance):
+        json_rep = super().to_representation(instance)
+        # replace the full release_info dictionary with only the release_code:
+        json_rep["release_code"] = json_rep["release_info"]["release_code"]
+        del json_rep["release_info"]
+        # remove the versions dictionary (nested in the text dictionary):
+        del json_rep["version"]["text"]["versions"]
+        # remove the texts dictionary (nested in the author dictionary):
+        for i in range(len(json_rep["version"]["text"]["author"])):
+            del json_rep["version"]["text"]["author"][i]["texts"]
+        return json_rep
 
     class Meta:
         model = ReleaseVersion

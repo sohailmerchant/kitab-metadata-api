@@ -4,16 +4,36 @@ from . import views
 urlpatterns = [
     path('', views.apiOverview, name='api-overview'),
 
+    # Text reuse statistics:
+
+    path('all-releases/text-reuse-stats/<str:book1>_<str:book2>/', views.getPairTextReuseStats, name='text-reuse-pair'),
+    path('all-releases/text-reuse-stats/all/', views.GetAllTextReuseStats.as_view(), name='all-text-reuse'),
+    path('all-releases/text-reuse-stats/', views.GetAllTextReuseStats.as_view(), name='all-text-reuse'),
+    path('all-releases/text-reuse-stats/<str:book1>/', views.GetAllTextReuseStatsB1.as_view(), name='all-text-reuse'),
+
+    path('<str:release_code>/text-reuse-stats/<str:book1>_<str:book2>/', views.getPairTextReuseStats, name='text-reuse-pair'),
+    path('<str:release_code>/text-reuse-stats/all/', views.GetAllTextReuseStats.as_view(), name='all-text-reuse'),
+    path('<str:release_code>/text-reuse-stats/', views.GetAllTextReuseStats.as_view(), name='all-text-reuse'),
+    path('<str:release_code>/text-reuse-stats/<str:book1>/', views.GetAllTextReuseStatsB1.as_view(), name='all-text-reuse'),
+
     # release version endpoints:
 
-    path('all-releases/version/all/', views.GetReleaseVersion.as_view(), name='all-releases-all-versions'),
-    path('all-releases/version/', views.GetReleaseVersion.as_view(), name='all-releases-all-versions'),
-    #path('all-releases/version/<str:version_code>/', views.GetReleaseVersion.as_view(), name='all-releases-one-version'), # multiple results possible!
-    path('all-releases/version/<str:version_code>/', views.getVersion, name='all-releases-one-version'),
+    path('all-releases/version/all/', views.VersionListView.as_view(), name='all-releases-all-versions'),
+    path('all-releases/version/', views.VersionListView.as_view(), name='all-releases-all-versions'),
+    path('all-releases/version/<str:version_code>/', views.VersionListView.as_view(), name='all-releases-one-version'), # multiple results possible!
     
-    path('<str:release_code>/version/all/', views.GetReleaseVersion.as_view(), name='one-release-all-versions'),
-    path('<str:release_code>/version/', views.GetReleaseVersion.as_view(), name='one-release-all-versions'),
-    path('<str:release_code>/version/<str:version_code>/', views.GetReleaseVersion, name='one-release-one-version'),
+    path('<str:release_code>/version/all/', views.VersionListView.as_view(), name='all-releases-all-versions'),
+    path('<str:release_code>/version/', views.VersionListView.as_view(), name='all-releases-all-versions'),
+    path('<str:release_code>/version/<str:version_code>/', views.getVersion, name='one-release-one-version'),
+
+    #path('all-releases/version/all/', views.GetReleaseVersion.as_view(), name='all-releases-all-versions'),
+    #path('all-releases/version/', views.GetReleaseVersion.as_view(), name='all-releases-all-versions'),
+    #path('all-releases/version/<str:version_code>/', views.GetReleaseVersion.as_view(), name='all-releases-one-version'), # multiple results possible!
+
+    #path('<str:release_code>/version/all/', views.GetReleaseVersion.as_view(), name='one-release-all-versions'),
+    #path('<str:release_code>/version/', views.GetReleaseVersion.as_view(), name='one-release-all-versions'),
+    #path('<str:release_code>/version/<str:version_code>/', views.GetReleaseVersion, name='one-release-one-version'),
+
 
     # text endpoints:  # TO DO: use other view for the texts
 
@@ -45,26 +65,22 @@ urlpatterns = [
     path('all-releases/relation/all/', views.RelationsListView.as_view(), name='all-releases-relations'),
     path('all-releases/relation/', views.RelationsListView.as_view(), name='all-releases-relations'),
 
+    # relation types endpoint:
+    path('relation-type/all/', views.RelationTypesListView.as_view(), name='all-releases-relations'),
+    path('relation-type/<str:code>/', views.getRelationType, name='all-releases-relations'),
+
     # source collections info (independent of releases):
 
-    path('source-collections/all/', views.GetSourceCollectionDetailsList.as_view(), name='source-collections'),
-    path('source-collections/', views.GetSourceCollectionDetailsList.as_view(), name='source-collections'),
-    path('source-collections/<str:code>', views.GetSourceCollectionDetailsList.as_view(), name='source-collections'),
+    path('source-collection/all/', views.GetSourceCollectionDetailsList.as_view(), name='source-collections'),
+    path('source-collection/', views.GetSourceCollectionDetailsList.as_view(), name='source-collections'),
+    path('source-collection/<str:code>', views.GetSourceCollectionDetailsList.as_view(), name='source-collections'),
 
     # corpus insights (statistics on the number of books, largest book, etc. for each release):
     
     path('all-releases/corpusinsights/', views.getCorpusInsights, name='corpusinsights'),
     path('<str:release_code>/corpusinsights/', views.getCorpusInsights, name='corpusinsights'),
 
-    # Text reuse statistics:
-
-    path('all-releases/text-reuse-stats/<str:book1>_<str:book2>/', views.getPairTextReuseStats, name='text-reuse-pair'),
-    path('all-releases/text-reuse-stats/all/', views.GetAllTextReuseStats.as_view(), name='all-text-reuse'),
-    path('all-releases/text-reuse-stats/<str:book1>/', views.GetAllTextReuseStatsB1.as_view(), name='all-text-reuse'),
-
-    path('<str:release_code>/text-reuse-stats/<str:book1>_<str:book2>/', views.getPairTextReuseStats, name='text-reuse-pair'),
-    path('<str:release_code>/text-reuse-stats/all/', views.GetAllTextReuseStats.as_view(), name='all-text-reuse'),
-    path('<str:release_code>/text-reuse-stats/<str:book1>/', views.GetAllTextReuseStatsB1.as_view(), name='all-text-reuse'),
+ 
 
     # # version endpoints: (a confusing category - we should use the releaseMeta as starting point!)
 

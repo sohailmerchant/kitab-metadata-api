@@ -599,7 +599,7 @@ def collect_author_yml_data(author_yml_fp, author_uri):
                             or "none" in auth_d[x].lower())]
     english_name = " ".join(english_name).strip()
 
-    name_from_uri = re.sub("([A-Z])", r" \1", author_uri).strip()
+    name_from_uri = re.sub("([A-Z])", r" \1", author_uri[4:]).strip()
     name_from_uri = name_from_uri.replace("c", "ʿ").replace("C", "ʿ")
 
     # collect author name elements:
@@ -755,7 +755,7 @@ def set_analysis_priority(version_list):
             return version_list
         else:
             # sort the version list by length of the text (from long to short):
-            version_list = sorted(version_list, key=lambda el:el["char_length"], reverse=True)
+            version_list = sorted(version_list, key=lambda el:int(el["char_length"]), reverse=True)
             # take the longest text as primary text:
             version_list[0]["analysis_priority"] = "pri"
             return version_list
