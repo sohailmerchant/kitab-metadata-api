@@ -28,8 +28,8 @@ kitab-metadata-api
       |- models-v2.py: older version of models.py?
       |- serializers.py: define serializers (which create JSON representations
            of the data in the database):
-           personNameSerializer, VersionMetaSerializer,
-           TextSerializer, AuthorMetaSerializer, AggregatedStatsSerializer
+           PersonNameSerializer, VersionSerializer,
+           TextSerializer, AuthorSerializer, AggregatedStatsSerializer
       |- tests.py: (empty file)
       |- urls.py: creates endpoint URLs, each connected with a specific view
            (see views.py)

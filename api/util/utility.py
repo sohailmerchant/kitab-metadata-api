@@ -178,8 +178,8 @@ def tags2dic(tags_fp):
         data = f1.read().split("\n")
 
         for d in data:
-            version_id, tags = d.split("\t")
-            dic[version_id] = tags.split(";")
+            version_code, tags = d.split("\t")
+            dic[version_code] = tags.split(";")
     return dic
 
 def read_header(fp):
@@ -272,12 +272,12 @@ def collect_version_yml_data(version_yml_fp, version_uri, corpus_folder, base_ur
         tuple (version_fp: str, version_meta: dict)
     """
 
-    version_id = version_uri.split("-")[0].split(".")[-1]
+    version_code = version_uri.split("-")[0].split(".")[-1]
     language = version_uri.split("-")[1][:3]
     try:
-        collection_code = re.findall(r"^([A-Za-z]+?\d*[A-Za-z]+)\d+(?:BK\d+)?(?:Vols)?[A-Z]?$", version_id)[0]
+        collection_code = re.findall(r"^([A-Za-z]+?\d*[A-Za-z]+)\d+(?:BK\d+)?(?:Vols)?[A-Z]?$", version_code)[0]
     except:
-        print("no collection code found in", version_id)
+        print("no collection code found in", version_code)
         collection_code = None
         input("CONTINUE?")
 
@@ -371,7 +371,7 @@ def collect_version_yml_data(version_yml_fp, version_uri, corpus_folder, base_ur
 
     version_meta = dict(
         # version_meta:
-        version_id=version_id,
+        version_code=version_code,
         version_uri=version_uri,
         collection_code=collection_code,
         text_meta="",

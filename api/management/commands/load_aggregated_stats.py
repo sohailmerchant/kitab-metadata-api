@@ -1,6 +1,6 @@
 """Load the aggregated corpus stats (number of authors/books/versions/...) into the database"""
 
-from api.models import authorMeta, textMeta, ReleaseMeta, CorpusInsights, ReleaseDetails
+from api.models import Author, Text, ReleaseVersion, CorpusInsights, ReleaseInfo
 from django.core.management.base import BaseCommand
 from django.db.models import Count, Sum, Max
 import json
@@ -15,54 +15,54 @@ class Command(BaseCommand):
             load_aggregated_data(release_code)
 
 def get_distinct_authors(release_code):
-    return authorMeta.objects\
-            .filter(text__version__release__release__release_code=release_code)\
+    return Author.objects\
+            .filter(text__version__release_version__release_info__release_code=release_code)\
             .distinct().count()  # without distinct, it counts the number of rows in the join table!
 
 def get_distinct_texts(release_code):
-    return textMeta.objects\
-            .filter(version__release__release__release_code=release_code)\
+    return Text.objects\
+            .filter(version__release_version__release_info__release_code=release_code)\
             .distinct().count()
 
 def get_distinct_versions(release_code):
-    return ReleaseMeta.objects.filter(release__release_code=release_code).count()
+    return ReleaseVersion.objects.filter(release_info__release_code=release_code).count()
 
 def get_distinct_primary_versions(release_code):
-    return ReleaseMeta.objects.filter(release__release_code=release_code, analysis_priority="pri").count()
+    return ReleaseVersion.objects.filter(release_info__release_code=release_code, analysis_priority="pri").count()
 
 def get_distinct_secondary_versions(release_code):
-    return ReleaseMeta.objects.filter(release__release_code=release_code, analysis_priority="sec").count()
+    return ReleaseVersion.objects.filter(release_info__release_code=release_code, analysis_priority="sec").count()
 
 def get_distinct_mARkdown_versions(release_code):
-    return ReleaseMeta.objects.filter(release__release_code=release_code, annotation_status="mARkdown").count()
+    return ReleaseVersion.objects.filter(release_info__release_code=release_code, annotation_status="mARkdown").count()
 
 def get_distinct_completed_versions(release_code):
-    return ReleaseMeta.objects.filter(release__release_code=release_code, annotation_status="completed").count()
+    return ReleaseVersion.objects.filter(release_info__release_code=release_code, annotation_status="completed").count()
 
 def get_total_word_count(release_code):
-    return ReleaseMeta.objects\
-            .filter(release__release_code=release_code)\
+    return ReleaseVersion.objects\
+            .filter(release_info__release_code=release_code)\
             .aggregate(sum=Sum("tok_length"))['sum']
 
 def get_total_word_count_pri(release_code):
-    return ReleaseMeta.objects\
-            .filter(release__release_code=release_code, analysis_priority="pri")\
+    return ReleaseVersion.objects\
+            .filter(release_info__release_code=release_code, analysis_priority="pri")\
             .aggregate(sum=Sum("tok_length"))['sum']
 
 def get_largest_text(release_code):
-    return ReleaseMeta.objects\
-            .filter(release__release_code=release_code)\
+    return ReleaseVersion.objects\
+            .filter(release_info__release_code=release_code)\
             .aggregate(largest=Max("tok_length"))['largest']
 
 def get_largest_books(release_code, n=10):
-    all_books = ReleaseMeta.objects\
-        .filter(release__release_code=release_code)\
-        .values('version_meta__version_uri', 'tok_length')\
+    all_books = ReleaseVersion.objects\
+        .filter(release_info__release_code=release_code)\
+        .values('version__version_uri', 'tok_length')\
         .order_by('-tok_length')
 
     top_books = dict()
     for b in all_books:
-        text_uri = '.'.join(b['version_meta__version_uri'].split('.')[:2])
+        text_uri = '.'.join(b['version__version_uri'].split('.')[:2])
         if text_uri not in top_books:
             top_books[text_uri] = b
         if len(top_books) == n:
@@ -99,7 +99,7 @@ def get_largest_books(release_code, n=10):
 
 def load_aggregated_data(release_code):
     """load data from the database in aggregated format for the insight page"""
-    release_obj = ReleaseDetails.objects.get(release_code=release_code)
+    release_obj = ReleaseInfo.objects.get(release_code=release_code)
 
     # print(release_code)
     # print("get_distinct_authors:", get_distinct_authors(release_code))
@@ -112,7 +112,7 @@ def load_aggregated_data(release_code):
     # print("---------------------")
 
     CorpusInsights.objects.get_or_create(
-        release=release_obj,
+        release_info=release_obj,
         number_of_authors=get_distinct_authors(release_code),
         number_of_books=get_distinct_texts(release_code),
         number_of_versions=get_distinct_versions(release_code),

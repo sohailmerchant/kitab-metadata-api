@@ -6,10 +6,11 @@ IMPORTANT: before running the script, make sure you have pulled all changes from
 """
 
 import json
+import copy
 import csv
 from webbrowser import get
 from django.db import models
-from api.models import authorMeta, textMeta, versionMeta, personName, CorpusInsights, ReleaseMeta, ReleaseDetails, editionMeta, a2bRelation, relationType, placeMeta, SourceCollectionDetails
+from api.models import Author, Text, Version, PersonName, CorpusInsights, ReleaseVersion, ReleaseInfo, Edition, A2BRelation, RelationType, Place, SourceCollectionDetails
 from django.core.management.base import BaseCommand
 import os
 import re
@@ -27,7 +28,7 @@ from api.util.utility import tags2dic, date_from_string, extract_metadata_from_h
 
 # define some global variables: 
 VERBOSE = False
-version_ids = dict()
+version_codes = dict()
 
 
 class Command(BaseCommand):
@@ -56,10 +57,10 @@ def main(corpus_folder, relations_definitions_fp, source_collections_fp, tags_fp
     # load the corpus metadata:
     load_corpus_meta(corpus_folder, base_url, text_tags, release_code)
 
-    # check for duplicate version_ids:
-    for version_id, fn_list in version_ids.items():
+    # check for duplicate version_codes:
+    for version_code, fn_list in version_codes.items():
         if len(fn_list) > 1:
-            print("DUPLICATE ID:", version_id)
+            print("DUPLICATE ID:", version_code)
             print(fn_list)
 
 
@@ -72,7 +73,7 @@ def load_relations_definitions(relations_definitions_fp):
                 descr = row["descr"]
             else:
                 descr = ""
-            reltype, created = relationType.objects.update_or_create(
+            reltype, created = RelationType.objects.update_or_create(
                 # selection keys:
                 code=row["code"],
                 subtype_code=row["subtype_code"],
@@ -110,14 +111,14 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
         corpus_folder (str): path to the folder containing the 25-years folders
         base_url (str): the url to the folder on raw.github.com that contains the most current version of the text files
         text_tags (dict): a dictionary containing the tags Maxim gave to each version ID
-            (key: version_id (str), value: list of tag strings)
+            (key: version_code (str), value: list of tag strings)
         release_code (str): the release code (e.g., 2021.2.5; for the current GitHub repo, the release code is "post-release")
     """
     split_files = dict()  # TO DO: deal with split files!
     all_relation_types = dict()
 
     # create the release in the database (if it doesn't exist yet):
-    release_obj, created = ReleaseDetails.objects.update_or_create(
+    release_obj, created = ReleaseInfo.objects.update_or_create(
         release_code=release_code,
         defaults=dict(
             release_date=datetime.date.today(),
@@ -173,6 +174,7 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
                     
                     for fn in os.listdir(text_folder_pth):
                         fp = os.path.join(text_folder_pth, fn)
+                        split_files = dict() # text files split because of their size!
 
                         # check how many periods the file contains
                         # (easy proxy for whether a text file has an extension, 
@@ -195,15 +197,25 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
                             # collect additional metadata from the text file metadata headers:
                             r = collect_header_meta(version_fp, author_meta, text_meta, version_meta)
                             author_meta, text_meta, version_meta = r
-                            # add Maxim's tags (organized by version_id) to the text's tags:
+                            # add Maxim's tags (organized by version_code) to the text's tags:
                             try:
-                                text_meta["tags"] += text_tags[version_meta["version_id"]]
+                                text_meta["tags"] += text_tags[version_meta["version_code"]]
                             except:
-                                #print("no text tags found for", version_meta["version_id"])
+                                #print("no text tags found for", version_meta["version_code"])
                                 pass
-                            # add the meta dictionaries to the texts dictionary:
-                            texts[text_uri]["text_meta"] = text_meta  # update the text_meta that was already in the dictionary!
-                            texts[text_uri]["versions"].append(version_meta)
+
+                            # update the text_meta that was already in the dictionary!
+                            texts[text_uri]["text_meta"] = text_meta  
+                            
+                            # check whether the text file was split because of its size:
+                            if re.findall("[A-Z]\.yml", fn):
+                                whole_fn = fn[:-5]
+                                if whole_fn not in split_files:
+                                    split_files[whole_fn] = []
+                                split_files[whole_fn].append(version_meta)
+                            else:
+                                # add the version_meta dictionary to the texts dictionary:
+                                texts[text_uri]["versions"].append(version_meta)
                         elif re.findall(text_uri+r"\.[A-Z]\w+-[a-z]{3}\d(?:\.mARkdown|\.completed|\.inProgress)?", fn):
                             # load only the data from the most developed text file (.mARkdown > .completed > .inProgress > "")
                             # into the database; this is defined in the collect_version_yml_data function!
@@ -214,12 +226,12 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
                             # elif n_periods == 3:
                             #     version_uri, extension = os.path.splitext(fn)
 
-                            # add the version ID to the version_ids dictionary
+                            # add the version ID to the version_codes dictionary
                             # to check for duplicate IDs later:
-                            version_id = split_fn[2].split("-")[0]
-                            if not version_id in version_ids:
-                                version_ids[version_id] = []
-                            version_ids[version_id].append(fn)
+                            version_code = split_fn[2].split("-")[0]
+                            if not version_code in version_codes:
+                                version_codes[version_code] = []
+                            version_codes[version_code].append(fn)
 
                         else:
                             print(text_uri)
@@ -238,7 +250,7 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
             # add/update the author meta to the database:
             print(author_uri)
 
-            am, am_created = authorMeta.objects.update_or_create(
+            am, am_created = Author.objects.update_or_create(
                 author_uri=author_uri,
                 defaults = dict(
                     author_ar=author_meta['author_ar'],
@@ -257,8 +269,8 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
 
             # add/update the author's name elements to the database (only once)
             for language, d in author_meta["name_elements"].items():
-                personName.objects.update_or_create(
-                    author_meta=am,
+                PersonName.objects.update_or_create(
+                    author=am,
                     language=language,
                     defaults=dict(
                         shuhra=d["shuhra"],
@@ -272,13 +284,13 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
             # add/update the author's place relations to the database:
             for d in author_meta["place_relations"]:
                 # first, add the place if it doesn't exist yet
-                pb, created = placeMeta.objects.get_or_create(
+                pb, created = Place.objects.get_or_create(
                     thuraya_uri=d["place_b"]
                 )
 
                 # then, add the relation type if it doesn't exist yet:
                 if not f'd["code"]_d["subtype_code"]' in all_relation_types:  # avoid extra lookup in database
-                    rt, rt_created = relationType.objects.get_or_create(
+                    rt, rt_created = RelationType.objects.get_or_create(
                         code=d["code"], 
                         subtype_code=d["subtype_code"]
                     )
@@ -287,7 +299,7 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
                     rt = all_relation_types[f'd["code"]_d["subtype_code"]']
 
                 # then, add the relation: 
-                rel, created = a2bRelation.objects.get_or_create(
+                rel, created = A2BRelation.objects.get_or_create(
                     person_a=am,
                     place_b=pb,
                     relation_type=rt
@@ -299,18 +311,18 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
                 # first, add the person if they don't exist yet
                 if d["person_a"] == author_uri:
                     pa = am
-                    pb, created = authorMeta.objects.get_or_create(
+                    pb, created = Author.objects.get_or_create(
                         author_uri=d["person_b"]
                     )
                 else:
-                    pa, created = authorMeta.objects.get_or_create(
+                    pa, created = Author.objects.get_or_create(
                         author_uri=d["person_a"]
                     )
                     pb = am
 
                 # then, add the relation type if it doesn't exist yet:
                 if not f'd["code"]_d["subtype_code"]' in all_relation_types:  # avoid extra lookup in database
-                    rt, rt_created = relationType.objects.get_or_create(
+                    rt, rt_created = RelationType.objects.get_or_create(
                         code=d["code"], 
                         subtype_code=d["subtype_code"]
                     )
@@ -319,7 +331,7 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
                     rt = all_relation_types[f'd["code"]_d["subtype_code"]']
 
                 # then, add the relation: 
-                rel, created = a2bRelation.objects.get_or_create(
+                rel, created = A2BRelation.objects.get_or_create(
                     person_a=pa,
                     person_b=pb,
                     relation_type=rt
@@ -337,9 +349,9 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
                     text_meta["title_ar_prefered"] = re.split(" *:: *| *[,;] *", text_meta["titles_ar"])[0]
                 
                 # upload text meta to the database:
-                tm, tm_created = textMeta.objects.update_or_create(
+                tm, tm_created = Text.objects.update_or_create(
                     text_uri=text_meta["text_uri"],
-                    author_meta=am,
+                    author=am,
                     defaults=dict(
                         titles_ar=text_meta['titles_ar'],
                         titles_lat=text_meta['titles_lat'],
@@ -358,26 +370,26 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
                     # first, add the other text if it doesn't exist yet:
                     if d["text_a"] == text_uri:
                         ta = tm
-                        pb, created = authorMeta.objects.get_or_create(
+                        pb, created = Author.objects.get_or_create(
                             author_uri=d["text_b"].split(".")[0]
                         )
-                        tb, created = textMeta.objects.get_or_create(
+                        tb, created = Text.objects.get_or_create(
                             text_uri=d["text_b"],
-                            author_meta=pb
+                            author=pb
                         )
                     else:
-                        pa, created = authorMeta.objects.get_or_create(
+                        pa, created = Author.objects.get_or_create(
                             author_uri=d["text_a"].split(".")[0]
                         )
-                        ta, created = textMeta.objects.get_or_create(
+                        ta, created = Text.objects.get_or_create(
                             text_uri=d["text_a"],
-                            author_meta=pa
+                            author=pa
                         )
                         tb = tm
 
                     # then, add the relation type if it doesn't exist yet:
                     if not f'd["code"]_d["subtype_code"]' in all_relation_types:  # avoid extra lookup in database
-                        rt, rt_created = relationType.objects.get_or_create(
+                        rt, rt_created = RelationType.objects.get_or_create(
                             code=d["code"], 
                             subtype_code=d["subtype_code"]
                         )
@@ -386,7 +398,7 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
                         rt = all_relation_types[f'd["code"]_d["subtype_code"]']
 
                     # then, add the relation: 
-                    rel, created = a2bRelation.objects.get_or_create(
+                    rel, created = A2BRelation.objects.get_or_create(
                         text_a=ta,
                         text_b=tb,
                         relation_type=rt
@@ -396,13 +408,13 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
 
                 for d in text_meta["person_relations"]:
                     # first, add the place if it doesn't exist yet
-                    pb, created = authorMeta.objects.get_or_create(
+                    pb, created = Author.objects.get_or_create(
                         author_uri=d["person_b"]
                     )
 
                     # then, add the relation type if it doesn't exist yet:
                     if not f'd["code"]_d["subtype_code"]' in all_relation_types:  # avoid extra lookup in database
-                        rt, rt_created = relationType.objects.get_or_create(
+                        rt, rt_created = RelationType.objects.get_or_create(
                             code=d["code"], 
                             subtype_code=d["subtype_code"]
                         )
@@ -411,7 +423,7 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
                         rt = all_relation_types[f'd["code"]_d["subtype_code"]']
 
                     # then, add the relation: 
-                    rel, created = a2bRelation.objects.get_or_create(
+                    rel, created = A2BRelation.objects.get_or_create(
                         text_a=tm,
                         person_b=pb,
                         relation_type=rt
@@ -421,13 +433,13 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
 
                 for d in text_meta["place_relations"]:
                     # first, add the place if it doesn't exist yet
-                    pb, created = placeMeta.objects.get_or_create(
+                    pb, created = Place.objects.get_or_create(
                         thuraya_uri=d["place_b"]
                     )
 
                     # then, add the relation type if it doesn't exist yet:
                     if not f'd["code"]_d["subtype_code"]' in all_relation_types:  # avoid extra lookup in database
-                        rt, rt_created = relationType.objects.get_or_create(
+                        rt, rt_created = RelationType.objects.get_or_create(
                             code=d["code"], 
                             subtype_code=d["subtype_code"]
                         )
@@ -436,7 +448,7 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
                         rt = all_relation_types[f'd["code"]_d["subtype_code"]']
 
                     # then, add the relation: 
-                    rel, created = a2bRelation.objects.get_or_create(
+                    rel, created = A2BRelation.objects.get_or_create(
                         text_a=tm,
                         place_b=pb,
                         relation_type=rt
@@ -444,6 +456,62 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
                     
 
             # 3. VERSION METADATA
+                # deal with texts split because of their size:
+                for whole_fn in split_files:
+                    # create a dictionary to contain the joined metadata:
+                    combined_meta = copy.deepcopy(split_files[whole_fn][0])
+                    combined_meta["version_code"] = combined_meta["version_code"][:-1]
+                    combined_meta["version_uri"] = whole_fn
+                    combined_meta["char_length"] = 0
+                    combined_meta["tok_length"] = 0
+                    combined_meta["url"] = []
+                    combined_meta["worldcat_url"] = []
+                    combined_meta["pdf_url"] = []
+
+                    # combine the metadata from the parts:
+                    for part_meta in split_files[whole_fn]:
+                        combined_meta["char_length"] += part_meta["char_length"]
+                        combined_meta["tok_length"] += part_meta["tok_length"]
+                        if part_meta["url"]:
+                            urls = re.split(r"[ ¶\n\r]*[;,][ ¶\n\r]*", part_meta["url"].strip())
+                            urls = [re.sub(r"[ ¶\n\r]+", "", url) for url in urls]
+                            for url in urls:
+                                if url not in combined_meta["url"]:
+                                    combined_meta["url"].append(url)
+                        if part_meta["worldcat_url"]:
+                            urls = re.split(r"[ ¶\n\r]*[;,][ ¶\n\r]*", part_meta["worldcat_url"].strip())
+                            urls = [re.sub(r"[ ¶\n\r]+", "", url) for url in urls]
+                            for url in urls:
+                                if url not in combined_meta["worldcat_url"]:
+                                    combined_meta["worldcat_url"].append(url)
+                        if part_meta["pdf_url"]:
+                            urls = re.split(r"[ ¶\n\r]*[;,][ ¶\n\r]*", part_meta["pdf_url"].strip())
+                            urls = [re.sub(r"[ ¶\n\r]+", "", url) for url in urls]
+                            for url in urls:
+                                if url not in combined_meta["pdf_url"]:
+                                    combined_meta["pdf_url"].append(url)
+                        combined_meta["text_meta"] = part_meta["text_meta"]
+                        if not combined_meta["edition_meta"]:
+                            combined_meta["edition_meta"] = part_meta["edition_meta"]
+                        if part_meta["analysis_priority"] and "pri" in part_meta["analysis_priority"]:
+                            combined_meta["edition_meta"] = "pri"
+                        # add a link to the whole in the part dictionary:
+                        part_meta["part_of"] = whole_fn
+                    # convert the lists to comma-separated strings:
+                    combined_meta["url"] = ",".join(combined_meta["url"])
+                    combined_meta["worldcat_url"] = ",".join(combined_meta["worldcat_url"])
+                    combined_meta["pdf_url"] = ",".join(combined_meta["pdf_url"])
+                    
+                    # if a single part has primary status, give the primary status to all parts:
+                    if combined_meta["analysis_priority"] and "pri" in combined_meta["analysis_priority"]:
+                        for part_meta in split_files[whole_fn]:
+                            part_meta["analysis_priority"] = combined_meta["analysis_priority"]
+                    
+                    # add the parts to the text_d:
+                    text_d["versions"].append(combined_meta)
+                    text_d["versions"] += split_files[whole_fn]
+
+
                 # set the analysis priority ("pri", "sec") for all versions:
                 text_d["versions"] = set_analysis_priority(text_d["versions"])
 
@@ -452,13 +520,13 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
                     # upload edition meta :
                     # NB: the edition meta comes mostly from the text files' metadata headers,
                     # except for the worldcat_url and pdf_url.
-                    # The way we create these editionMeta objects,
+                    # The way we create these Edition objects,
                     # the same edition may be created multiple times if one or more
                     # fields are different; the alternative is that they overwrite each other,
                     # which is probably even less desirable:
 
-                    em, em_created = editionMeta.objects.get_or_create(
-                        text_meta=tm,
+                    em, em_created = Edition.objects.get_or_create(
+                        text=tm,
                         editor=version_meta["editor"],
                         edition_place=version_meta["edition_place"],
                         publisher=version_meta["publisher"],
@@ -469,28 +537,37 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
                     )
 
                     # upload the collection code if it doesn't exist yet:
+
                     cm, cm_created = SourceCollectionDetails.objects.get_or_create(
                         code=version_meta["collection_code"]
                     )
 
+                    # get the parent version object if it was split into parts:
+
+                    if "part_of" in version_meta:
+                        whole_obj = Version.objects.get(version_uri=version_meta["part_of"])
+                    else:
+                        whole_obj = None
+
                     # upload version metadata:
 
-                    vm, vm_created = versionMeta.objects.update_or_create(
-                        version_id=version_meta["version_id"],
+                    vm, vm_created = Version.objects.update_or_create(
+                        version_code=version_meta["version_code"],
                         version_uri=version_meta["version_uri"],
-                        text_meta=tm,
+                        text=tm,
                         language=version_meta["language"],
                         defaults=dict(
-                            edition_meta=em,
-                            source_coll=cm
+                            edition=em,
+                            source_coll=cm,
+                            part_of=whole_obj
                         )
                     )                    
 
                     # upload release version meta
 
-                    rvm, rvm_created = ReleaseMeta.objects.update_or_create(
-                        release=release_obj,
-                        version_meta=vm,
+                    rvm, rvm_created = ReleaseVersion.objects.update_or_create(
+                        release_info=release_obj,
+                        version=vm,
                         defaults=dict(
                             url=version_meta["url"],
                             char_length=version_meta["char_length"],
@@ -535,11 +612,11 @@ def collect_header_meta(version_fp, author_meta, text_meta, version_meta):
     version_meta["ed_info"] = " :: ".join(ed_info)
 
     # - additional genre tags:
-    # version_id = version_meta["version_id"]
+    # version_code = version_meta["version_code"]
     # try:
-    #     coll_id = re.findall(r"^([A-Za-z]+?\d*[A-Za-z]+)\d+(?:BK\d+)?(?:Vols)?[A-Z]?$", version_id)[0]
+    #     coll_id = re.findall(r"^([A-Za-z]+?\d*[A-Za-z]+)\d+(?:BK\d+)?(?:Vols)?[A-Z]?$", version_code)[0]
     # except:
-    #     print("no collection ID found in", version_id)
+    #     print("no collection ID found in", version_code)
     #     input("continue?")
     collection_code = version_meta["collection_code"]
 

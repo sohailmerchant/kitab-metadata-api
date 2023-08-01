@@ -1,47 +1,62 @@
 """THIS SCRIPT IS WORK IN PROGRESS - DO NOT USE YET
 
-This script uploads the metadata of the 2022.1.6 release to the database.
+This script uploads the metadata of a single release to the database.
+
+Provide the relevant inputs for the script in the Command.handle() function: e.g., 
+    release_code = "2022.1.6"
+    release_date = datetime.date(2022, 7, 8) # YYYY, M, D
+    meta_fp = "meta/OpenITI_metadata_2022-1-6_wNoor.csv"
+    base_url = "https://raw.githubusercontent.com/OpenITI/RELEASE/v2022.1.6/data"
+    zenodo_link = "https://zenodo.org/record/6808108"
+    release_notes_fp = "meta/release_notes_2022-1-6.txt"
+    reuse_data_fp = "reuse_data/stats-v2022-1-6_bi-dir.csv"
+    reuse_data_base_url = "http://dev.kitab-project.org/passim01102022/"
+
+NB: for the metadata file, use the _wNoor version, non-merged.
+
 """
 
 import csv
 from webbrowser import get
 from django.db import models
-from api.models import authorMeta, textMeta, versionMeta, CorpusInsights, ReleaseMeta, ReleaseDetails, editionMeta, TextReuseStats, SourceCollectionDetails
+from api.models import Author, Text, Version, CorpusInsights, ReleaseVersion, ReleaseInfo, Edition, TextReuseStats, SourceCollectionDetails
 from django.core.management.base import BaseCommand
 import re
 import datetime
 import json
 
-version_ids = dict()
+version_codes = dict()
+VERBOSE = False
 
 class Command(BaseCommand):
     def handle(self, **options):
         # if testing, only upload text reuse data for Tabari.Tarikh and MalikIbnAnas.Muwatta
         test = True
+        #TextReuseStats.objects.all().delete()
 
         # provide the release details here:
 
-        # release_code = "2022.2.7"
-        # release_date = datetime.date(2023, 2, 24) # YYYY, M, D
-        # meta_fp = "meta/OpenITI_metadata_2022-2-7_merged_wNoor.csv"
-        # base_url = "https://raw.githubusercontent.com/OpenITI/RELEASE/v2022.2.7/data"
-        # zenodo_link = "https://zenodo.org/record/7687795"
-        # release_notes_fp = "meta/release_notes_2022-2-7.txt"
-        # reuse_data_fp = "reuse_data/stats-v2022-2-7_bi-dir.csv"
-        # reuse_data_base_url = "http://dev.kitab-project.org/passim01122022-v7/"
+        release_code = "2022.2.7"
+        release_date = datetime.date(2023, 2, 24) # YYYY, M, D
+        meta_fp = "meta/OpenITI_metadata_2022-2-7_wNoor.csv"
+        base_url = "https://raw.githubusercontent.com/OpenITI/RELEASE/v2022.2.7/data"
+        zenodo_link = "https://zenodo.org/record/7687795"
+        release_notes_fp = "meta/release_notes_2022-2-7.txt"
+        reuse_data_fp = "reuse_data/stats-v2022-2-7_bi-dir.csv"
+        reuse_data_base_url = "http://dev.kitab-project.org/passim01122022-v7/"
 
-        release_code = "2022.1.6"
-        release_date = datetime.date(2022, 7, 8) # YYYY, M, D
-        meta_fp = "meta/OpenITI_metadata_2022-1-6_merged_wNoor.csv"
-        base_url = "https://raw.githubusercontent.com/OpenITI/RELEASE/v2022.1.6/data"
-        zenodo_link = "https://zenodo.org/record/6808108"
-        release_notes_fp = "meta/release_notes_2022-1-6.txt"
-        reuse_data_fp = "reuse_data/stats-v2022-1-6_bi-dir.csv"
-        reuse_data_base_url = "http://dev.kitab-project.org/passim01102022/"
+        # release_code = "2022.1.6"
+        # release_date = datetime.date(2022, 7, 8) # YYYY, M, D
+        # meta_fp = "meta/OpenITI_metadata_2022-1-6_wNoor.csv"
+        # base_url = "https://raw.githubusercontent.com/OpenITI/RELEASE/v2022.1.6/data"
+        # zenodo_link = "https://zenodo.org/record/6808108"
+        # release_notes_fp = "meta/release_notes_2022-1-6.txt"
+        # reuse_data_fp = "reuse_data/stats-v2022-1-6_bi-dir.csv"
+        # reuse_data_base_url = "http://dev.kitab-project.org/passim01102022/"
 
         # release_code = "2021.2.5"
         # release_date = datetime.date(2021, 10, 18) # YYYY, M, D
-        # meta_fp = "meta/OpenITI_metadata_2021-2-5_merged_wNoor.csv"
+        # meta_fp = "meta/OpenITI_metadata_2021-2-5_wNoor.csv"
         # base_url = "https://raw.githubusercontent.com/OpenITI/RELEASE/v2021.2.5/data"
         # zenodo_link = "https://zenodo.org/record/5550338"
         # release_notes_fp="meta/release_notes_2021-2-5.txt"
@@ -73,19 +88,21 @@ class Command(BaseCommand):
 
 def main(meta_fp, base_url, release_info, reuse_data_fp, reuse_data_base_url, test=False):
     # load the release metadata:
-    release_obj, version_ids_d = upload_release_meta(meta_fp, base_url, release_info)
-    # check for duplicate version_ids:
+    release_obj, version_codes_d = upload_release_meta(meta_fp, base_url, release_info)
+    # check for duplicate version_codes:
+    print("-"*60)
     no_duplicates=True
-    for version_id, fn_list in version_ids.items():
+    for version_code, fn_list in version_codes.items():
         if len(fn_list) > 1:
-            print("DUPLICATE ID:", version_id)
+            print("DUPLICATE ID:", version_code)
             print(fn_list)
             no_duplicates = False
     if no_duplicates:
         print("No duplicate version IDs found")
+    print("-"*60)
     # upload the text reuse stats:
     
-    upload_reuse_stats(reuse_data_fp, release_info["release_code"], release_obj, reuse_data_base_url, version_ids_d, test=test)
+    upload_reuse_stats(reuse_data_fp, release_info["release_code"], release_obj, reuse_data_base_url, version_codes_d, test=test)
     # create the corpus insights data:
     
 
@@ -153,13 +170,18 @@ def format_fields(data, base_url):
     record['title_ar_prefered'] = re.split(' *:: *| *, *| *; *',data['title_ar'])[0]
     record['title_lat_prefered'] = re.split(' *:: *| *, *| *; *',data['title_lat'])[0]
     record['ed_info'] = data['ed_info']
-    record['version_id'] = data['id']
+    record['version_code'] = data['id']
+
+    # check if the version is part of a text file that was split because of its size:
+    if re.findall("[A-Z]$", data['id']):
+        record["part_of"] = data['id'][:-1]
+        print(data['id'], "is part of", data['id'][:-1])
+
     try:
         record["collection_code"] = re.findall(r"^([A-Za-z]+?\d*[A-Za-z]+)\d+(?:BK\d+)?(?:Vols)?[A-Z]?$", data['id'])[0]
     except:
         record["collection_code"] = None
         print("Collection code not found in", data['id'])
-        input("CONTINUE?")
     version_tags, text_tags, author_tags = split_tag_list(data['tags'].split(" :: "))
     record["version_tags"] = " :: ".join(version_tags)
     record["text_tags"] = " :: ".join(text_tags)
@@ -185,26 +207,34 @@ def format_fields(data, base_url):
 
 
 def upload_release_meta(meta_fp, base_url, release_info):
-    version_ids_d = dict()
+    print(f"Uploading release {release_info['release_code']} metadata...")
+    version_codes_d = dict()
     fieldnames = ['versionUri', 'date', 'author_ar', 'author_lat', 'book', 'title_ar', 'title_lat', 'ed_info', 'id', 'status', 'tok_length', 'url', 'tags', 'author_from_uri', 'author_lat_shuhra', 'author_lat_full_name', 'char_length']
     with open(meta_fp, 'r', encoding='utf-8') as f:
         reader = csv.DictReader(f, fieldnames=fieldnames, delimiter='\t')
         header = next(reader)
 
         for version_data in reader:
-            # add the version_id + extension to the version_ids_d (to create the url to the text reuse data later)
-            version_id = version_data["id"]
+            # add the version_code + extension to the version_codes_d (to create the url to the text reuse data later)
+            version_code = version_data["id"]
             try:
-                version_ids_d[version_id] = re.findall(version_id+".*", version_data["url"])[0]
+                version_codes_d[version_code] = re.findall(version_code+".*", version_data["url"])[0]
+                # for text files that were split into parts, add the whole to the dictionary as well:
+                if re.findall("[A-Z]$", version_code): 
+                    whole_version_code = version_code[:-1]
+                    s = version_codes_d[version_code]
+                    whole_s = re.sub(version_code, whole_version_code, s)
+                    version_codes_d[whole_version_code] = whole_s
+                    print("add whole:", whole_version_code, whole_s)
             except: 
-                print("version_id", version_id, "not found in url", version_data["url"])
+                print("version_code", version_code, "not found in url", version_data["url"])
 
             # read in the metadata for a version and format it:
             record = format_fields(version_data, base_url)
 
             # first, create the new release itself in the database:
 
-            release_obj, created = ReleaseDetails.objects.update_or_create(
+            release_obj, created = ReleaseInfo.objects.update_or_create(
                 release_code=release_info["release_code"],
                 defaults=dict(
                     release_date=release_info["release_date"],
@@ -212,21 +242,22 @@ def upload_release_meta(meta_fp, base_url, release_info):
                     release_notes=release_info["release_notes"]
                 )
             )
+            if created:
+                print("NEW RELEASE ENTRY CREATED:", release_obj)
 
             # check if the version uri is already in the database:
 
             try:
-                vm = versionMeta.objects.get(
-                    version_uri=record['version_uri'],
-                    language=record["version_lang"]
+                vm = Version.objects.get(
+                    version_uri=record['version_uri']
                 )
-            except versionMeta.DoesNotExist:
+            except Version.DoesNotExist:
                 print(record['version_uri'], "does not exist in the database")
 
                 # if not, check if the text author_uri is in the database:
 
                 try:
-                    am = authorMeta.objects.get(
+                    am = Author.objects.get(
                         author_uri=record['author_uri']
                     )
                     print("but author does:", record['author_uri'])
@@ -235,7 +266,7 @@ def upload_release_meta(meta_fp, base_url, release_info):
 
                     # the author is not yet in the database! Create a new author object:
 
-                    am, am_created = authorMeta.objects.get_or_create(
+                    am, am_created = Author.objects.get_or_create(
                         author_uri=record['author_uri'],
                         author_ar=record['author_ar'],
                         author_lat=record['author_lat'],
@@ -254,16 +285,16 @@ def upload_release_meta(meta_fp, base_url, release_info):
                 # the author is now in the database, check if the text exists:
 
                 try:
-                    tm = textMeta.objects.get(
+                    tm = Text.objects.get(
                         text_uri=record['text_uri']
                     )
                     print("but text does:", record['text_uri'])
                 except: 
                     # the text is not yet in the database! Create a new text object:
                     print("Text URI not in database either:", record['text_uri'])
-                    tm, tm_created = textMeta.objects.update_or_create(
+                    tm, tm_created = Text.objects.update_or_create(
                         text_uri=record["text_uri"],
-                        author_meta=am,
+                        author=am,
                         defaults=dict(
                             titles_ar=record['titles_ar'],
                             titles_lat=record['titles_lat'],
@@ -282,8 +313,8 @@ def upload_release_meta(meta_fp, base_url, release_info):
                 # (but first, we check if the edition meta object exists or create it)
 
                 try:
-                    em = editionMeta.objects.filter(
-                        text_meta=tm,
+                    em = Edition.objects.filter(
+                        text=tm,
                         ed_info=record['ed_info']
                     )[0]  # more than one edition with the same query criteria may exist!; 
                     # NB: .first() returns None if none exists, so it will not trigger the exception
@@ -293,8 +324,8 @@ def upload_release_meta(meta_fp, base_url, release_info):
                 except: 
                     print("Neither does the edition exist")
 
-                    em, em_created = editionMeta.objects.update_or_create(
-                        text_meta=tm,
+                    em, em_created = Edition.objects.update_or_create(
+                        text=tm,
                         ed_info=record["ed_info"],
                     )
                     if em_created:
@@ -307,25 +338,30 @@ def upload_release_meta(meta_fp, base_url, release_info):
                     code=record["collection_code"]
                 )
 
-                vm, vm_created = versionMeta.objects.update_or_create(
-                    version_id=record["version_id"],
+                if "part_of" in record:
+                    whole_obj = Version.objects.get(version_uri=record["part_of"])
+                else:
+                    whole_obj = None
+
+                vm, vm_created = Version.objects.update_or_create(
+                    version_code=record["version_code"],
                     version_uri=record["version_uri"],
-                    text_meta=tm,
+                    text=tm,
                     language=record["version_lang"],
                     defaults=dict(
-                        edition_meta=em,
-                        source_coll=cm
+                        edition=em,
+                        source_coll=cm,
+                        part_of=whole_obj
                     )
                 )     
                 if vm_created:
                     print("-> created", record['version_uri'])              
 
 
-            # now that we know that the version object is in the database, create or update the ReleaseMeta object:
-            # TO DO: 
-            rvm, rvm_created = ReleaseMeta.objects.update_or_create(
-                release=release_obj,
-                version_meta=vm,
+            # now that we know that the version object is in the database, create or update the ReleaseVersion object:
+            rvm, rvm_created = ReleaseVersion.objects.update_or_create(
+                release_info=release_obj,
+                version=vm,
                 defaults=dict(
                     url=record["url"],
                     char_length=record["char_length"],
@@ -335,10 +371,13 @@ def upload_release_meta(meta_fp, base_url, release_info):
                     tags=record["version_tags"]
                 )
             )
+            if rvm_created and VERBOSE:
+                print("NEW RELEASE VERSION OBJECT CREATED:", rvm)
 
-    return release_obj, version_ids_d
+    return release_obj, version_codes_d
  
-def upload_reuse_stats(reuse_data_fp, release_code, release_obj, reuse_data_base_url, version_ids_d, test=False):
+def upload_reuse_stats(reuse_data_fp, release_code, release_obj, reuse_data_base_url, version_codes_d, test=False):
+    print("Loading text reuse stats...")
     with open(reuse_data_fp, 'r', encoding='utf-8') as f:
         reader = csv.DictReader(f, delimiter='\t')
         for data in reader:
@@ -347,36 +386,49 @@ def upload_reuse_stats(reuse_data_fp, release_code, release_obj, reuse_data_base
                 if not (("Shamela0009783" in data['_T1'] or "Shamela0009783" in data['_T2']) \
                     or ("Shamela0028107" in data['_T1'] or "Shamela0028107" in data['_T1'])):  # 0179MalikIbnAnas.Muwatta
                     continue
-            version_id1 = data['_T1'].split("-")[0].split(".")[0]
-            version_id2 = data['_T2'].split("-")[0].split(".")[0]
-            # get the last part of the filename (version_id + lang + number + extension),
+            version_code1 = data['_T1'].split("-")[0].split(".")[0]
+            version_code2 = data['_T2'].split("-")[0].split(".")[0]
+
+            # replace the version code of a part with the version code of the whole (should not be necessary):
+            if re.findall("[A-Z]$", version_code1):
+                print(version_code1, ">", version_code1[:-1])
+                version_code1 = version_code1[:-1]
+            if re.findall("[A-Z]$", version_code2):
+                print(version_code2, ">", version_code2[:-1])
+                version_code2 = version_code2[:-1]
+
+            # get the last part of the filename (version_code + lang + number + extension),
             # which form part of the URL
             try:
-                ref1 = version_ids_d[version_id1]
-                ref2 = version_ids_d[version_id2]
+                ref1 = version_codes_d[version_code1]
+                ref2 = version_codes_d[version_code2]
             except:
-                print("FAILED:", version_id1, version_id2)
-            b1 = ReleaseMeta.objects.get(
-                    release__release_code=release_code,
-                    version_meta__version_id=version_id1
-                    )
-            b2 = ReleaseMeta.objects.get(
-                    release__release_code=release_code,
-                    version_meta__version_id=version_id2
-                    )
+                print("FAILED:", version_code1, version_code2)
+                ref1 = version_code1 + "-ara1"
+                ref2 = version_code2 + "-ara1"
+            b1 = ReleaseVersion.objects.get(
+                release_info__release_code=release_code,
+                version__version_code=version_code1
+            )
+            b2 = ReleaseVersion.objects.get(
+                release_info__release_code=release_code,
+                version__version_code=version_code2
+            )
             
             tsv_url = f"{reuse_data_base_url}{ref1}/{ref1}_{ref2}.csv"
             
-            TextReuseStats.objects.update_or_create(
+            tr, created = TextReuseStats.objects.update_or_create(
                 book_1 = b1,
                 book_2 = b2,
-                instances_count=data['instances'],
-                book1_words_matched=data['WM1_Total'],
-                book2_words_matched=data['WM2_Total'],
-                book1_pct_words_matched=data['WM_B1inB2'],
-                book2_pct_words_matched=data['WM_B2inB1'],
-                release=release_obj,
+                release_info=release_obj,
                 defaults=dict(
-                    tsv_url=tsv_url
+                    tsv_url=tsv_url,
+                    instances_count=data['instances'],
+                    book1_words_matched=data['WM1_Total'],
+                    book2_words_matched=data['WM2_Total'],
+                    book1_pct_words_matched=data['WM_B1inB2'],
+                    book2_pct_words_matched=data['WM_B2inB1'],
                 )
             )
+            if created and VERBOSE:
+                print("NEW TEXT REUSE ENTRY CREATED:", tr)
