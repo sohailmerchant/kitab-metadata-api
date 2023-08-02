@@ -62,8 +62,8 @@ urlpatterns = [
 
     # A2BRelations endpoints (independent of releases):
 
-    path('all-releases/relation/all/', views.RelationsListView.as_view(), name='all-releases-relations'),
-    path('all-releases/relation/', views.RelationsListView.as_view(), name='all-releases-relations'),
+    path('relation/all/', views.RelationsListView.as_view(), name='all-releases-relations'),
+    path('relation/', views.RelationsListView.as_view(), name='all-releases-relations'),
 
     # relation types endpoint:
     path('relation-type/all/', views.RelationTypesListView.as_view(), name='all-releases-relations'),
@@ -71,16 +71,18 @@ urlpatterns = [
 
     # source collections info (independent of releases):
 
-    path('source-collection/all/', views.GetSourceCollectionDetailsList.as_view(), name='source-collections'),
-    path('source-collection/', views.GetSourceCollectionDetailsList.as_view(), name='source-collections'),
-    path('source-collection/<str:code>', views.GetSourceCollectionDetailsList.as_view(), name='source-collections'),
+    path('source-collection/all/', views.GetSourceCollectionDetailsList.as_view(), name='all-source-collections'),
+    path('source-collection/', views.GetSourceCollectionDetailsList.as_view(), name='all-source-collections'),
+    path('source-collection/<str:code>/', views.get_source_collection, name='source-collection'),
 
     # corpus insights (statistics on the number of books, largest book, etc. for each release):
     
     path('all-releases/corpusinsights/', views.get_corpus_insights, name='corpusinsights'),
     path('<str:release_code>/corpusinsights/', views.get_corpus_insights, name='corpusinsights'),
 
- 
+    # Person names endpoints: 
+
+    path('person-names/all/', views.PersonNameListView.as_view(), name='person-names-all'),
 
     # # version endpoints: (a confusing category - we should use the releaseMeta as starting point!)
 

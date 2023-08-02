@@ -130,7 +130,7 @@ class Place (models.Model):
                                              symmetrical=False, related_name="places_related", related_query_name="place_related")
 
     def __str__(self):
-        return self.person_id + "_" + self.place_id
+        return self.thuraya_uri
 
 
 class RelationType(models.Model):

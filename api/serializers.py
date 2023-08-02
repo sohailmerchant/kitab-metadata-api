@@ -45,11 +45,36 @@ class ShallowVersionSerializer(FlexFieldsModelSerializer):
     (it excludes the author and text metadata)"""
     edition = ShallowEditionSerializer(read_only=True)
 
+    def serialize_relations(self, version_instance):
+        """serialize a version's parts 
+        (for books split into pieces because of their length, like BiharAnwar)"""
+        # select the versions that are part of the current version_instance:
+        parts = Version.objects\
+            .filter(part_of__version_uri=version_instance.version_uri)
+        return {"parts": [d.version_uri for d in parts]}
+
+    def to_representation(self, instance):
+        """Customize the default json representation"""
+        # get the default representation:
+        json_rep = super().to_representation(instance)
+        # use only the release code instead of the full release version dictionary:
+        release_codes = [d["release_info"]["release_code"] for d in json_rep.pop("release_versions")]
+        releases = {"releases": release_codes}
+        # add the version URIs of the parts: 
+        parts = self.serialize_relations(instance)
+        # use only the version URI for the part_of key:
+        part_of = json_rep.pop("part_of")
+        try:
+            part_of = {"part_of": part_of["version_uri"]}
+        except:
+            part_of = {"part_of": None}
+
+        return {**json_rep, **parts, **part_of, **releases}
+
     class Meta:
         model = Version
-        fields = ("id", "version_code", "version_uri", "edition", "language", "release_versions")
-        depth = 0  # exclude text and author metadata
-
+        fields = ("id", "version_code", "version_uri", "edition", "language", "release_versions", "part_of", "parts")
+        depth = 2  
 
 class ShallowAuthorSerializer(FlexFieldsModelSerializer):
     """This serializer is used to serialize the metadata from the Author model
@@ -57,15 +82,86 @@ class ShallowAuthorSerializer(FlexFieldsModelSerializer):
     If you want to serialize the full Author model, use the AuthorSerializer.
     NB: this serializer wraps the author Metadata in a list, 
     in the future we may have multiple authors for a single text"""
+    name_elements = ShallowNameElementsSerializer(many=True, read_only=True)
+
+    def serialize_relations(self, person_instance):
+        """serialize a person's relations"""
+        # select the relations in which the current person is involved:
+        relationship_instances = A2BRelation.objects\
+            .select_related("relation_type", "person_a", "person_b", "text_a", "text_b", "place_a", "place_b")\
+            .filter(Q(person_a=person_instance) | Q(person_b=person_instance))
+        # NB: select_related creates a more complex SQL query that joins the relevant tables,
+        # so that the foreign-key relationships are included in the query set
+        # and no further database lookups are needed to get attributes from the foreign-key related table 
+        # (see https://docs.djangoproject.com/en/4.2/ref/models/querysets/#select-related)
+
+        # divide these relations into the relevant categories:
+
+        related_persons = []
+        related_texts = []
+        related_places = []
+        for d in relationship_instances:
+            # create a new dictionary in which we only collect the relevant fields:
+            new_d = dict(
+                relation_type_code=d.relation_type.code,
+                relation_subtype_code=d.relation_type.subtype_code,
+                start_date_AH=d.start_date_AH,
+                end_date_AH=d.end_date_AH,
+                authority=d.authority,
+                confidence=d.confidence
+            )
+            # add relevant fields for each type of relation:
+            if d.person_a and d.person_b:
+                # add only the information about the related person:
+                if d.person_a.author_uri == person_instance.author_uri:
+                    new_d["relation_type_name"] = d.relation_type.name
+                    new_d["related_person_uri"] = d.person_b.author_uri
+                else:
+                    new_d["relation_type_name"] = d.relation_type.name_inverted
+                    new_d["related_person_uri"] = d.person_a.author_uri
+                related_persons.append(new_d)
+            elif d.text_a or d.text_b:
+                # add the relevant relation_type_name:
+                if d.text_a:
+                    new_d["related_text_uri"] = d.text_a.text_uri
+                    new_d["relation_type_name"]= d.relation_type.name_inverted
+                else: 
+                    new_d["related_text_uri"] = d.text_b.text_uri
+                    new_d["relation_type_name"]= d.relation_type.name
+                # remove keys irrelevant for text relations:
+                del new_d["start_date_AH"]
+                del new_d["end_date_AH"]
+                related_texts.append(new_d)
+            elif d.place_a or d.place_b:
+                if d.place_a:
+                    new_d["related_place_uri"] = d.place_a.thuraya_uri
+                    new_d["relation_type_name"]= d.relation_type.name_inverted
+                else: 
+                    new_d["related_place_uri"] = d.place_b.thuraya_uri
+                    new_d["relation_type_name"]= d.relation_type.name
+                related_places.append(new_d)
+
+        # combine the categories into a dictionary that will be added to the json representation:
+
+        d = {
+            "related_persons": related_persons, 
+            "related_texts": related_texts,
+            "related_places": related_places
+            }
+        return d
 
     def to_representation(self, instance):
         json_rep = super().to_representation(instance)
+        #del json_rep["texts"]
         for d in json_rep["texts"]:
             # remove the fields below the text level:
             del d["author"]
             del d["related_texts"]
             del d["related_persons"]
             del d["related_places"]
+        json_rep = {**json_rep, **self.serialize_relations(instance)}
+        print(json_rep)
+        # return the dictionary inside a list (we may have multiple authors later)
         return [json_rep]
 
     class Meta:
@@ -88,6 +184,7 @@ class PersonNameSerializer(FlexFieldsModelSerializer):
 
 
 class RelationTypeSerializer(FlexFieldsModelSerializer):
+    
     class Meta:
         model = RelationType
         fields = ("__all__")
@@ -95,6 +192,19 @@ class RelationTypeSerializer(FlexFieldsModelSerializer):
 
 
 class AllRelationSerializer(FlexFieldsModelSerializer):
+
+    def to_representation(self, instance):
+        """Override the default json representation"""
+        # get the default json representation:
+        json_rep = super().to_representation(instance)
+        # remove unwanted keys in the dictionary:
+        for k in ["person_a", "person_b", "place_a", "place_b", "text_a", "text_b"]:
+            for field in ["related_persons", "related_places", "related_texts", "author"]:
+                try: 
+                    del json_rep[k][field]
+                except Exception as e:
+                    pass
+        return json_rep
 
     class Meta:
         model = A2BRelation
@@ -186,8 +296,11 @@ class TextSerializer(FlexFieldsModelSerializer):
         return d
 
     def to_representation(self, instance):
-
+        # make the default serialization:
         json_rep = super().to_representation(instance)
+        # remove the "texts" list nested within author:
+        for i in range(len(json_rep["author"])):
+            del json_rep["author"][i]["texts"]
         # add the relationships to the default representation (__all__ fields):
         return {**json_rep, **self.serialize_relations(instance)}
 
@@ -375,7 +488,13 @@ class AuthorSerializer(FlexFieldsModelSerializer):
         # create the default json representation of the author metadata
         json_rep = super().to_representation(instance)
         # add the relationships to the default representation:
-        return {**json_rep, **self.serialize_relations(instance)}
+        json_rep = {**json_rep, **self.serialize_relations(instance)}
+        # remove the author dictionary nested inside the texts dictionaries:
+        for d in json_rep["texts"]:
+            del d["author"]
+
+
+        return json_rep
  
     class Meta:
         model = Author

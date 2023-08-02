@@ -33,6 +33,8 @@ version_codes = dict()
 
 class Command(BaseCommand):
     def handle(self, **options):
+        #A2BRelation.objects.all().delete()
+
         relations_definitions_fp = "meta/relations_definitions.tsv"
         corpus_folder = r"D:/AKU/OpenITI/25Y_repos"
         tags_fp = "meta/ID_TAGS.txt"
@@ -127,8 +129,9 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
 
     for ah_folder in os.listdir(corpus_folder):
         # skip irrelevant folders: 
-        #if not re.findall("^\d{4}AH$", ah_folder):
-        if not re.findall("^1125AH$", ah_folder):
+        if not re.findall("^\d{4}AH$", ah_folder):
+        #if not re.findall("^1125AH$", ah_folder): # for testing!
+        #if not re.findall("^0200AH$", ah_folder): # for testing!
             continue # skip anything that's not an xxxxAH folder
         if ah_folder == "9001AH":  # TO DO: load 9001AH folder!
             continue
@@ -215,10 +218,9 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
                                 whole_fn = fn.split("-")[0][:-1] + "-" + version_fp.split("-")[-1]
                                 if whole_fn not in split_files:
                                     split_files[whole_fn] = []
-                                print("whole_fn:", whole_fn)
-                                input("CONTINUE?")
+                                #print("whole_fn:", whole_fn)
                                 split_files[whole_fn].append(version_meta)
-                                print(len(split_files[whole_fn]))
+                                #print(len(split_files[whole_fn]))
                                 #print(json.dumps(split_files, indent=2, ensure_ascii=False))
                             else:
                                 # add the version_meta dictionary to the texts dictionary:
@@ -249,8 +251,8 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
                     for whole_fn in split_files:
                         new_split_files[whole_fn] = []
                         # create a dictionary to contain the joined metadata:
-                        print(whole_fn)
-                        print(json.dumps(split_files[whole_fn], indent=2, ensure_ascii=False))
+                        #print(whole_fn)
+                        #print(json.dumps(split_files[whole_fn], indent=2, ensure_ascii=False))
                         combined_meta = copy.deepcopy(split_files[whole_fn][0])
                         combined_meta["version_code"] = combined_meta["version_code"][:-1]
                         combined_meta["version_uri"] = whole_fn
@@ -291,7 +293,7 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
                             part_meta["part_of"] = whole_fn
                             # append the updated dictionary to the new list:
                             new_split_files[whole_fn].append(part_meta)
-                            print(part_meta)
+                            #print(part_meta)
                         # convert the lists to comma-separated strings:
                         combined_meta["url"] = ",".join(combined_meta["url"])
                         combined_meta["worldcat_url"] = ",".join(combined_meta["worldcat_url"])
@@ -309,8 +311,8 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
                         # add the parts to the text_d:
                         texts[text_uri]["versions"].append(combined_meta)
                         texts[text_uri]["versions"] += split_files[whole_fn]
-                        print("---------------")
-                        print(json.dumps(text_d["versions"], indent=2, ensure_ascii=False))
+                        #print("---------------")
+                        #print(json.dumps(text_d["versions"], indent=2, ensure_ascii=False))
                     split_files = dict()
 
 
@@ -349,6 +351,7 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
 
             # add/update the author's name elements to the database (only once)
             for language, d in author_meta["name_elements"].items():
+                print(language, d)
                 PersonName.objects.update_or_create(
                     author=am,
                     language=language,
@@ -369,14 +372,14 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
                 )
 
                 # then, add the relation type if it doesn't exist yet:
-                if not f'd["code"]_d["subtype_code"]' in all_relation_types:  # avoid extra lookup in database
+                if not f'{d["code"]}_{d["subtype_code"]}' in all_relation_types:  # avoid extra lookup in database
                     rt, rt_created = RelationType.objects.get_or_create(
                         code=d["code"], 
                         subtype_code=d["subtype_code"]
                     )
-                    all_relation_types[f'd["code"]_d["subtype_code"]'] = rt
+                    all_relation_types[f'{d["code"]}_{d["subtype_code"]}'] = rt
                 else:
-                    rt = all_relation_types[f'd["code"]_d["subtype_code"]']
+                    rt = all_relation_types[f'{d["code"]}_{d["subtype_code"]}']
 
                 # then, add the relation: 
                 rel, created = A2BRelation.objects.get_or_create(
@@ -401,14 +404,14 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
                     pb = am
 
                 # then, add the relation type if it doesn't exist yet:
-                if not f'd["code"]_d["subtype_code"]' in all_relation_types:  # avoid extra lookup in database
+                if not f'{d["code"]}_{d["subtype_code"]}' in all_relation_types:  # avoid extra lookup in database
                     rt, rt_created = RelationType.objects.get_or_create(
                         code=d["code"], 
                         subtype_code=d["subtype_code"]
                     )
-                    all_relation_types[f'd["code"]_d["subtype_code"]'] = rt
+                    all_relation_types[f'{d["code"]}_{d["subtype_code"]}'] = rt
                 else:
-                    rt = all_relation_types[f'd["code"]_d["subtype_code"]']
+                    rt = all_relation_types[f'{d["code"]}_{d["subtype_code"]}']
 
                 # then, add the relation: 
                 rel, created = A2BRelation.objects.get_or_create(
@@ -468,14 +471,14 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
                         tb = tm
 
                     # then, add the relation type if it doesn't exist yet:
-                    if not f'd["code"]_d["subtype_code"]' in all_relation_types:  # avoid extra lookup in database
+                    if not f'{d["code"]}_{d["subtype_code"]}' in all_relation_types:  # avoid extra lookup in database
                         rt, rt_created = RelationType.objects.get_or_create(
                             code=d["code"], 
                             subtype_code=d["subtype_code"]
                         )
-                        all_relation_types[f'd["code"]_d["subtype_code"]'] = rt
+                        all_relation_types[f'{d["code"]}_{d["subtype_code"]}'] = rt
                     else:
-                        rt = all_relation_types[f'd["code"]_d["subtype_code"]']
+                        rt = all_relation_types[f'{d["code"]}_{d["subtype_code"]}']
 
                     # then, add the relation: 
                     rel, created = A2BRelation.objects.get_or_create(
@@ -493,14 +496,14 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
                     )
 
                     # then, add the relation type if it doesn't exist yet:
-                    if not f'd["code"]_d["subtype_code"]' in all_relation_types:  # avoid extra lookup in database
+                    if not f'{d["code"]}_{d["subtype_code"]}' in all_relation_types:  # avoid extra lookup in database
                         rt, rt_created = RelationType.objects.get_or_create(
                             code=d["code"], 
                             subtype_code=d["subtype_code"]
                         )
-                        all_relation_types[f'd["code"]_d["subtype_code"]'] = rt
+                        all_relation_types[f'{d["code"]}_{d["subtype_code"]}'] = rt
                     else:
-                        rt = all_relation_types[f'd["code"]_d["subtype_code"]']
+                        rt = all_relation_types[f'{d["code"]}_{d["subtype_code"]}']
 
                     # then, add the relation: 
                     rel, created = A2BRelation.objects.get_or_create(
@@ -518,14 +521,14 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
                     )
 
                     # then, add the relation type if it doesn't exist yet:
-                    if not f'd["code"]_d["subtype_code"]' in all_relation_types:  # avoid extra lookup in database
+                    if not f'{d["code"]}_{d["subtype_code"]}' in all_relation_types:  # avoid extra lookup in database
                         rt, rt_created = RelationType.objects.get_or_create(
                             code=d["code"], 
                             subtype_code=d["subtype_code"]
                         )
-                        all_relation_types[f'd["code"]_d["subtype_code"]'] = rt
+                        all_relation_types[f'{d["code"]}_{d["subtype_code"]}'] = rt
                     else:
-                        rt = all_relation_types[f'd["code"]_d["subtype_code"]']
+                        rt = all_relation_types[f'{d["code"]}_{d["subtype_code"]}']
 
                     # then, add the relation: 
                     rel, created = A2BRelation.objects.get_or_create(

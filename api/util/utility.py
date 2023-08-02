@@ -124,6 +124,14 @@ def insert_spaces(s):
     """Split the camel-case string s and insert a space before each capital."""
     return re.sub("([A-Z])", r" \1", s).strip()
 
+def replace_c_with_cayn(s):
+    """Replace the c in an OpenITI URI string with ʿAyn"""
+    # lower-case: simply replace c with ʿayn
+    s = s.replace("c", "ʿ") 
+    # upper-case: make the next letter upper case!
+    s = re.sub("C([a-z])", lambda match: "ʿ"+match.group(1).upper(), s)
+    return s
+
 def get_name_el(d, k):
     """Get the name element (shuhra, kunya, ...) from an OpenITI author yml dict
     (returning an empty string if the yml dict contains the default value
@@ -414,8 +422,13 @@ def collect_text_yml_data(text_yml_fp, text_uri):
                     or "none" in text_d[c].lower()):
                 title_lat.append(text_d[c].strip())
                 title_ar.append(betaCodeToArSimple(title_lat[-1]))
-    title_from_uri = re.sub("([A-Z])", r" \1", text_uri.split(".")[1]).strip()
-    title_from_uri = title_from_uri.replace("c", "ʿ").replace("C", "ʿ")
+    title_from_uri = text_uri.split(".")[1]
+    title_from_uri = insert_spaces(title_from_uri)
+    title_from_uri = replace_c_with_cayn(title_from_uri)
+    #title_from_uri = re.sub("([A-Z])", r" \1", text_uri.split(".")[1]).strip()
+    #title_from_uri = title_from_uri.replace("c", "ʿ")
+    #title_from_uri = re.sub("C([a-z])", lambda match: "ʿ"+match.group(1).upper(), title_from_uri)
+    
     title_lat.append(title_from_uri)
     title_lat_prefered = title_lat[0]
     if title_ar:
@@ -599,15 +612,19 @@ def collect_author_yml_data(author_yml_fp, author_uri):
                             or "none" in auth_d[x].lower())]
     english_name = " ".join(english_name).strip()
 
-    name_from_uri = re.sub("([A-Z])", r" \1", author_uri[4:]).strip()
-    name_from_uri = name_from_uri.replace("c", "ʿ").replace("C", "ʿ")
+    name_from_uri = author_uri[4:]
+    name_from_uri = insert_spaces(name_from_uri)
+    name_from_uri = replace_c_with_cayn(name_from_uri)
+    #name_from_uri = re.sub("([A-Z])", r" \1", author_uri[4:]).strip()
+    #name_from_uri = name_from_uri.replace("c", "ʿ").replace("C", "ʿ")
 
     # collect author name elements:
     present_languages = []
     for key in auth_d:
         lang = re.findall("#([A-Z]{2}):", key)
         if lang and lang[0] not in present_languages and lang[0] not in ["AH", "CE"]:
-            present_languages.append(lang)
+            present_languages.append(lang[0])
+    #print(present_languages)
     #for lang in ["AR", "EN", "FA"]:
     for lang in present_languages:
         lang_d = dict()

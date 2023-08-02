@@ -112,7 +112,7 @@ def book_list(request):
 
 @api_view(['GET'])
 def get_text(request, text_uri, release_code=None):
-    """Get a text by its URI."""
+    """Get a single text by its URI (additionally, a release code"""
     print("RELEASE_CODE:", release_code)
 
     try:
@@ -120,7 +120,7 @@ def get_text(request, text_uri, release_code=None):
             print(release_code)
             text = Text.objects\
                 .filter(text_uri=text_uri, version__release_version__release_info__release_code=release_code)\
-                .distinct().first()
+                .first()  # .distinct() not necessary: will all be the same
             print(text)
         else:
             print(release_code)
@@ -129,6 +129,19 @@ def get_text(request, text_uri, release_code=None):
         return Response(serializer.data)
     except Text.DoesNotExist:
         raise Http404
+
+
+
+# @api_view(['GET'])
+# def get_release_text(request, release_code, text_uri):
+#     """Get a text version by its version_code and release_code"""
+
+#     try:
+#         text = Text.objects.filter(text_uri=text_uri, version__release_version__release_info__release_code=release_code).first()
+#         serializer = TextSerializer(text, many=False)
+#         return Response(serializer.data)
+#     except Text.DoesNotExist:
+#         raise Http404
 
 # Get a text version by its version_code
 @api_view(['GET'])
@@ -170,18 +183,6 @@ def get_release_version(request, version_code, release_code=None):
         raise Http404
     
 
-@api_view(['GET'])
-def get_release_text(request, release_code, text_uri):
-    """Get a text version by its version_code and release_code"""
-
-    try:
-        text = Text.objects.filter(text_uri=text_uri, version__release_version__release_info__release_code=release_code).first()
-        serializer = TextSerializer(text, many=False)
-        return Response(serializer.data)
-    except Text.DoesNotExist:
-        raise Http404
-
-
 # Get an author record by its author_uri
 @api_view(['GET'])
 def get_author(request, author_uri, release_code=None):
@@ -191,7 +192,10 @@ def get_author(request, author_uri, release_code=None):
 
     try:
         if release_code:
-            author = Author.objects.get(author_uri=author_uri, text__version__release_version__release_info__release_code=release_code)
+            author = Author.objects\
+                .filter(author_uri=author_uri, text__version__release_version__release_info__release_code=release_code)\
+                .distinct().first()
+            print(author)
         else:
             author = Author.objects.get(author_uri=author_uri)
         serializer = AuthorSerializer(author, many=False)
@@ -443,9 +447,17 @@ class TextListView(generics.ListAPIView):
         return queryset
 
 
+class PersonNameListView(generics.ListAPIView):
+    """Get all relations in the A2BRelations model (independent of releases)"""
+    queryset = PersonName.objects.all()
+    # for q in queryset:
+    #    print(q.text_a)
+    serializer_class = PersonNameSerializer
+
 class RelationsListView(generics.ListAPIView):
     """Get all relations in the A2BRelations model (independent of releases)"""
     queryset = A2BRelation.objects.all()
+    pagination_class = CustomPagination
     # for q in queryset:
     #    print(q.text_a)
     serializer_class = AllRelationSerializer
@@ -629,5 +641,15 @@ class GetSourceCollectionDetailsList(generics.ListAPIView):
     queryset = SourceCollectionDetails.objects.all()
     serializer_class = SourceCollectionDetailsSerializer
 
+
+@api_view(['GET'])
+def get_source_collection(request, code):
+    """Get info on a release."""
+    try:
+        coll = SourceCollectionDetails.objects.get(code=code)
+        serializer = SourceCollectionDetailsSerializer(coll, many=False)
+        return Response(serializer.data)
+    except Text.DoesNotExist:
+        raise Http404
 
 
