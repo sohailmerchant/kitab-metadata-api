@@ -212,10 +212,11 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
                             # check whether the text file was split because of its size:
                             if re.findall("[A-Z]-", fn):
                                 print("SPLIT FILE:", fn)
-                                whole_fn = fn.split("-")[0][:-1]
+                                whole_fn = fn.split("-")[0][:-1] + "-" + version_fp.split("-")[-1]
                                 if whole_fn not in split_files:
                                     split_files[whole_fn] = []
                                 print("whole_fn:", whole_fn)
+                                input("CONTINUE?")
                                 split_files[whole_fn].append(version_meta)
                                 print(len(split_files[whole_fn]))
                                 #print(json.dumps(split_files, indent=2, ensure_ascii=False))

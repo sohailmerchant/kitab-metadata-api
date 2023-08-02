@@ -15,39 +15,39 @@ from .serializers import TextSerializer, VersionSerializer, PersonNameSerializer
 from .filters import AuthorFilter, VersionFilter, TextFilter, TextReuseFilter, ReleaseVersionFilter
 
 
-    # path('all-releases/version/all/', views.GetReleaseVersion.as_view(), name='all-releases-all-versions'),
-    # path('all-releases/version/', views.GetReleaseVersion.as_view(), name='all-releases-all-versions'),
-    # #path('all-releases/version/<str:version_code>/', views.GetReleaseVersion.as_view(), name='all-releases-one-version'), # multiple results possible!
-    # path('all-releases/version/<str:version_code>/', views.getVersion, name='all-releases-one-version'),
+    # path('all-releases/version/all/', views.ReleaseVersionListView.as_view(), name='all-releases-all-versions'),
+    # path('all-releases/version/', views.ReleaseVersionListView.as_view(), name='all-releases-all-versions'),
+    # #path('all-releases/version/<str:version_code>/', views.ReleaseVersionListView.as_view(), name='all-releases-one-version'), # multiple results possible!
+    # path('all-releases/version/<str:version_code>/', views.get_version, name='all-releases-one-version'),
     
-    # path('<str:release_code>/version/all/', views.GetReleaseVersion.as_view(), name='one-release-all-versions'),
-    # path('<str:release_code>/version/', views.GetReleaseVersion.as_view(), name='one-release-all-versions'),
-    # path('<str:release_code>/version/<str:version_code>/', views.GetReleaseVersion, name='one-release-one-version'),
+    # path('<str:release_code>/version/all/', views.ReleaseVersionListView.as_view(), name='one-release-all-versions'),
+    # path('<str:release_code>/version/', views.ReleaseVersionListView.as_view(), name='one-release-all-versions'),
+    # path('<str:release_code>/version/<str:version_code>/', views.get_release_version, name='one-release-one-version'),
 
     # # text endpoints:  # TO DO: use other view for the texts
 
     # path('all-releases/text/', views.TextListView.as_view(), name='all-releases-all-texts'),
     # path('all-releases/text/all/', views.TextListView.as_view(), name='all-releases-all-texts'),
-    # path('all-releases/text/<str:text_uri>/', views.getText, name='all-releases-one-text'),
+    # path('all-releases/text/<str:text_uri>/', views.get_text, name='all-releases-one-text'),
 
     # path('<str:release_code>/text/', views.TextListView.as_view(), name='one-release-all-texts'),
     # path('<str:release_code>/text/all/', views.TextListView.as_view(), name='one-release-all-texts'),
-    # path('<str:release_code>/text/<str:text_uri>/', views.getText, name='one-release-one-text'),
+    # path('<str:release_code>/text/<str:text_uri>/', views.get_text, name='one-release-one-text'),
 
     # # author endpoints:
 
     # path('all-releases/author/', views.AuthorListView.as_view(), name='all-releases-all-authors'),
     # path('all-releases/author/all/', views.AuthorListView.as_view(), name='all-releases-all-authors'),
-    # path('all-releases/author/<str:author_uri>/', views.getAuthor, name='all-releases-one-author'),
+    # path('all-releases/author/<str:author_uri>/', views.get_author, name='all-releases-one-author'),
 
     # path('<str:release_code>/author/', views.AuthorListView.as_view(), name='one-release-all-authors'),
     # path('<str:release_code>/author/all/', views.AuthorListView.as_view(), name='one-release-all-authors'),
-    # path('<str:release_code>/author/<str:author_uri>/', views.getAuthor, name='one-release-one-author'),
+    # path('<str:release_code>/author/<str:author_uri>/', views.get_author, name='one-release-one-author'),
 
     # # release info endpoints:
 
     # path('all-releases/release-details/', views.GetReleaseInfoList.as_view(), name='release-details-all'),
-    # path('<str:release_code>/release-details/', views.GetReleaseInfo, name='release-details'),
+    # path('<str:release_code>/release-details/', views.get_release_info, name='release-details'),
 
     # # A2BRelations endpoints (independent of releases):
 
@@ -62,23 +62,23 @@ from .filters import AuthorFilter, VersionFilter, TextFilter, TextReuseFilter, R
 
     # # corpus insights (statistics on the number of books, largest book, etc. for each release):
     
-    # path('all-releases/corpusinsights/', views.getCorpusInsights, name='corpusinsights'),
-    # path('<str:release_code>/corpusinsights/', views.getCorpusInsights, name='corpusinsights'),
+    # path('all-releases/corpusinsights/', views.get_corpus_insights, name='corpusinsights'),
+    # path('<str:release_code>/corpusinsights/', views.get_corpus_insights, name='corpusinsights'),
 
     # # Text reuse statistics:
 
-    # path('all-releases/text-reuse-stats/<str:book1>_<str:book2>/', views.getPairTextReuseStats, name='text-reuse-pair'),
+    # path('all-releases/text-reuse-stats/<str:book1>_<str:book2>/', views.get_pair_text_reuse_stats, name='text-reuse-pair'),
     # path('all-releases/text-reuse-stats/all/', views.GetAllTextReuseStats.as_view(), name='all-text-reuse'),
     # path('all-releases/text-reuse-stats/<str:book1>/', views.GetAllTextReuseStats.as_view(), name='all-text-reuse'),
 
-    # path('<str:release_code>/text-reuse-stats/<str:book1>_<str:book2>/', views.getPairTextReuseStats, name='text-reuse-pair'),
+    # path('<str:release_code>/text-reuse-stats/<str:book1>_<str:book2>/', views.get_pair_text_reuse_stats, name='text-reuse-pair'),
     # path('<str:release_code>/text-reuse-stats/all/', views.GetAllTextReuseStats.as_view(), name='all-text-reuse'),
     # path('<str:release_code>/text-reuse-stats/<str:book1>/', views.GetAllTextReuseStats.as_view(), name='all-text-reuse'),
 
 
 
 @api_view(['GET'])
-def apiOverview(request):
+def api_overview(request):
     api_urls = {
         'List all text versions:': '<release_code>/version/all/ e.g., `2022.1.6/version/all/',
         'List all authors:': '<release_code>/author/all/',
@@ -104,14 +104,14 @@ def apiOverview(request):
 
 # Not in use but useful if we want everything in one go
 @api_view(['GET'])
-def bookList(request):
+def book_list(request):
     books = Version.objects.all()
     serializer = VersionSerializer(books, many=True)
     return Response(serializer.data)
 
 
 @api_view(['GET'])
-def getText(request, text_uri, release_code=None):
+def get_text(request, text_uri, release_code=None):
     """Get a text by its URI."""
     print("RELEASE_CODE:", release_code)
 
@@ -132,7 +132,7 @@ def getText(request, text_uri, release_code=None):
 
 # Get a text version by its version_code
 @api_view(['GET'])
-def getVersion(request, version_code, release_code=None):
+def get_version(request, version_code, release_code=None):
     if "-" in version_code:
         version_code = version_code.split("-")[0].split(".")[-1]
     print("VERSION_CODE:", version_code)
@@ -156,7 +156,7 @@ def getVersion(request, version_code, release_code=None):
 
 
 @api_view(['GET'])
-def GetReleaseVersion(request, version_code, release_code=None):
+def get_release_version(request, version_code, release_code=None):
     """Get a text version by its version_code and release_code"""
 
     try:
@@ -171,7 +171,7 @@ def GetReleaseVersion(request, version_code, release_code=None):
     
 
 @api_view(['GET'])
-def GetReleaseText(request, release_code, text_uri):
+def get_release_text(request, release_code, text_uri):
     """Get a text version by its version_code and release_code"""
 
     try:
@@ -184,7 +184,7 @@ def GetReleaseText(request, release_code, text_uri):
 
 # Get an author record by its author_uri
 @api_view(['GET'])
-def getAuthor(request, author_uri, release_code=None):
+def get_author(request, author_uri, release_code=None):
     print("GETTING AUTHOR!")
     print(author_uri)
     print(release_code)
@@ -198,14 +198,14 @@ def getAuthor(request, author_uri, release_code=None):
         return Response(serializer.data)
         
     except Exception as e:
-        print("getAuthor failed:")
+        print("get_author failed:")
         print(e)
         raise Http404
 
 
 # Get some aggregated stats on the corpus like authors no, book no. etc.
 @api_view(['GET'])
-def getCorpusInsights(request, release_code=None):
+def get_corpus_insights(request, release_code=None):
     try:
         if release_code:
             corpus_insight_stats = CorpusInsights.objects.get(release_info__release_code=release_code)
@@ -216,7 +216,7 @@ def getCorpusInsights(request, release_code=None):
         return Response(serializer.data)
         
     except Exception as e:
-        print("getCorpusInsights failed:")
+        print("get_corpus_insights failed:")
         print(e)
         raise Http404
 
@@ -225,7 +225,7 @@ def getCorpusInsights(request, release_code=None):
 
 # Remove this before going live as we shouldn't allow any POST method
 @api_view(['POST'])
-def bookCreate(request):
+def book_create(request):
     serializer = VersionSerializer(data=request.data)
     if serializer.is_valid():
         serializer.save()
@@ -457,7 +457,7 @@ class RelationTypesListView(generics.ListAPIView):
     serializer_class = AllRelationTypesSerializer
 
 @api_view(['GET'])
-def getRelationType(request, code):
+def get_relation_type(request, code):
     """Get the text reuse statistics for a pair of texts."""
     
     try:
@@ -536,7 +536,7 @@ class GetAllTextReuseStatsB1(GetAllTextReuseStats):
 
 
 @api_view(['GET'])
-def getPairTextReuseStats(request, book1, book2, release_code=None):
+def get_pair_text_reuse_stats(request, book1, book2, release_code=None):
     """Get the text reuse statistics for a pair of texts."""
     try:
         if release_code:
@@ -554,7 +554,7 @@ def getPairTextReuseStats(request, book1, book2, release_code=None):
         raise Http404
 
 
-class GetReleaseVersion(generics.ListAPIView):
+class ReleaseVersionListView(generics.ListAPIView):
     
     search_fields = [field.name for field in ReleaseVersion._meta.get_fields() if (field.name not in excl_flds)] \
         + ["version__" + field.name for field in Version._meta.get_fields() if (field.name not in excl_flds)] 
@@ -615,7 +615,7 @@ class GetReleaseInfoList(generics.ListAPIView):
     serializer_class = ReleaseInfoSerializer
 
 @api_view(['GET'])
-def GetReleaseInfo(request, release_code):
+def get_release_info(request, release_code):
     """Get info on a release."""
     try:
         release_info = ReleaseInfo.objects.get(release_code=release_code)

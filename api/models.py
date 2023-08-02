@@ -95,7 +95,7 @@ class Version(models.Model):
                                      related_query_name="edition", on_delete=models.DO_NOTHING)
     source_coll = models.ForeignKey("SourceCollectionDetails", related_name='versions',
                                      related_query_name="version", on_delete=models.DO_NOTHING, blank=True, null=True)
-    part_of = models.ForeignKey("self", related_name='divisions', related_query_name="divided_into", 
+    part_of = models.ForeignKey("self", related_name='parts', related_query_name="part", 
                                 on_delete=models.DO_NOTHING, blank=True, null=True)
     # NB: - notes, char_lenght, tok length, url, status and annotation status were moved to Release table
     #     - editor, edition_place, publisher, edition_date, ed_info fields were moved to Edition model

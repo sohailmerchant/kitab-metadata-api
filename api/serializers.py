@@ -19,7 +19,7 @@ https://github.com/rsinger86/drf-flex-fields
 class ShallowNameElementsSerializer(FlexFieldsModelSerializer):
     """This serializer is used to serialize the name elements in author queries.
     It excludes the author field. If you want to serialize the full PersonName model,
-    use hte PersonNameSerializer"""
+    use the PersonNameSerializer"""
 
     class Meta:
         model = PersonName
@@ -260,7 +260,17 @@ class VersionSerializer(FlexFieldsModelSerializer):
     edition = ShallowEditionSerializer(read_only=True)
     release_versions = ShallowReleaseVersionSerializer(read_only=True, many=True)
 
+    def serialize_relations(self, version_instance):
+        """serialize a version's parts 
+        (for books split into pieces because of their length, like BiharAnwar)"""
+        # select the versions that are part of the current version_instance:
+        parts = Version.objects\
+            .filter(part_of__version_uri=version_instance.version_uri)
+        return {"parts": [d.version_uri for d in parts]}
+
     def to_representation(self, instance):
+        """Customize the default json representation"""
+        # get the default representation:
         json_rep = super().to_representation(instance)
         # remove the nested list of all versions of the text:
         del json_rep["text"]["versions"]
@@ -273,12 +283,21 @@ class VersionSerializer(FlexFieldsModelSerializer):
             requested_release = [d for d in json_rep["release_versions"] if d["release_code"] == release_code]
             del json_rep["release_versions"]
             json_rep["release_version"] = requested_release
-        return json_rep
+        # add the version URIs of the parts: 
+        parts = self.serialize_relations(instance)
+        # use only the version URI for the part_of key:
+        part_of = json_rep.pop("part_of")
+        try:
+            part_of = {"part_of": part_of["version_uri"]}
+        except:
+            part_of = {"part_of": None}
+        
+        return {**json_rep, **parts, **part_of}
 
     class Meta:
         model = Version
         #fields = ("__all__")
-        fields = ("id", "version_code", "version_uri", "language", "text", "edition", "divisions", "part_of", "release_versions")
+        fields = ("id", "version_code", "version_uri", "language", "text", "edition", "release_versions", "part_of")
         depth = 3  # expand text and author metadata
 
 
