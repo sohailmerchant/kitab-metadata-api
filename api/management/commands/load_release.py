@@ -195,7 +195,8 @@ def format_fields(data, base_url):
     ##releasefields
     record['char_length'] = data['char_length']
     record['tok_length'] = data['tok_length']
-    record['url'] = data['url'].replace("../data", base_url)
+    # record['url'] = data['url'].replace("../data", base_url)  # this creates problems with v2022.2.7, which has ../data/xxxxAH/data/
+    record['url'] = re.sub( ".{,15}/data", base_url, data['url'])   # greedy quantifier `{,}` deals with both situations: ../data/ and ../data/xxxxAH/data/
     record['analysis_priority'] = data['status']
     record['annotation_status'] = get_annotation_status(data['url'].split('.')[-1])
     if "type" in data:
