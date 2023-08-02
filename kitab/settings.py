@@ -45,7 +45,8 @@ INSTALLED_APPS = [
     'rest_framework',
     'django_filters',
     'rest_flex_fields',
-    "corsheaders",
+    'corsheaders',
+    
 ]
 REST_FRAMEWORK = {
 

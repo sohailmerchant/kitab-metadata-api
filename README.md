@@ -28,8 +28,8 @@ kitab-metadata-api
       |- models-v2.py: older version of models.py?
       |- serializers.py: define serializers (which create JSON representations
            of the data in the database):
-           personNameSerializer, VersionMetaSerializer,
-           TextSerializer, AuthorMetaSerializer, AggregatedStatsSerializer
+           PersonNameSerializer, VersionSerializer,
+           TextSerializer, AuthorSerializer, AggregatedStatsSerializer
       |- tests.py: (empty file)
       |- urls.py: creates endpoint URLs, each connected with a specific view
            (see views.py)
@@ -237,4 +237,3 @@ http://127.0.0.1:8000/text/all/?search=Tabari Tarikh
 - At the load, populate aggregatedstats data e.g. number of authors, number of versions, etc...
 - Search and Filter on the endpoints
 - Find a way to update the database dynamically everyday without the downtime
-- New database per version and upload the data
