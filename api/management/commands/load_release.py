@@ -25,6 +25,9 @@ import re
 import datetime
 import json
 
+from openiti.helper.ara import normalize_ara_light
+from api.util.betacode import betacodeToSearch
+
 version_codes = dict()
 VERBOSE = False
 
@@ -154,21 +157,39 @@ def format_fields(data, base_url):
     record['date_AH'] = int(data['date'])
     record['date_CE'] = ah2ce(data['date'])
     record['date_str'] = int(data['date'])
-    record['author_ar'] = data['author_ar']
-    record['author_lat'] = data['author_lat']
-    record['author_ar_prefered'] = re.split(' *:: *| *, *| *; *',data['author_ar'])[0]
-
+    # add normalized versions + prefered version of the arabic-script author name:
+    author_ar = re.split(' *:: *| *, *| *; *',data['author_ar'])
+    normalized_author_ar = [normalize_ara_light(a.strip()) for a in author_ar if a]
+    record['author_ar'] = " :: ".join(list(set(author_ar + normalized_author_ar)))
+    record['author_ar_prefered'] = author_ar[0]
+    # add normalized versions + prefered version of the latin-script author name:
+    author_lat_shuhra = re.split(' *:: *| *, *| *; *',data['author_lat_shuhra'])
+    author_lat = re.split(' *:: *| *, *| *; *',data['author_lat'])
     if data['author_lat_shuhra']:
-        record['author_lat_prefered'] = re.split(' *:: *| *, *| *; *',data['author_lat_shuhra'])[0]
+        record['author_lat_prefered'] = author_lat_shuhra[0]
     else:
-        record['author_lat_prefered'] = re.split(' *:: *| *, *| *; *',data['author_lat'])[0]
+        record['author_lat_prefered'] = author_lat[0]
+    author_lat += author_lat_shuhra
+    normalized_author_lat = [betacodeToSearch(a) for a in author_lat if a]
+    record['author_lat'] = " :: ".join(list(set(author_lat + normalized_author_lat)))
 
     record['text_uri'] = data['book']
     record['author_uri'] = data['book'].split(".")[0]
-    record['titles_ar'] = data['title_ar']
-    record['titles_lat'] = data['title_lat']
-    record['title_ar_prefered'] = re.split(' *:: *| *, *| *; *',data['title_ar'])[0]
-    record['title_lat_prefered'] = re.split(' *:: *| *, *| *; *',data['title_lat'])[0]
+
+    # add normalized version of the Arabic-script titles:
+    titles_ar = re.split(' *:: *| *, *| *; *', data['title_ar'])
+    normalized_titles_ar = [normalize_ara_light(t.strip()) for t in titles_ar if t]
+    record['titles_ar'] = " :: ".join(list(set(titles_ar + normalized_titles_ar)))
+
+    # add normalized version of the Latin-script titles:
+    titles_lat = re.split(' *:: *| *, *| *; *', data['title_lat'])
+    normalized_titles_lat = [betacodeToSearch(t) for t in titles_lat if t]
+    record['titles_lat'] = " :: ".join(list(set(titles_lat + normalized_titles_lat)))
+
+    # define the preferred title: 
+    record['title_ar_prefered'] = titles_ar[0]
+    record['title_lat_prefered'] = titles_lat[0]
+
     record['ed_info'] = data['ed_info']
     record['version_code'] = data['id']
 
@@ -379,6 +400,7 @@ def upload_release_meta(meta_fp, base_url, release_info):
  
 def upload_reuse_stats(reuse_data_fp, release_code, release_obj, reuse_data_base_url, version_codes_d, test=False):
     print("Loading text reuse stats...")
+    book_cache = dict() # to avoid unnecessary lookups in the database
     with open(reuse_data_fp, 'r', encoding='utf-8') as f:
         reader = csv.DictReader(f, delimiter='\t')
         for data in reader:
@@ -407,14 +429,23 @@ def upload_reuse_stats(reuse_data_fp, release_code, release_obj, reuse_data_base
                 print("FAILED:", version_code1, version_code2)
                 ref1 = version_code1 + "-ara1"
                 ref2 = version_code2 + "-ara1"
-            b1 = ReleaseVersion.objects.get(
-                release_info__release_code=release_code,
-                version__version_code=version_code1
-            )
-            b2 = ReleaseVersion.objects.get(
-                release_info__release_code=release_code,
-                version__version_code=version_code2
-            )
+            
+            if version_code1 in book_cache:
+                b1 = book_cache[version_code1]
+            else:
+                b1 = ReleaseVersion.objects.get(
+                    release_info__release_code=release_code,
+                    version__version_code=version_code1
+                )
+                book_cache[version_code1] = b1
+            if version_code2 in book_cache:
+                b2 = book_cache[version_code2]
+            else:
+                b2 = ReleaseVersion.objects.get(
+                    release_info__release_code=release_code,
+                    version__version_code=version_code2
+                )
+                book_cache[version_code2] = b2
             
             tsv_url = f"{reuse_data_base_url}{ref1}/{ref1}_{ref2}.csv"
             

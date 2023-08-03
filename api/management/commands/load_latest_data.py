@@ -20,9 +20,10 @@ import datetime
 
 from openiti.git import get_issues   # TO DO: add issues!
 from openiti.helper.yml import readYML, dicToYML, fix_broken_yml
-from openiti.helper.ara import deNoise, ar_cnt_file
+from openiti.helper.ara import ar_cnt_file, normalize_ara_light
 
-from api.util.betaCode import betaCodeToArSimple
+from api.util.betacode import betacodeToArSimple, betacodeToSearch
+
 from api.util.utility import tags2dic, date_from_string, extract_metadata_from_header, collect_author_yml_data, collect_text_yml_data, collect_version_yml_data, set_analysis_priority
 
 
@@ -332,6 +333,15 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
             # add/update the author meta to the database:
             print(author_uri)
 
+            if author_meta['author_ar']:
+                author_ar = re.split(" *:: *| *[,;] *", author_meta['author_ar'])
+            elif "author_ar_from_header" in author_meta:
+                author_ar = author_meta["author_ar_from_header"]
+            if not author_meta['author_ar_prefered'] and author_ar:
+                author_meta['author_ar_prefered'] = author_ar[0]                
+            normalized_author_ar = [normalize_ara_light(a.strip()) for a in author_ar if a]
+            author_meta['author_ar'] = " :: ".join(list(set(author_ar + normalized_author_ar)))
+
             am, am_created = Author.objects.update_or_create(
                 author_uri=author_uri,
                 defaults = dict(
@@ -426,12 +436,15 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
                 # prepare title fields before upload:
                 text_meta = text_d["text_meta"]
                 if "titles_ar_from_header" in text_meta and text_meta["titles_ar_from_header"]:
-                    titles_ar = list(set(text_meta["titles_ar"] + text_meta["titles_ar_from_header"]))
-                    text_meta['titles_ar'] = " :: ".join(titles_ar)
+                    titles_ar = list(set(text_meta["titles_ar"] + [t for t in text_meta["titles_ar_from_header"] if t.strip()]))
+                if titles_ar:
+                    normalized_titles_ar = [normalize_ara_light(t.strip()) for t in titles_ar if t.strip()]
+                text_meta['titles_ar'] = " :: ".join(list(set(titles_ar + normalized_titles_ar)))
                 if not text_meta["title_ar_prefered"] and text_meta["titles_ar"]:
                     text_meta["title_ar_prefered"] = re.split(" *:: *| *[,;] *", text_meta["titles_ar"])[0]
                 
                 # upload text meta to the database:
+                print(text_meta["titles_ar"])
                 tm, tm_created = Text.objects.update_or_create(
                     text_uri=text_meta["text_uri"],
                     author=am,
@@ -621,7 +634,10 @@ def collect_header_meta(version_fp, author_meta, text_meta, version_meta):
     if not author_meta["author_ar"]: # if no Arabic author name was taken from YML files:
         if "author_ar_from_header" not in author_meta:
             author_meta["author_ar_from_header"] = []
-        author_meta["author_ar_from_header"] += list(set(header_meta["AuthorName"]))
+        for a in header_meta["AuthorName"]:
+            if a.strip() and a not in author_meta:
+                author_meta["author_ar_from_header"].append(a.strip())
+        #author_meta["author_ar_from_header"] += list(set())
 
     # - text title (combine with the uri's title component)
 

@@ -6,7 +6,7 @@ import re
 
 from openiti.helper.ara import deNoise, ar_cnt_file
 from openiti.helper.yml import readYML, dicToYML, fix_broken_yml
-from api.util.betaCode import betaCodeToArSimple
+from api.util.betacode import betacodeToArSimple, betacodeToSearch
 
 geo_URIs = dict()
 text_rel_d = dict()
@@ -421,7 +421,7 @@ def collect_text_yml_data(text_yml_fp, text_uri):
             if not ("al-Muʾallif" in text_d[c]\
                     or "none" in text_d[c].lower()):
                 title_lat.append(text_d[c].strip())
-                title_ar.append(betaCodeToArSimple(title_lat[-1]))
+                title_ar.append(betacodeToArSimple(title_lat[-1]))
     title_from_uri = text_uri.split(".")[1]
     title_from_uri = insert_spaces(title_from_uri)
     title_from_uri = replace_c_with_cayn(title_from_uri)
@@ -554,8 +554,8 @@ def collect_text_yml_data(text_yml_fp, text_uri):
     text_meta = dict(
         text_uri=text_uri,
         author_meta="",
-        titles_ar=title_ar,  # list; will be joined with list of titles from metadata headers later
-        titles_lat=" :: ".join(title_lat),
+        titles_ar=[t for t in title_ar if t],  # list; will be joined with list of titles from metadata headers later
+        titles_lat=" :: ".join([t for t in set(title_lat) if t]),
         title_ar_prefered=title_ar_prefered,
         title_lat_prefered=title_lat_prefered,
         text_type="text",
@@ -590,7 +590,7 @@ def collect_author_yml_data(author_yml_fp, author_uri):
     if not ("Fulān" in auth_d["10#AUTH#SHUHRA#AR:"]\
             or "none" in auth_d["10#AUTH#SHUHRA#AR:"].lower()):
         shuhra = auth_d["10#AUTH#SHUHRA#AR:"].strip()
-        shuhra_ar = betaCodeToArSimple(shuhra)
+        shuhra_ar = betacodeToArSimple(shuhra)
     name_comps = ["10#AUTH#LAQAB##AR:",
                   "10#AUTH#KUNYA##AR:",
                   "10#AUTH#ISM####AR:",
@@ -601,7 +601,7 @@ def collect_author_yml_data(author_yml_fp, author_uri):
                     and not ("Fulān" in auth_d[x] \
                                 or "none" in auth_d[x].lower())]
     full_name = " ".join(full_name).strip()
-    full_name_ar = betaCodeToArSimple(full_name)
+    full_name_ar = betacodeToArSimple(full_name)
     if not shuhra:
         shuhra = full_name
         shuhra_ar = full_name_ar
@@ -641,7 +641,7 @@ def collect_author_yml_data(author_yml_fp, author_uri):
             else:
                 # store a version of the name in transcription and Arabic script:
                 name_d["LA"] = lang_d
-                lang_d_converted = {k: betaCodeToArSimple(v) for k,v in lang_d.items()}
+                lang_d_converted = {k: betacodeToArSimple(v) for k,v in lang_d.items()}
                 name_d[lang] = lang_d_converted
 
 
@@ -720,12 +720,14 @@ def collect_author_yml_data(author_yml_fp, author_uri):
         author_ar_prefered = [x for x in [shuhra_ar, full_name_ar] if x][0]
     except:
         author_ar_prefered = ""
-    author_lat_prefered=[x for x in [shuhra, full_name, english_name, name_from_uri] if x][0]
+    author_lat =[x for x in [shuhra, full_name, english_name, name_from_uri] if x.strip()]
+    normalized_author_lat = [betacodeToSearch(a) for a in author_lat]
+    author_lat_prefered=author_lat[0]
 
     author_meta = dict(
         author_uri=author_uri,
-        author_ar=" :: ".join([x for x in [shuhra_ar, full_name_ar] if x]),
-        author_lat=" :: ".join([x for x in [shuhra, full_name, english_name, name_from_uri] if x]),
+        author_ar=" :: ".join([x for x in [shuhra_ar, full_name_ar] if x.strip()]),
+        author_lat=" :: ".join(list(set(author_lat + normalized_author_lat))),
         author_ar_prefered=author_ar_prefered,
         author_lat_prefered=author_lat_prefered,
         date=date,

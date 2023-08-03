@@ -160,7 +160,6 @@ class ShallowAuthorSerializer(FlexFieldsModelSerializer):
             del d["related_persons"]
             del d["related_places"]
         json_rep = {**json_rep, **self.serialize_relations(instance)}
-        print(json_rep)
         # return the dictionary inside a list (we may have multiple authors later)
         return [json_rep]
 
@@ -387,9 +386,9 @@ class VersionSerializer(FlexFieldsModelSerializer):
         json_rep = super().to_representation(instance)
         # remove the nested list of all versions of the text:
         del json_rep["text"]["versions"]
-        # remove the nested list of all texts by the same author:
-        for i in range(len(json_rep["text"]["author"])):
-            del json_rep["text"]["author"][i]["texts"]
+        # remove the nested list of all texts by the same author: (not necessary anymore: is now already done TextSerializer!)
+        #for i in range(len(json_rep["text"]["author"])):
+        #    del json_rep["text"]["author"][i]["texts"]
         # remove the release_versions dictionary if a specific release was requested:
         release_code = self.context.get('release_code')
         if release_code:

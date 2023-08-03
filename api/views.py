@@ -12,7 +12,7 @@ from rest_framework import filters
 
 from .models import Author, PersonName, Text, Version, CorpusInsights, TextReuseStats, A2BRelation, ReleaseVersion, SourceCollectionDetails, ReleaseInfo, RelationType
 from .serializers import TextSerializer, VersionSerializer, PersonNameSerializer, ReleaseVersionSerializer, AuthorSerializer, TextReuseStatsSerializer, CorpusInsightsSerializer, AllRelationSerializer,  SourceCollectionDetailsSerializer, ReleaseInfoSerializer, ShallowTextReuseStatsSerializer, TextReuseStatsSerializerB1, AllRelationTypesSerializer#, RelationTypeSerializer
-from .filters import AuthorFilter, VersionFilter, TextFilter, TextReuseFilter, ReleaseVersionFilter
+from .filters import AuthorFilter, VersionFilter, TextFilter, TextReuseFilter, ReleaseVersionFilter, CustomSearchFilter, VersionSearchFilter
 
 
     # path('all-releases/version/all/', views.ReleaseVersionListView.as_view(), name='all-releases-all-versions'),
@@ -354,11 +354,23 @@ class VersionListView(generics.ListAPIView):
     #+ ["text__version__"+ field.name for field in Version._meta.get_fields() if(field.name not in ["id", 'Text','tok_length','char_length'])]\
     #+ ["author_names__"+ field.name for field in PersonName._meta.get_fields() if(field.name not in ["id", 'Author'])]
     #print("FIELD", Version._meta.get_fields())
-    search_fields = [field.name for field in Version._meta.get_fields() if (field.name not in excl_flds)] \
-        + ["text__" + field.name for field in Text._meta.get_fields() if (field.name not in excl_flds)] \
-        + ["text__author__" + field.name for field in Author._meta.get_fields() if (field.name not in excl_flds)] \
-        + ["text__author__name_element__" + field.name for field in PersonName._meta.get_fields() if (field.name not in excl_flds)] \
-        + ["release_version__" + field.name for field in ReleaseVersion._meta.get_fields() if (field.name not in excl_flds)] \
+    # search_fields = [field.name for field in Version._meta.get_fields() if (field.name not in excl_flds)] \
+    #     + ["text__" + field.name for field in Text._meta.get_fields() if (field.name not in excl_flds)] \
+    #     + ["text__author__" + field.name for field in Author._meta.get_fields() if (field.name not in excl_flds)] \
+    #     + ["text__author__name_element__" + field.name for field in PersonName._meta.get_fields() if (field.name not in excl_flds)] \
+    #     + ["release_version__" + field.name for field in ReleaseVersion._meta.get_fields() if (field.name not in excl_flds)] \
+
+
+    # define the default search fields - these may be overridden 
+    # by using the "&search_fields" switch in the query string 
+    # (as defined in the VersionSearchFilter)
+    search_fields = [
+        "version_uri",        # also contains the version_code, source_coll__code, text_uri, author_uri and text__author__date_str!
+        "text__titles_ar", "text__titles_lat", # contain all attested titles in a single string
+        "text__author__author_ar", "text__author__author_lat", # contains all attested author names (incl. from the name elements)
+        "release_version__analysis_priority", "release_version__annotation_status", 
+        ]
+
 
     # print("VERSION SEARCH FIELDS:")
     # print(search_fields)
@@ -366,7 +378,8 @@ class VersionListView(generics.ListAPIView):
     # Customize filtering:
 
     filter_backends = (django_filters.DjangoFilterBackend,
-                       filters.SearchFilter, filters.OrderingFilter)
+                       VersionSearchFilter, #filters.SearchFilter, 
+                       filters.OrderingFilter)
     filterset_class = VersionFilter
 
     ordering_fields = ['text__titles_lat', 'text__titles_ar',
@@ -576,21 +589,33 @@ class ReleaseVersionListView(generics.ListAPIView):
         #     field.name for field in PersonName._meta.get_fields() if (field.name not in excl_flds)]
 
          ## had to put the list manualy as above function add these two field which makes the code 'version_uri', 'version_uri__release' 
-    search_fields = ['release_info__release_code', 'url', 'analysis_priority', 'annotation_status', 'version__version_uri',  
-                     'version__editor', 'version__edition_place', 'version__publisher', 'version__edition_date', 
-                     'version__ed_info', 'version__language', 'version__release_version__tags', 'notes', 
-                     'analysis_priority', 'annotation_status', 'version__text__text_uri', 
+    # search_fields = ['release_info__release_code', 'url', 'analysis_priority', 'annotation_status', 'version__version_uri',  
+    #                  'version__edition__editor', 'version__edition__edition_place', 'version__edition__publisher', 'version__edition__edition_date', 
+    #                  'version__edition__ed_info', 'version__language', 'version__release_version__tags', 'notes', 
+    #                  'analysis_priority', 'annotation_status', 'version__text__text_uri', 
+    #                  'version__text__titles_ar', 'version__text__titles_lat', 
+    #                  'version__text__title_ar_prefered', 'version__text__title_lat_prefered', 
+    #                  'version__text__text_type', 'version__text__tags', 'version__text__notes', 
+    #                  'version__text__author__author_uri', 
+    #                  'version__text__author__author_ar', 'version__text__author__author_lat', 
+    #                  'version__text__author__author_ar_prefered', 'version__text__author__author_lat_prefered', 
+    #                  'version__text__author__date_str', 'version__text__author__notes', 
+    #                  'version__text__author__name_element__language', 
+    #                  'version__text__author__name_element__shuhra', 'version__text__author__name_element__nasab', 
+    #                  'version__text__author__name_element__kunya', 'version__text__author__name_element__ism', 
+    #                  'version__text__author__name_element__laqab', 'version__text__author__name_element__nisba']
+
+    search_fields = ['analysis_priority', 'annotation_status', 'tags', 'notes', 
+                     'release_info__release_code', 
+                     'version__version_uri',  
+                     'version__edition__ed_info', 
                      'version__text__titles_ar', 'version__text__titles_lat', 
-                     'version__text__title_ar_prefered', 'version__text__title_lat_prefered', 
-                     'version__text__text_type', 'version__text__tags', 'version__text__notes', 
+                     'version__text__tags', 'version__text__notes', 
                      'version__text__author__author_uri', 
                      'version__text__author__author_ar', 'version__text__author__author_lat', 
-                     'version__text__author__author_ar_prefered', 'version__text__author__author_lat_prefered', 
-                     'version__text__author__date_str', 'version__text__author__notes', 
-                     'version__text__author__name_element__language', 
-                     'version__text__author__name_element__shuhra', 'version__text__author__name_element__nasab', 
-                     'version__text__author__name_element__kunya', 'version__text__author__name_element__ism', 
-                     'version__text__author__name_element__laqab', 'version__text__author__name_element__nisba']
+                     'version__text__author__notes']
+
+
 
     
     # print("RELEASE SEARCH FIELDS:")
