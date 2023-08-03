@@ -160,7 +160,6 @@ class ShallowAuthorSerializer(FlexFieldsModelSerializer):
             del d["related_persons"]
             del d["related_places"]
         json_rep = {**json_rep, **self.serialize_relations(instance)}
-        print(json_rep)
         # return the dictionary inside a list (we may have multiple authors later)
         return [json_rep]
 

@@ -1,7 +1,7 @@
 import re
 
 ###################################################################################
-# BetaCode Tables: Beginning ######################################################
+# betacode Tables: Beginning ######################################################
 ###################################################################################
 
 # The file includes three conversion tables.
@@ -246,7 +246,7 @@ translitArabic = {
     'ủ' : ' ُ ',  # final kasraŧ 
     }
 
-arabicBetaCode = {
+arabicbetacode = {
 # Alphabet letters
     " ا " :  "_a",   # alif
     " أ " :  "'a",   # alif
@@ -299,7 +299,7 @@ arabicBetaCode = {
 
 
 ###################################################################################
-# BetaCode Tables: End ############################################################
+# betacode Tables: End ############################################################
 ###################################################################################
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -308,8 +308,8 @@ arabicBetaCode = {
 # ConversionFunctions: Beginning ##################################################
 ###################################################################################
 
-# conversionFlow: betaCode > translit > Arabic
-# conversionFlow: Arabic > betaCode :: fixing Arabic via betaCode > cleaned Arabic
+# conversionFlow: betacode > translit > Arabic
+# conversionFlow: Arabic > betacode :: fixing Arabic via betacode > cleaned Arabic
 
 # convert AH to CE (only years)
 def AHCE(ah):
@@ -372,14 +372,14 @@ def betacodeToLOC(text):
     text = re.sub(r"\w_", r"", text)
     return(text)
 
-def arabicToBetaCode(text):
-    #print("arabicToBetaCode()")
+def arabicTobetacode(text):
+    #print("arabicTobetacode()")
 
     # convert optative phrases    
     text = re.sub(r"صلى الله عليه وسلم", r".sl`m", text)
     text = re.sub(r"radiyallahuanhu", r"r.dh", text)
 
-    text = dictReplace(text, arabicBetaCode)
+    text = dictReplace(text, arabicbetacode)
     
     # converting tashdids and removing Arabic residue
     text = re.sub(r"(\w)%s" % " ّ ".strip(), r"\1\1", text)
@@ -558,7 +558,7 @@ def betacodeToArabic(text):
     #text = re.sub("-", "ـ ـ", text)
     return(text)
 
-def betaCodeToArSimple(text):
+def betacodeToArSimple(text):
     text = betacodeToArabic(text)
     text = text.replace("ﭐ", "ا")
     text = deNoise(text)
@@ -586,7 +586,7 @@ def betaCodeToArSimple(text):
 ##print(betacodeToLOC(testString))
 ##print(betacodeToArabic(testString))
 ##
-##testBetaCode = """
+##testbetacode = """
 ##'amru.n 'unsu.n 'insu.n '_im_anu.n
 ##'_aya:tu.n '_amana mas'ala:tu.n sa'ala ra'su.n qur'_anu.n ta'_amara
 ##_di'bu.n as'ila:tu.n q_ari'i-hi su'lu.n mas'_ulu.n
@@ -607,6 +607,6 @@ def betaCodeToArSimple(text):
 ##`Amru.n.w wa-fa`al_u.a
 ##"""
 ##
-###print(arabicToBetaCode(testStringArabic))
-##print(betacodeToArabic(testBetaCode))
-##print(betacodeToTranslit(testBetaCode))
+###print(arabicTobetacode(testStringArabic))
+##print(betacodeToArabic(testbetacode))
+##print(betacodeToTranslit(testbetacode))
