@@ -4,6 +4,7 @@ import json
 import os
 import re
 
+from openiti.git import get_issues
 from openiti.helper.ara import deNoise, ar_cnt_file
 from openiti.helper.yml import readYML, dicToYML, fix_broken_yml
 from api.util.betacode import betacodeToArSimple, betacodeToSearch
@@ -430,6 +431,7 @@ def collect_text_yml_data(text_yml_fp, text_uri):
     #title_from_uri = re.sub("C([a-z])", lambda match: "ʿ"+match.group(1).upper(), title_from_uri)
     
     title_lat.append(title_from_uri)
+    normalized_title_lat = [betacodeToSearch(t) for t in title_lat if t]
     title_lat_prefered = title_lat[0]
     if title_ar:
         title_ar_prefered = title_ar[0]
@@ -555,7 +557,7 @@ def collect_text_yml_data(text_yml_fp, text_uri):
         text_uri=text_uri,
         author_meta="",
         titles_ar=[t for t in title_ar if t],  # list; will be joined with list of titles from metadata headers later
-        titles_lat=" :: ".join([t for t in set(title_lat) if t]),
+        titles_lat=" :: ".join(list(set(title_lat + normalized_title_lat))),
         title_ar_prefered=title_ar_prefered,
         title_lat_prefered=title_lat_prefered,
         text_type="text",
@@ -778,3 +780,21 @@ def set_analysis_priority(version_list):
             # take the longest text as primary text:
             version_list[0]["analysis_priority"] = "pri"
             return version_list
+        
+
+def get_github_issues(token_fp="api/util/GitHub personalAccessTokenReadOnly.txt"):
+    """Get annotation issues from GitHub"""
+    try:
+        with open(token_fp, mode="r", encoding="utf-8") as file:
+            github_token = file.read().strip()
+    except:
+        github_token = None # you will be prompted to insert the token manually
+
+    issues = get_issues.get_issues("OpenITI/Annotation",
+                                   access_token=github_token,
+                                   issue_labels=["URI change suggestion",
+                                                 "text quality",
+                                                 "PRI & SEC Versions"])
+    issues = get_issues.define_text_uris(issues)
+    issues_uri_dict = get_issues.sort_issues_by_uri(issues)
+    return issues_uri_dict

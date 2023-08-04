@@ -1,3 +1,5 @@
+# TO DO: add a tags model!
+
 from django.db import models
 
 
@@ -275,3 +277,23 @@ class SourceCollectionDetails(models.Model):
 
     def __str__(self):
         return self.code
+    
+
+class GitHubIssue(models.Model):
+    """Describes a GitHub Issue"""
+    title = models.CharField(max_length=200, null=False)
+    number = models.IntegerField()
+    state = models.CharField(max_length=6)  # open/closed
+    labels = models.ManyToManyField("GitHubIssueLabel", blank=True, 
+                                    related_name='github_issues', related_query_name="github_issue")
+    version = models.ForeignKey(Version, on_delete=models.DO_NOTHING, blank=True, null=True,
+                                related_name='github_issues', related_query_name="github_issue")
+    text = models.ForeignKey(Text, on_delete=models.DO_NOTHING, blank=True, null=True,
+                             related_name='github_issues', related_query_name="github_issue")
+    author = models.ForeignKey(Author, on_delete=models.DO_NOTHING, blank=True, null=True,
+                               related_name='github_issues', related_query_name="github_issue")
+
+
+class GitHubIssueLabel(models.Model):
+    """Describes a GitHub Issue label"""
+    name = models.CharField(max_length=15, null=False)

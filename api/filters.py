@@ -141,9 +141,6 @@ class VersionFilter(django_filters.FilterSet):
     http://127.0.0.1:8000/2022.2.7/version/?language=per
     http://127.0.0.1:8000/2022.2.7/version/?analysis_priority=pri
 
-    
-
-
     """
     version_uri_contains = django_filters.CharFilter(
         field_name="version_uri", lookup_expr='icontains', label="Version URI")  # "exact" is default

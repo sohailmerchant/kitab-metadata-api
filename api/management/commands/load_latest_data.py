@@ -10,7 +10,9 @@ import copy
 import csv
 from webbrowser import get
 from django.db import models
-from api.models import Author, Text, Version, PersonName, CorpusInsights, ReleaseVersion, ReleaseInfo, Edition, A2BRelation, RelationType, Place, SourceCollectionDetails
+from api.models import Author, Text, Version, PersonName, CorpusInsights, \
+    ReleaseVersion, ReleaseInfo, Edition, A2BRelation, RelationType, \
+    Place, SourceCollectionDetails, GitHubIssueLabel, GitHubIssue
 from django.core.management.base import BaseCommand
 import os
 import re
@@ -18,13 +20,15 @@ import random
 import itertools
 import datetime
 
-from openiti.git import get_issues   # TO DO: add issues!
 from openiti.helper.yml import readYML, dicToYML, fix_broken_yml
 from openiti.helper.ara import ar_cnt_file, normalize_ara_light
 
 from api.util.betacode import betacodeToArSimple, betacodeToSearch
 
-from api.util.utility import tags2dic, date_from_string, extract_metadata_from_header, collect_author_yml_data, collect_text_yml_data, collect_version_yml_data, set_analysis_priority
+from api.util.utility import tags2dic, extract_metadata_from_header, \
+                            collect_author_yml_data, collect_text_yml_data,\
+                            collect_version_yml_data, set_analysis_priority,\
+                            get_github_issues
 
 
 # define some global variables: 
@@ -35,6 +39,8 @@ version_codes = dict()
 class Command(BaseCommand):
     def handle(self, **options):
         #A2BRelation.objects.all().delete()
+        #GitHubIssue.objects.all().delete()
+        #GitHubIssueLabel.objects.all().delete()
 
         relations_definitions_fp = "meta/relations_definitions.tsv"
         corpus_folder = r"D:/AKU/OpenITI/25Y_repos"
@@ -42,6 +48,7 @@ class Command(BaseCommand):
         base_url = "https://raw.githubusercontent.com/OpenITI"
         release_code = "post-release"
         source_collections_fp = "meta/source_collections.tsv"
+
 
         main(corpus_folder, relations_definitions_fp, source_collections_fp, tags_fp, base_url, release_code)
 
@@ -59,6 +66,9 @@ def main(corpus_folder, relations_definitions_fp, source_collections_fp, tags_fp
 
     # load the corpus metadata:
     load_corpus_meta(corpus_folder, base_url, text_tags, release_code)
+
+    # load GitHub issues:
+    load_github_issues()
 
     # check for duplicate version_codes:
     for version_code, fn_list in version_codes.items():
@@ -129,13 +139,12 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
     )
 
     for ah_folder in os.listdir(corpus_folder):
-        # skip irrelevant folders: 
-        if not re.findall("^\d{4}AH$", ah_folder):
         #if not re.findall("^1125AH$", ah_folder): # for testing!
         #if not re.findall("^0200AH$", ah_folder): # for testing!
+
+        # skip irrelevant folders: 
+        if not re.findall("^\d{4}AH$", ah_folder):
             continue # skip anything that's not an xxxxAH folder
-        if ah_folder == "9001AH":  # TO DO: load 9001AH folder!
-            continue
 
         # create the path to the data folder that contains all the author folders:
         data_folder_pth = os.path.join(corpus_folder, ah_folder, "data")
@@ -439,10 +448,10 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
                     titles_ar = list(set(text_meta["titles_ar"] + [t for t in text_meta["titles_ar_from_header"] if t.strip()]))
                 if titles_ar:
                     normalized_titles_ar = [normalize_ara_light(t.strip()) for t in titles_ar if t.strip()]
+                    if not text_meta["title_ar_prefered"]:
+                        text_meta["title_ar_prefered"] = titles_ar[0]
                 text_meta['titles_ar'] = " :: ".join(list(set(titles_ar + normalized_titles_ar)))
-                if not text_meta["title_ar_prefered"] and text_meta["titles_ar"]:
-                    text_meta["title_ar_prefered"] = re.split(" *:: *| *[,;] *", text_meta["titles_ar"])[0]
-                
+
                 # upload text meta to the database:
                 print(text_meta["titles_ar"])
                 tm, tm_created = Text.objects.update_or_create(
@@ -674,3 +683,63 @@ def collect_header_meta(version_fp, author_meta, text_meta, version_meta):
                 tags.append(collection_code+"@"+t)
     
     return author_meta, text_meta, version_meta
+
+
+def load_github_issues():
+    """Get the URI issues from https://github.com/OpenITI/Annotation/issues
+    and add them to the database"""
+    # get the relevant issues from GitHub and sort the by URI:
+    issues_uri_dict = get_github_issues()
+    # create a dictionary of issue labels so we don't have to query the database each time:
+    label_objects = GitHubIssueLabel.objects.all()
+    label_objects = {obj.name: obj.id for obj in label_objects}
+
+    print("Loading GitHub Issues into database")
+    for uri, issue_list in issues_uri_dict.items():
+        print(f"{uri}: {len(issue_list)} issues")
+
+        # get the relevant object from the database (based on the URI)
+        author = None
+        text = None
+        version = None
+        try:
+            if uri.count(".") == 0: # author uri
+                author = Author.objects.get(author_uri=uri)
+            elif uri.count(".") == 1: # text uri
+                text = Text.objects.get(text_uri=uri)
+            elif uri.count(".") == 2: # version uri
+                version = Version.objects.get(version_uri__icontains=uri)
+            if author == text == version == None:
+                print("uri not found in the database:", uri)
+                continue
+        except Exception as e:
+            print(e)
+            continue  # skip if the URI was not found in the database
+        for issue in issue_list:
+            print(issue)
+            # create the issue:
+            issue_obj, created = GitHubIssue.objects.update_or_create(
+                number=issue.number,
+                defaults=dict(
+                    author=author,
+                    text=text,
+                    version=version,
+                    title=issue.title,
+                    state=issue.state
+                )
+            )
+            # get the issue's label objects from the dictionary or create new labels in the database:
+            label_list = []
+            for label in issue.labels:
+                if label.name in label_objects:
+                    label_obj = label_objects[label.name]
+                else:
+                    label_obj = GitHubIssueLabel.objects.create(
+                        name=label.name
+                    )
+                    label_objects[label.name] = label_obj
+                label_list.append(label_obj)
+            # add the labels to the issue object:
+            if label_list:
+                issue_obj.labels.set(label_list)
+
