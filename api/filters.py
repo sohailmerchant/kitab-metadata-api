@@ -1,41 +1,93 @@
-import regex
-from openiti.helper.ara import normalize_ara_light
+"""This module contains filters defined for specific views.
 
+Filters allow specifying values for specific fields;
+only results that match will be displayed. 
+
+Documentation: https://www.django-rest-framework.org/api-guide/filtering/
+"""
+
+import regex
+# NB: use regex for regular expressions instead of re here,
+#     because re does not consider Arabic vowels word characters (\w):
+#     regex.findall("\w+", "أَلِفٌ")    # result: ['أَلِفٌ']
+#     re.findall("\w+", "أَلِفٌ")       # result: ['أ', 'ل', 'ف']
 
 from django_filters import rest_framework as django_filters
 from rest_framework import filters
 
 from .models import Author, PersonName, Text, Version, CorpusInsights, ReleaseVersion, TextReuseStats
+
+# normalization functions:
+from openiti.helper.ara import normalize_ara_light
 from api.util.betacode import betacodeToSearch
+
+
+########################### FILTER HELPER CLASSES ####################################
+
+class NumberInFilter(django_filters.BaseInFilter, django_filters.NumberFilter):
+    """
+    Create a filter that allows comma-separated numbers in API call
+    https://django-filter.readthedocs.io/en/latest/ref/filters.html#baseinfilter
+    """
+    pass  # no need to do anything more than this!
+
+
+class CharInFilter(django_filters.BaseInFilter, django_filters.CharFilter):
+    """
+    Create a filter that allows comma-separated strings in API call
+    https://django-filter.readthedocs.io/en/latest/ref/filters.html#baseinfilter
+    """
+    pass  # no need to do anything more than this!
+
+
+class NumberRangeFilter(django_filters.BaseRangeFilter, django_filters.NumberFilter):
+    """
+    Create a filter that allows comma-separated range in API call
+    https://django-filter.readthedocs.io/en/latest/ref/filters.html#baserangefilter
+    """
+    pass  # no need to do anything more than this!
+
+
+########################### SEARCH FILTERS ####################################
+
+
 
 
 def get_terms(query_string,
               findterms=regex.compile(r'"([^"]+)"|(\w+)').findall,
               normspace=regex.compile(r'\s{2,}').sub):
-    ''' Splits the query string into individual keywords, getting rid of unnecessary spaces
-        and grouping quoted words together.
-        Based on: https://www.julienphalip.com/blog/adding-search-to-a-django-site-in-a-snap/
-        Example:
-
+    """Splits the query string into individual keywords, getting rid of unnecessary spaces
+    and grouping quoted words together.
+    Based on: https://www.julienphalip.com/blog/adding-search-to-a-django-site-in-a-snap/
+    
+    Example:
         >>> get_terms(' some random words "with quotes " and spaces')
         ['some', 'random', 'words', 'with quotes', 'and', 'spaces']
-
-    '''
+    """
     return [normspace(' ', (t[0] or t[1]).strip()) for t in findterms(query_string)]
 
 
 class CustomSearchFilter(filters.SearchFilter):
-    """This custom search filter allows for normalization of the search terms."""
+    """This custom search filter allows for normalization of the search terms,
+    and allows grouping search terms using (double) quotes.
+    
+    Normalization is the default behaviour; if you want to switch it off, 
+    add "normalize=False" to your query
+    """
 
     def get_search_terms(self, request):
         """Override the default way Django gets the search terms;
+        Add normalization + term grouping
         """
         # get the search string in the standard Django way:
         params = request.query_params.get(self.search_param, '')
-        # normalize the search string if the query string does not contain "&normalize=False":
+        
+        # normalize the search string:
+        # (if the query string does not contain "&normalize=False")
         normalize_query = request.query_params.get('normalize', '')
         if normalize_query.lower() != "false":
             params = normalize_ara_light(betacodeToSearch(params))
+        
         # divide the search string into search terms (grouping words between parentheses):
         terms = get_terms(params)
 
@@ -89,45 +141,22 @@ class VersionSearchFilter(CustomSearchFilter):
         return search_fields
     
 
-########################### FILTER HELPER CLASSES ####################################
-
-class NumberInFilter(django_filters.BaseInFilter, django_filters.NumberFilter):
-    """
-    Create a filter that allows comma-separated numbers in API call
-    https://django-filter.readthedocs.io/en/latest/ref/filters.html#baseinfilter
-    """
-    pass  # no need to do anything more than this!
-
-
-class CharInFilter(django_filters.BaseInFilter, django_filters.CharFilter):
-    """
-    Create a filter that allows comma-separated strings in API call
-    https://django-filter.readthedocs.io/en/latest/ref/filters.html#baseinfilter
-    """
-    pass  # no need to do anything more than this!
-
-
-class NumberRangeFilter(django_filters.BaseRangeFilter, django_filters.NumberFilter):
-    """
-    Create a filter that allows comma-separated range in API call
-    https://django-filter.readthedocs.io/en/latest/ref/filters.html#baserangefilter
-    """
-    pass  # no need to do anything more than this!
 
 
 ########################### VIEW FILTER CLASSES ####################################
 
 class VersionFilter(django_filters.FilterSet):
-    """Define the filter fields that can be looked up for versions
+    """Define the fields by which versions objects can be filtered.
 
     The variable name will be used in the query in the URL;
     the field name is the name of the field in the model;
-    and the lookup_expr defines which lookup method must be used (lt = less than, gt = greater than,
+    and the lookup_expr defines which lookup method must be used 
+        (lt = less than, gt = greater than,
         icontains = case insensitive substring)
 
     # TO DO: find out how we can intercept the querystring and normalize it as we do in the search query
 
-    E.g., 
+    Examples: 
 
     http://127.0.0.1:8000/2022.2.7/version/all/?died_after_AH=309&died_before_AH=311
     http://127.0.0.1:8000/2022.2.7/version/all/?title_ar=تاريخ
@@ -235,14 +264,6 @@ class VersionFilter(django_filters.FilterSet):
         field_name="text__tags", lookup_expr='icontains',
         label="Tags related to the text")  # /?tags=_SHICR
     
-    
-
-
-
-    
-
-
-
     class Meta:
         model = Version
         # additional fields with the default lookup ("exact"):
@@ -252,7 +273,7 @@ class VersionFilter(django_filters.FilterSet):
 
 
 class AuthorFilter(django_filters.FilterSet):
-    """Define the filter fields that can be looked up for authors
+    """Define the fields by which author objects can be filtered.
 
     The variable name will be used in the query in the URL;
     the field name is the name of the field in the model;
@@ -266,47 +287,46 @@ class AuthorFilter(django_filters.FilterSet):
     http://127.0.0.1:8000/author/all/?author_uri=0310Tabari
 
     """
-    #author_ar_contains = django_filters.CharFilter(field_name="author_ar", lookup_expr='icontains')
-    #author_lat_contains = django_filters.CharFilter(field_name="author_lat", lookup_expr='icontains')
-    author_ar = django_filters.CharFilter(
-        field_name="author_ar", lookup_expr='icontains')
-    author_lat = django_filters.CharFilter(
-        field_name="author_lat", lookup_expr='icontains')
-    died_after_AH = django_filters.NumberFilter(
-        field_name="date_AH", lookup_expr="gt")  # /?died_after_AH=309
-    died_before_AH = django_filters.NumberFilter(
-        field_name="date_AH", lookup_expr="lt")  # /?died_before_AH=311
-    died_between_AH = NumberRangeFilter(
-        field_name="date_AH", lookup_expr="range")       # /?died_between_AH=309,311
+    author_uri = django_filters.CharFilter(lookup_expr='icontains', 
+        field_name="author_uri", label="Author URI") 
+    author_ar = django_filters.CharFilter(lookup_expr='icontains', 
+        field_name="author_ar", label="Author name (Arabic script)")
+    author_lat = django_filters.CharFilter(lookup_expr='icontains',
+        field_name="author_lat",  label="Author name (Latin script)")
+    died_after_AH = django_filters.NumberFilter(lookup_expr="gt", 
+        field_name="date_AH", label="Author died after (AH)")  # /?died_after_AH=309
+    died_before_AH = django_filters.NumberFilter(lookup_expr="lt", 
+        field_name="date_AH", label="Author died before (AH)")  # /?died_before_AH=311
+    died_between_AH = NumberRangeFilter(lookup_expr="range", 
+        field_name="date_AH", label="Author died between (AH, comma-separated)")       # /?died_between_AH=309,311
 
-    shuhra = django_filters.CharFilter(
-        field_name="name_element__shuhra", lookup_expr='icontains')
-    ism = django_filters.CharFilter(
-        field_name="name_element__ism", lookup_expr='icontains')
-    nasab = django_filters.CharFilter(
-        field_name="name_element__nasab", lookup_expr='icontains')
-    kunya = django_filters.CharFilter(
-        field_name="name_element__kunya", lookup_expr='icontains')
-    laqab = django_filters.CharFilter(
-        field_name="name_element__laqab", lookup_expr='icontains')
-    nisba = django_filters.CharFilter(
-        field_name="name_element__nisba", lookup_expr='icontains')
+    shuhra = django_filters.CharFilter(lookup_expr='icontains', 
+        field_name="name_element__shuhra", label="Author's shuhra")
+    ism = django_filters.CharFilter(lookup_expr='icontains', 
+        field_name="name_element__ism", label="Author's ism")
+    nasab = django_filters.CharFilter(lookup_expr='icontains', 
+        field_name="name_element__nasab", label="Author's nasab")
+    kunya = django_filters.CharFilter(lookup_expr='icontains', 
+        field_name="name_element__kunya", label="Author's kunya")
+    laqab = django_filters.CharFilter(lookup_expr='icontains', 
+        field_name="name_element__laqab", label="Author's laqab")
+    nisba = django_filters.CharFilter(lookup_expr='icontains', 
+        field_name="name_element__nisba", label="Author's nisba")
 
-    text_title_ar = django_filters.CharFilter(
-        field_name="text__titles_ar", lookup_expr='icontains')
-    text_title_lat = django_filters.CharFilter(
-        field_name="text__titles_lat", lookup_expr='icontains')
+    text_title_ar = django_filters.CharFilter(lookup_expr='icontains', 
+        field_name="text__titles_ar", label="Title of text (Arabic script)")
+    text_title_lat = django_filters.CharFilter(lookup_expr='icontains', 
+        field_name="text__titles_lat", label="Title of text (Latin script)")
 
     class Meta:
         model = Author
         # additional fields with the default lookup ("exact"):
-        #fields = ["author_uri", "author_lat", "author_ar", "date_AH"]
-        fields = ["author_uri", "date_AH", "id"]
+        fields = ["date_AH", "id"]
 
 
 
 class TextFilter(django_filters.FilterSet):
-    """Define the filter fields that can be looked up for texts
+    """Define the fields by which text objects can be filtered.
 
     The variable name will be used in the query in the URL;
     the field name is the name of the field in the model;
@@ -315,109 +335,134 @@ class TextFilter(django_filters.FilterSet):
 
     E.g., 
     http://127.0.0.1:8000/text/?died_after_AH=309&died_before_AH=310
-    http://127.0.0.1:8000/author/?text_title_ar=تاريخ
+    http://127.0.0.1:8000/author/?title_ar=تاريخ
     http://127.0.0.1:8000/author/?date_AH=310
     http://127.0.0.1:8000/author/?author_uri=0310Tabari
 
     """
-    #author_ar_contains = django_filters.CharFilter(field_name="author_ar", lookup_expr='icontains')
-    #author_lat_contains = django_filters.CharFilter(field_name="author_lat", lookup_expr='icontains')
-    title_ar = django_filters.CharFilter(
-        field_name="text__titles_ar", lookup_expr='icontains')
-    title_lat = django_filters.CharFilter(
-        field_name="text__titles_lat", lookup_expr='icontains')
-    text_type = django_filters.CharFilter(
-        field_name="text_type", lookup_expr='icontains')
+    text_uri = django_filters.CharFilter(lookup_expr='icontains',
+        field_name="text_uri", label="Text URI")
+    title_ar = django_filters.CharFilter(lookup_expr='icontains',
+        field_name="text__titles_ar", label="Title (Arabic script)")
+    title_lat = django_filters.CharFilter(lookup_expr='icontains', 
+        field_name="text__titles_lat", label="Title (Latin script)")
+    text_type = django_filters.CharFilter(lookup_expr='icontains', 
+        field_name="text_type", label="Text type (book/document)")
     tag = django_filters.CharFilter(field_name="tags", lookup_expr='icontains')
 
-    author_ar = django_filters.CharFilter(
-        field_name="author__author_ar", lookup_expr='icontains')
-    author_lat = django_filters.CharFilter(
-        field_name="author__author_lat", lookup_expr='icontains')
-    author_died_after_AH = django_filters.NumberFilter(
-        field_name="author__date_AH", lookup_expr="gt")  # /?died_after_AH=309
-    author_died_before_AH = django_filters.NumberFilter(
-        field_name="author__date_AH", lookup_expr="lt")  # /?died_before_AH=311
-    author_died_between_AH = NumberRangeFilter(
-        field_name="author__date_AH", lookup_expr="range")       # /?died_between_AH=309,311
+    author_ar = django_filters.CharFilter(lookup_expr='icontains', 
+        field_name="author__author_ar", label="Author's name (Arabic script)")
+    author_lat = django_filters.CharFilter(lookup_expr='icontains', 
+        field_name="author__author_lat", label="Author's name (Latin script)")
+    author_died_after_AH = django_filters.NumberFilter(lookup_expr="gt",          # /?died_after_AH=309
+        field_name="author__date_AH", label="Author died after the hijrī year")  
+    author_died_before_AH = django_filters.NumberFilter(lookup_expr="lt",         # /?died_before_AH=311
+        field_name="author__date_AH", label="Author died before the hijrī year")  
+    author_died_between_AH = NumberRangeFilter(lookup_expr="range",               # /?died_between_AH=309,311
+        field_name="author__date_AH", label="Author died between the hijrī years (comma-separated)")       
 
-    author_shuhra = django_filters.CharFilter(
-        field_name="author__name_element__shuhra", lookup_expr='icontains')
-    author_ism = django_filters.CharFilter(
-        field_name="author__name_element__ism", lookup_expr='icontains')
-    author_nasab = django_filters.CharFilter(
-        field_name="author__name_element__nasab", lookup_expr='icontains')
-    author_kunya = django_filters.CharFilter(
-        field_name="author__name_element__kunya", lookup_expr='icontains')
-    author_laqab = django_filters.CharFilter(
-        field_name="author__name_element__laqab", lookup_expr='icontains')
-    author_nisba = django_filters.CharFilter(
-        field_name="author__name_element__nisba", lookup_expr='icontains')
+    author_shuhra = django_filters.CharFilter(lookup_expr='icontains', 
+        field_name="author__name_element__shuhra", label="Author's shuhra")
+    author_ism = django_filters.CharFilter(lookup_expr='icontains', 
+        field_name="author__name_element__ism", label="Author's ism")
+    author_nasab = django_filters.CharFilter(lookup_expr='icontains', 
+        field_name="author__name_element__nasab", label="Author's nasab")
+    author_kunya = django_filters.CharFilter(lookup_expr='icontains', 
+        field_name="author__name_element__kunya", label="Author's kunya")
+    author_laqab = django_filters.CharFilter(lookup_expr='icontains', 
+        field_name="author__name_element__laqab", label="Author's laqab")
+    author_nisba = django_filters.CharFilter(lookup_expr='icontains', 
+        field_name="author__name_element__nisba", label="Author's nisba")
 
-    related_text_title_lat = django_filters.CharFilter(
-        field_name="related_texts__titles_lat", lookup_expr='icontains')
+    related_text_title_lat = django_filters.CharFilter(lookup_expr='icontains', 
+        field_name="related_texts__titles_lat", 
+        label="Title of a related text (commentary, translation; Latin script)")
+    related_text_title_ar = django_filters.CharFilter(lookup_expr='icontains', 
+        field_name="related_texts__titles_ar", 
+        label="Title of a related text (commentary, translation; Arabic script)")
 
     class Meta:
         model = Text
         # additional fields with the default lookup ("exact"):
         #fields = ["author_uri", "author_lat", "author_ar", "date_AH"]
-        fields = ["text_uri", "id"]
+        fields = ["id"]
 
 
 class TextReuseFilter(django_filters.FilterSet):
-    """Filters for views based on the TextReuseStats model"""
+    """Filters for views based on the TextReuseStats model
+    
+    Examples:
+    http://127.0.0.1:7000/2022.2.7/text-reuse-stats/?book_1=Tabari  # any part of the version URI
+    http://127.0.0.1:7000/2022.2.7/text-reuse-stats/?book_2=Shamela # any part of the version URI
+    http://127.0.0.1:7000/2022.2.7/text-reuse-stats/?instances_count_gt=500  # pairs with more than 500 text reuse instances
+    http://127.0.0.1:7000/2022.2.7/text-reuse-stats/?instances_count_range_min=500&instances_count_range_max=600
+    http://127.0.0.1:7000/2022.2.7/text-reuse-stats/?book2_words_matched_gt=100000 # pairs with more than 100.000 words matched in book 2
+    http://127.0.0.1:7000/2022.2.7/text-reuse-stats/?book1_pct_words_matched_gt=0.8 # pairs with more than 80% of book 1 in book 2
+    """
     # filter on version URI: 
-    book_1 = django_filters.CharFilter(
-        field_name="book_1__version__version_uri", lookup_expr='icontains')
-    book_2 = django_filters.CharFilter(
-        field_name="book_2__version__version_uri", lookup_expr='icontains')
+    book_1 = django_filters.CharFilter(lookup_expr='icontains', 
+        field_name="book_1__version__version_uri", label="Version URI of book 1")
+    book_2 = django_filters.CharFilter(lookup_expr='icontains', 
+        field_name="book_2__version__version_uri", label="Version URI of book 2")
     
     # filter on the number of text reuse instances:
-    instances_count_gt = django_filters.NumberFilter(
-        field_name="instances_count", lookup_expr="gt")
-    instances_count_lt = django_filters.NumberFilter(
-        field_name="instances_count", lookup_expr="lt")
-    instances_count_range = django_filters.NumericRangeFilter(
-        field_name="instances_count", lookup_expr="range")
+    instances_count_gt = django_filters.NumberFilter(lookup_expr="gt", 
+        field_name="instances_count", label="Minimum number of text reuse instances")
+    instances_count_lt = django_filters.NumberFilter(lookup_expr="lt",
+        field_name="instances_count", label="Maximum number of text reuse instances")
+    instances_count_range = django_filters.NumericRangeFilter(lookup_expr="range",
+        field_name="instances_count", label="Number of text reuse instances between")
     # NB: example of the range filter in url query string: 
     # ?instances_count_range_min=10&instances_count_range_max=80
 
     # filter on the number of words in book 1 that are matched in book 2:
-    book1_words_matched_gt = django_filters.NumberFilter(
-        field_name="book1_words_matched", lookup_expr="gt")
-    book1_words_matched_lt = django_filters.NumberFilter(
-        field_name="book1_words_matched", lookup_expr="lt")
-    book1_words_matched_range = django_filters.NumericRangeFilter(
-        field_name="book1_words_matched", lookup_expr="range")
+    book1_words_matched_gt = django_filters.NumberFilter(lookup_expr="gt", 
+        field_name="book1_words_matched_max", 
+        label="Minimum number of words of book 1 found in text reuse instances with book 2")
+    book1_words_matched_lt = django_filters.NumberFilter(lookup_expr="lt",
+        field_name="book1_words_matched_min",
+        label="Maximum number of words of book 1 found in text reuse instances with book 2")
+    book1_words_matched_range = django_filters.NumericRangeFilter(lookup_expr="range",
+        field_name="book1_words_matched_between", 
+        label="Number of words of book 1 found in text reuse instances with book 2 (between)")
 
     # filter on the number of words in book 2 that are matched in book 1:
-    book2_words_matched_gt = django_filters.NumberFilter(
-        field_name="book2_words_matched", lookup_expr="gt")
-    book2_words_matched_lt = django_filters.NumberFilter(
-        field_name="book2_words_matched", lookup_expr="lt")
-    book2_words_matched_range = django_filters.NumericRangeFilter(
-        field_name="book2_words_matched", lookup_expr="range")
+    book2_words_matched_gt = django_filters.NumberFilter(lookup_expr="gt", 
+        field_name="book2_words_matched_max", 
+        label="Minimum number of words of book 2 found in text reuse instances with book 1")
+    book2_words_matched_lt = django_filters.NumberFilter(lookup_expr="lt",
+        field_name="book2_words_matched_min",
+        label="Maximum number of words of book 2 found in text reuse instances with book 1")
+    book2_words_matched_range = django_filters.NumericRangeFilter(lookup_expr="range",
+        field_name="book2_words_matched_between", 
+        label="Number of words of book 2 found in text reuse instances with book 1 (between)")
 
     # filter on the percentage of words in book 1 that are matched in book 2:
-    book1_pct_words_matched_gt = django_filters.NumberFilter(
-        field_name="book1_pct_words_matched", lookup_expr="gt")
-    book1_pct_words_matched_lt = django_filters.NumberFilter(
-        field_name="book1_pct_words_matched", lookup_expr="lt")
-    book1_pct_words_matched_range = django_filters.NumericRangeFilter(
-        field_name="book1_pct_words_matched", lookup_expr="range")
+    book1_pct_words_matched_gt = django_filters.NumberFilter(lookup_expr="gt", 
+        field_name="book1_pct_matched_max", 
+        label="Minimum percentage of words of book 1 found in text reuse instances with book 2")
+    book1_pct_words_matched_lt = django_filters.NumberFilter(lookup_expr="lt",
+        field_name="book1_pct_matched_min",
+        label="Maximum percentage of words of book 1 found in text reuse instances with book 2")
+    book1_pct_words_matched_range = django_filters.NumericRangeFilter(lookup_expr="range",
+        field_name="book1_pct_matched_between", 
+        label="Percentage of words of book 1 found in text reuse instances with book 2 (between)")
 
     # filter on the percentage of words in book 2 that are matched in book 1:
-    book2_pct_words_matched_gt = django_filters.NumberFilter(
-        field_name="book2_pct_words_matched", lookup_expr="gt")
-    book2_pct_words_matched_lt = django_filters.NumberFilter(
-        field_name="book2_pct_words_matched", lookup_expr="lt")
-    book2_pct_words_matched_range = django_filters.NumericRangeFilter(
-        field_name="book2_pct_words_matched", lookup_expr="range")
+    book2_pct_words_matched_gt = django_filters.NumberFilter(lookup_expr="gt", 
+        field_name="book2_pct_matched_max", 
+        label="Minimum percentage of words of book 2 found in text reuse instances with book 1")
+    book2_pct_words_matched_lt = django_filters.NumberFilter(lookup_expr="lt",
+        field_name="book2_pct_matched_min",
+        label="Maximum percentage of words of book 2 found in text reuse instances with book 1")
+    book2_pct_words_matched_range = django_filters.NumericRangeFilter(lookup_expr="range",
+        field_name="book2_pct_matched_between", 
+        label="Percentage of words of book 2 found in text reuse instances with book 1 (between)")
 
     class Meta:
         model = TextReuseStats
         # additional fields with the default lookup ("exact"):
-        fields = []
+        fields = ["id"]
 
 class ReleaseVersionFilter(django_filters.FilterSet):
     """Define the filter fields that can be looked up for versions

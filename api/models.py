@@ -200,10 +200,6 @@ class TextReuseStats(models.Model):
     book2_words_matched = models.IntegerField(null=True, blank=True)
     book1_pct_words_matched = models.DecimalField(null=True, blank=True, max_digits=5, decimal_places=2)
     book2_pct_words_matched = models.DecimalField(null=True, blank=True, max_digits=5, decimal_places=2)
-    # book_1 = models.ForeignKey(Version, to_field='version_code', on_delete=models.DO_NOTHING,
-    #                            related_name='textreuse_b1', related_query_name="textreuse_b1")
-    # book_2 = models.ForeignKey(Version, to_field='version_code', on_delete=models.DO_NOTHING, 
-    #                            related_name='textreuse_b2', related_query_name="textreuse_b2")
     book_1 = models.ForeignKey("ReleaseVersion", on_delete=models.DO_NOTHING,
                                related_name='textreuse_b1', related_query_name="textreuse_b1")
     book_2 = models.ForeignKey("ReleaseVersion", on_delete=models.DO_NOTHING, 
@@ -286,11 +282,11 @@ class GitHubIssue(models.Model):
     state = models.CharField(max_length=6)  # open/closed
     labels = models.ManyToManyField("GitHubIssueLabel", blank=True, 
                                     related_name='github_issues', related_query_name="github_issue")
-    version = models.ForeignKey(Version, on_delete=models.DO_NOTHING, blank=True, null=True,
+    about_version = models.ForeignKey(Version, on_delete=models.DO_NOTHING, blank=True, null=True,
                                 related_name='github_issues', related_query_name="github_issue")
-    text = models.ForeignKey(Text, on_delete=models.DO_NOTHING, blank=True, null=True,
+    about_text = models.ForeignKey(Text, on_delete=models.DO_NOTHING, blank=True, null=True,
                              related_name='github_issues', related_query_name="github_issue")
-    author = models.ForeignKey(Author, on_delete=models.DO_NOTHING, blank=True, null=True,
+    about_author = models.ForeignKey(Author, on_delete=models.DO_NOTHING, blank=True, null=True,
                                related_name='github_issues', related_query_name="github_issue")
 
 

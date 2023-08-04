@@ -1,3 +1,8 @@
+"""
+This module maps the API endpoint URLs to views that will send the requests
+to the database and return a JSON response.
+"""
+
 from django.urls import path
 from . import views
 
@@ -7,14 +12,14 @@ urlpatterns = [
     # Text reuse statistics:
 
     path('all-releases/text-reuse-stats/<str:book1>_<str:book2>/', views.get_pair_text_reuse_stats, name='text-reuse-pair'),
-    path('all-releases/text-reuse-stats/all/', views.GetAllTextReuseStats.as_view(), name='all-text-reuse'),
-    path('all-releases/text-reuse-stats/', views.GetAllTextReuseStats.as_view(), name='all-text-reuse'),
-    path('all-releases/text-reuse-stats/<str:book1>/', views.GetAllTextReuseStatsB1.as_view(), name='all-text-reuse'),
+    path('all-releases/text-reuse-stats/all/', views.TextReuseStatsListView.as_view(), name='all-text-reuse'),
+    path('all-releases/text-reuse-stats/', views.TextReuseStatsListView.as_view(), name='all-text-reuse'),
+    path('all-releases/text-reuse-stats/<str:book1>/', views.TextReuseStatsB1ListView.as_view(), name='all-text-reuse'),
 
     path('<str:release_code>/text-reuse-stats/<str:book1>_<str:book2>/', views.get_pair_text_reuse_stats, name='text-reuse-pair'),
-    path('<str:release_code>/text-reuse-stats/all/', views.GetAllTextReuseStats.as_view(), name='all-text-reuse'),
-    path('<str:release_code>/text-reuse-stats/', views.GetAllTextReuseStats.as_view(), name='all-text-reuse'),
-    path('<str:release_code>/text-reuse-stats/<str:book1>/', views.GetAllTextReuseStatsB1.as_view(), name='all-text-reuse'),
+    path('<str:release_code>/text-reuse-stats/all/', views.TextReuseStatsListView.as_view(), name='all-text-reuse'),
+    path('<str:release_code>/text-reuse-stats/', views.TextReuseStatsListView.as_view(), name='all-text-reuse'),
+    path('<str:release_code>/text-reuse-stats/<str:book1>/', views.TextReuseStatsB1ListView.as_view(), name='all-text-reuse'),
 
     # release version endpoints:
 
@@ -25,15 +30,6 @@ urlpatterns = [
     path('<str:release_code>/version/all/', views.VersionListView.as_view(), name='all-releases-all-versions'),
     path('<str:release_code>/version/', views.VersionListView.as_view(), name='all-releases-all-versions'),
     path('<str:release_code>/version/<str:version_code>/', views.get_version, name='one-release-one-version'),
-
-    #path('all-releases/version/all/', views.get_release_version.as_view(), name='all-releases-all-versions'),
-    #path('all-releases/version/', views.get_release_version.as_view(), name='all-releases-all-versions'),
-    #path('all-releases/version/<str:version_code>/', views.get_release_version.as_view(), name='all-releases-one-version'), # multiple results possible!
-
-    #path('<str:release_code>/version/all/', views.get_release_version.as_view(), name='one-release-all-versions'),
-    #path('<str:release_code>/version/', views.get_release_version.as_view(), name='one-release-all-versions'),
-    #path('<str:release_code>/version/<str:version_code>/', views.get_release_version, name='one-release-one-version'),
-
 
     # text endpoints:  # TO DO: use other view for the texts  get_release_text
 
@@ -82,28 +78,48 @@ urlpatterns = [
 
     # Person names endpoints: 
 
-    path('person-names/all/', views.PersonNameListView.as_view(), name='person-names-all'),
+    path('person-name/all/', views.PersonNameListView.as_view(), name='person-names-all'),
 
-    # # version endpoints: (a confusing category - we should use the releaseMeta as starting point!)
+    # GitHub Issues endpoints (temporary): TO DO: version this endpoint + create view for single issue?
 
-    # path('all-releases/version/', views.VersionListView.as_view(), name='all-releases-all-versions'),
-    # path('all-releases/version/all/', views.VersionListView.as_view(), name='all-releases-all-versions'),
-    # path('all-releases/version/<str:version_code>/', views.get_version, name='all-releases-one-version'),
-
-    # path('<str:release_code>/version/', views.VersionListView.as_view(), name='one-release-all-versions'),
-    # path('<str:release_code>/version/all/', views.VersionListView.as_view(), name='one-release-all-versions'),
-    # path('<str:release_code>/version/<str:version_code>/', views.get_version, name='one-release-one-version'),
-
-
-    #path('book-list/', views.book_list, name='book-list'),
-    #path('book-detail/<str:pk>/', views.bookDetail, name='book-detail'),
-    #path('book-create/', views.book_create, name='book-create')
-
-
+    path('github-issue/all/', views.GitHubIssuesListView.as_view(), name='github-issues'),
 ]
 
 
+
+
+
+
+
+
+
+### OLD PATHS, NOT IN USE ANYMORE ###
 # urlpatterns = [
+
+#     # version endpoints: (a confusing category - we should use the releaseMeta as starting point!)
+
+#     path('all-releases/version/', views.VersionListView.as_view(), name='all-releases-all-versions'),
+#     path('all-releases/version/all/', views.VersionListView.as_view(), name='all-releases-all-versions'),
+#     path('all-releases/version/<str:version_code>/', views.get_version, name='all-releases-one-version'),
+
+#     path('<str:release_code>/version/', views.VersionListView.as_view(), name='one-release-all-versions'),
+#     path('<str:release_code>/version/all/', views.VersionListView.as_view(), name='one-release-all-versions'),
+#     path('<str:release_code>/version/<str:version_code>/', views.get_version, name='one-release-one-version'),
+
+#     path('all-releases/version/all/', views.get_release_version.as_view(), name='all-releases-all-versions'),
+#     path('all-releases/version/', views.get_release_version.as_view(), name='all-releases-all-versions'),
+#     path('all-releases/version/<str:version_code>/', views.get_release_version.as_view(), name='all-releases-one-version'), # multiple results possible!
+
+#     path('<str:release_code>/version/all/', views.get_release_version.as_view(), name='one-release-all-versions'),
+#     path('<str:release_code>/version/', views.get_release_version.as_view(), name='one-release-all-versions'),
+#     path('<str:release_code>/version/<str:version_code>/', views.get_release_version, name='one-release-one-version'),
+
+#     path('book-list/', views.book_list, name='book-list'),
+#     path('book-detail/<str:pk>/', views.bookDetail, name='book-detail'),
+#     path('book-create/', views.book_create, name='book-create')
+
+
+
 #     path('', views.api_overview, name='api-overview'),
 #     path('corpusinsights/', views.get_corpus_insights, name='corpusinsights'),
 #     path('author/', views.AuthorListView.as_view(), name='author-list-all'),

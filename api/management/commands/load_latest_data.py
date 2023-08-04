@@ -721,9 +721,9 @@ def load_github_issues():
             issue_obj, created = GitHubIssue.objects.update_or_create(
                 number=issue.number,
                 defaults=dict(
-                    author=author,
-                    text=text,
-                    version=version,
+                    about_author=author,
+                    about_text=text,
+                    about_version=version,
                     title=issue.title,
                     state=issue.state
                 )
