@@ -23,6 +23,7 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from rest_framework import filters
+from rest_framework import serializers
 from django_filters import rest_framework as django_filters
 
 
@@ -36,6 +37,18 @@ from .serializers import TextSerializer, VersionSerializer, PersonNameSerializer
                          GitHubIssueSerializer
 from .filters import AuthorFilter, VersionFilter, TextFilter, TextReuseFilter, ReleaseVersionFilter, \
                      CustomSearchFilter, VersionSearchFilter
+
+# list all parameters (apart from view-specific filters)
+# that are allowed in a URL's querystring
+# (other parameters will throw an error):
+allowed_parameters = [
+    "search", 
+    "normalize",
+    "ordering", 
+    "page", 
+    "page_size",
+    "fields"
+] 
 
 
 # fields to be excluded from search (because they are not string fields):
@@ -203,11 +216,14 @@ def get_version(request, version_code, release_code=None):
     try:
         if release_code:
             version = Version.objects\
-                .filter(version_code=version_code, release_version__release_info__release_code=release_code)\
+                .filter(version_code=version_code, 
+                        release_version__release_info__release_code=release_code)\
                 .first()  # multiple (identical) results will be returned because of the join strategy; take the first one
-            serializer = VersionSerializer(version, many=False, 
-                                           context=dict(release_code=release_code)  # pass the release code to the serializer
-                                           )
+            serializer = VersionSerializer(
+                version,
+                many=False,
+                context=dict(release_code=release_code)  # pass the release code to the serializer
+            )
         else:
             version = Version.objects.get(version_code=version_code)
             serializer = VersionSerializer(version, many=False)
@@ -304,6 +320,17 @@ class AuthorListView(CustomListView):
                 .distinct()
         else:
             queryset = Author.objects.all()
+
+        # check if any of the parameters is invalid:
+        declared_filters = list(self.filterset_class.declared_filters.keys())
+        all_allowed_parameters = allowed_parameters + declared_filters
+        for p in self.request.GET:
+            if p not in all_allowed_parameters:
+                msg = {"message": "Invalid parameter: "+ p}
+                res = serializers.ValidationError(msg)
+                res.status_code=200
+                raise res
+
         return queryset
 
 
@@ -359,27 +386,59 @@ class VersionListView(CustomListView):
         return context
 
     def get_queryset(self):
-        """Get the queryset, based on arguments provided in the URL"""
-        try:
-            release_code = self.kwargs['release_code']
-        except: 
-            release_code = None
+        """Get the queryset, based on whether or not
+        the version_code is defined in the URL"""
+
+        # check if any of the parameters is invalid:
+        declared_filters = list(self.filterset_class.declared_filters.keys())
+        all_allowed_parameters = allowed_parameters + declared_filters
+        for p in self.request.GET:
+            if p not in all_allowed_parameters:
+                msg = {"message": "Invalid parameter "+ p}
+                res = serializers.ValidationError(msg)
+                res.status_code=200
+                raise res
+            else:
+                print(p, ": parameter allowed")
+
+        # get the release and version code from the URL:
+        # try:
+        #     release_code = self.kwargs['release_code']
+        # except: 
+        #     release_code = None
+        # try:
+        #     version_code = self.kwargs['version_code']
+        # except:
+        #     version_code = None
+        # # filter the version objects based on release and version codes:
+        # if release_code:
+        #     if version_code: # this will in fact be handled by the get_release_version function
+        #         queryset = Version.objects\
+        #             .filter(version_code=version_code, release_version__release_info__release_code=release_code)\
+        #             .distinct()
+        #     else: # this will now in fact be handled by the ReleaseVersionListView
+        #         queryset = Version.objects\
+        #             .filter(release_version__release_info__release_code=release_code)\
+        #             .distinct()
+        # else:
+        #     if version_code:
+        #         queryset = Version.objects\
+        #             .filter(version_code=version_code)\
+        #             .distinct()
+        #     else:
+        #         queryset = Version.objects.all()
+ 
         try:
             version_code = self.kwargs['version_code']
         except:
             version_code = None
-        print("VERSION_CODE:", version_code)
-        if release_code:
+        if version_code:
             queryset = Version.objects\
-                .filter(release_version__release_info__release_code=release_code)\
+                .filter(version_code=version_code)\
                 .distinct()
         else:
-            if version_code:
-                queryset = Version.objects\
-                    .filter(version_code=version_code)\
-                    .distinct()
-            else:
-                queryset = Version.objects.all()
+            queryset = Version.objects.all()
+
         return queryset
 
 
@@ -421,7 +480,20 @@ class TextListView(CustomListView):
     def get_queryset(self):
         """Filter the text objects that are in a specific release
         (if a release code is provided in the query URL)"""
-        # check if the URL contained a release code:
+
+        # check if any of the parameters is invalid:
+        declared_filters = list(self.filterset_class.declared_filters.keys())
+        all_allowed_parameters = allowed_parameters + declared_filters
+        for p in self.request.GET:
+            if p not in all_allowed_parameters:
+                msg = {"message": "Invalid parameter "+ p}
+                res = serializers.ValidationError(msg)
+                res.status_code=200
+                raise res
+            else:
+                print(p, ": parameter allowed")
+
+        # check if the URL contains a release code:
         try:
             release_code = self.kwargs['release_code']
         except: 
@@ -430,9 +502,10 @@ class TextListView(CustomListView):
         if release_code:
             queryset = Text.objects\
                 .filter(version__release_version__release_info__release_code=release_code)\
-                .distinct()  # if using all, we get the number of rows for the joined table!
+                .distinct()  # if using all, we get the number of rows for the joined table (all identical)!
         else:
             queryset = Text.objects.all()
+
         return queryset
 
 
@@ -500,6 +573,19 @@ class TextReuseStatsListView(CustomListView):
 
     def get_queryset(self):
         """Filter the queryset based on the release_code and/or book1 elements in the URL"""
+
+        # check if any of the parameters is invalid:
+        declared_filters = list(self.filterset_class.declared_filters.keys())
+        all_allowed_parameters = allowed_parameters + declared_filters
+        for p in self.request.GET:
+            if p not in all_allowed_parameters:
+                msg = {"message": "Invalid parameter "+ p}
+                res = serializers.ValidationError(msg)
+                res.status_code=200
+                raise res
+            else:
+                print(p, ": parameter allowed")
+
         # check whether the URL contains a release_code:
         try:
             release_code = self.kwargs['release_code']
@@ -534,6 +620,7 @@ class TextReuseStatsListView(CustomListView):
             else:
                 print("book1 nor release defined")
                 queryset = TextReuseStats.objects.all()
+
         return queryset
 
 class TextReuseStatsB1ListView(TextReuseStatsListView):
@@ -563,16 +650,26 @@ def get_pair_text_reuse_stats(request, book1, book2, release_code=None):
 
 #class ReleaseVersionListView(generics.ListAPIView):
 class ReleaseVersionListView(CustomListView):
+    """Display the  release version objects in the database as a paginated list.
 
-    search_fields = ['analysis_priority', 'annotation_status', 'tags', 'notes', 
-                     'release_info__release_code', 
-                     'version__version_uri',  
-                     'version__edition__ed_info', 
-                     'version__text__titles_ar', 'version__text__titles_lat', 
-                     'version__text__tags', 'version__text__notes', 
-                     'version__text__author__author_uri', 
-                     'version__text__author__author_ar', 'version__text__author__author_lat', 
-                     'version__text__author__notes']
+    Filter, sort and search are enabled, and fields can be selected.
+
+    Examples: 
+        /version/all/
+        /version/all/?fields=version_uri
+        /version/all/?search=JK000001
+        /version/all/?ordering=version_uri
+        /version/all/?page=2
+        /version/all/?page_size=100     # default: 10, max: 200
+        /version/all/?fields=book_id&search=JK000001&page=2
+    """
+
+    search_fields = [
+        'analysis_priority', 'annotation_status',
+        'version__version_uri',        # also contains the version_code, source_coll__code, text_uri, author_uri and text__author__date_str!
+        "version__text__titles_ar", "version__text__titles_lat", # contain all attested titles in a single string
+        "version__text__author__author_ar", "version__text__author__author_lat", # contains all attested author names (incl. from the name elements)
+        ]
 
     serializer_class = ReleaseVersionSerializer
 
@@ -583,16 +680,30 @@ class ReleaseVersionListView(CustomListView):
 
     def get_queryset(self):
         """Filter the ReleaseVersion objects, based on the release_code in the query URL"""
+
+        # check if any of the parameters is invalid:
+        declared_filters = list(self.filterset_class.declared_filters.keys())
+        all_allowed_parameters = allowed_parameters + declared_filters
+        for p in self.request.GET:
+            if p not in all_allowed_parameters:
+                msg = {"message": "Invalid parameter: "+ p}
+                res = serializers.ValidationError(msg)
+                res.status_code=200
+                raise res
+
+        # get the release code from the URL:
         try:
             release_code = self.kwargs['release_code']
         except: 
             release_code = None
+        # filter the ReleaseVersion objects based on the release code:
         if release_code:
             queryset = ReleaseVersion.objects\
                 .filter(release_info__release_code=release_code)\
                 .distinct()
         else:
             queryset = ReleaseVersion.objects.all()
+
         return queryset
 
 
@@ -674,17 +785,31 @@ class GitHubIssuesListView(CustomListView):
 #     return Response(serializer.data)
 
 
-# @api_view(['GET'])
-# def get_release_version(request, version_code, release_code=None):
-#     """Get a text version by its version_code and release_code"""
+@api_view(['GET'])
+def get_release_version(request, version_code, release_code=None):
+    """Get a single release version by its version_code and release_code
+    """
 
-#     try:
-#         if release_code:
-#             release_version = ReleaseVersion.objects.get(release_info__release_code=release_code, version__version_code=version_code)
-#         else:
-#             release_version = ReleaseVersion.objects.get(release_info__release_code=release_code, version__version_code=version_code)
-#         serializer = ReleaseVersionSerializer(release_version, many=False)
-#         return Response(serializer.data)
-#     except Text.DoesNotExist:
-#         raise Http404
+    # if user provided a full version URI, extract the version_code
+    if "-" in version_code: 
+        version_code = version_code.split("-")[0].split(".")[-1]
+
+    try:
+        if release_code:
+            release_version = ReleaseVersion.objects\
+                .get(version__version_code=version_code,
+                     release_info__release_code=release_code)
+            serializer = ReleaseVersionSerializer(
+                release_version,
+                many=False,
+                context=dict(release_code=release_code)  # pass the release code to the serializer
+            )
+        else:
+            release_version = ReleaseVersion.objects.get(release_info__release_code=release_code, version__version_code=version_code)
+            serializer = ReleaseVersionSerializer(
+                release_version, 
+                many=False)
+        return Response(serializer.data)
+    except Text.DoesNotExist:
+        raise Http404
     

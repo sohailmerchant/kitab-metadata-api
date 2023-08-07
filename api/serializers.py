@@ -722,27 +722,63 @@ class TextReuseStatsSerializer(serializers.ModelSerializer):
 
 
 class ReleaseVersionSerializer(serializers.ModelSerializer):
+    """Serializes the ReleaseVersion table in the same way as the
+    VersionSerializer does. This is necessary because release-version-
+    specific metadata cannot be reliably filtered starting from the
+    Version model for a specific release. 
+    E.g., if one filters the versions based on "pri",
+    all versions that have "pri" priority in at least one release
+    will be returned, even if it has "sec" priority in the 
+    requested release. 
+    """
     version = VersionSerializer(read_only=True)
-    
+
+    def serialize_relations(self, instance):
+        """serialize a version's parts 
+        (for books split into pieces because of their length, like BiharAnwar)"""
+        # select the versions that are part of the current version_instance:
+        parts = ReleaseVersion.objects\
+            .filter(version__part_of__version_uri=instance.version.version_uri)
+        return {"parts": [d.version.version_uri for d in parts]}
+
     def to_representation(self, instance):
+        """Format the result in the same way as the VersionSerializer"""
         json_rep = super().to_representation(instance)
+
         # replace the full release_info dictionary with only the release_code:
         try:
             json_rep["release_code"] = json_rep["release_info"]["release_code"]
-            del json_rep["release_info"]
+            json_rep["release_date"] = json_rep["release_info"]["release_date"]
+            json_rep["zenodo_link"] = json_rep["release_info"]["zenodo_link"]
         except Exception as e:
             print(e)
-        # remove the versions dictionary (nested in the text dictionary):
+        # import json
+        # print(json.dumps(json_rep, indent=2))
+        # extract the relation_version metadata from the result:
+        rel_version = {
+            "release_code": json_rep["release_code"],
+            "release_date": json_rep["release_date"],
+            "zenodo_link": json_rep["zenodo_link"],
+            "char_length": json_rep["char_length"],
+            "tok_length": json_rep["tok_length"],
+            "url": json_rep["url"],
+            "analysis_priority": json_rep["analysis_priority"],
+            "annotation_status": json_rep["annotation_status"],
+            "tags": json_rep["tags"],
+            "notes": json_rep["notes"],
+        }
+        # make the version dictionary the main part of the returned dictionary:
+        json_rep = json_rep["version"]
+
+        # insert the release_version metadata into it:
+        json_rep["release_version"] = rel_version
+
+        # remove the list with all release versions of this version:
         try:
-            del json_rep["version"]["text"]["versions"]
+            del json_rep["release_versions"]
         except Exception as e:
             print(e)
-        # remove the texts dictionary (nested in the author dictionary):
-        try:
-            for i in range(len(json_rep["version"]["text"]["author"])):
-                del json_rep["version"]["text"]["author"][i]["texts"]
-        except Exception as e:
-            print(e)
+
         return json_rep
 
     class Meta:

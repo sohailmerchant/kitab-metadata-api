@@ -247,14 +247,14 @@ class VersionFilter(django_filters.FilterSet):
         field_name="edition__ed_info", lookup_expr='icontains',
         label="All edition-related metadata")
 
-    language = CharInFilter(
-        field_name="language", lookup_expr='in',
+    language = django_filters.CharFilter(
+        field_name="language", lookup_expr='icontains',
         label="Language of the text")
-    analysis_priority = CharInFilter(
-        field_name="release_version__analysis_priority", lookup_expr='in',
+    analysis_priority = django_filters.CharFilter(lookup_expr='icontains',
+        field_name="release_version__analysis_priority",
         label="Analysis priority (pri/sec)")
-    annotation_status = CharInFilter(
-        field_name="release_version__annotation_status", lookup_expr='in',
+    annotation_status = django_filters.CharFilter(
+        field_name="release_version__annotation_status", lookup_expr='icontains',
         label="Annotation status (mARkdown/completed)")
 
     release_tags = django_filters.CharFilter(
@@ -510,10 +510,10 @@ class ReleaseVersionFilter(django_filters.FilterSet):
         field_name="version__language", lookup_expr='in')
     tags = django_filters.CharFilter(
         field_name="version__release_version__tags", lookup_expr='icontains')  # /?tags=_SHICR
-    analysis_priority = CharInFilter(
-        field_name="analysis_priority", lookup_expr='in')
-    annotation_status = CharInFilter(
-        field_name="annotation_status", lookup_expr='in')
+    analysis_priority = django_filters.CharFilter(
+        field_name="analysis_priority", lookup_expr='icontains')
+    annotation_status = django_filters.CharFilter(
+        field_name="annotation_status", lookup_expr='icontains')
 
     title_ar = django_filters.CharFilter(
         field_name="version__text__titles_ar", lookup_expr='icontains')
