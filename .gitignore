@@ -1,5 +1,6 @@
 my_django_environment/
 reuse_data/
+api/util/GitHub personalAccessTokenReadOnly.txt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

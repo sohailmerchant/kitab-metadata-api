@@ -1,3 +1,19 @@
+"""
+This module contains view classes and functions.
+
+Views take web requests as input and return a response;
+in our API, the requests are database queries;
+the response could be an HTML page, 
+but in our API the response is a JSON representation
+(serialization) of the results returned by the database)
+
+Documentation: 
+* https://docs.djangoproject.com/en/4.2/topics/http/views/
+* https://docs.djangoproject.com/en/4.2/topics/class-based-views/
+* https://www.django-rest-framework.org/api-guide/views/#class-based-views
+* https://www.django-rest-framework.org/api-guide/views/#function-based-views
+"""
+
 from django.shortcuts import render
 from django.http import HttpResponse, JsonResponse, Http404
 
@@ -6,124 +22,180 @@ from rest_framework import pagination
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
-from django_filters import rest_framework as django_filters
 from rest_framework import filters
+from rest_framework import serializers
+from django_filters import rest_framework as django_filters
 
 
-from .models import Author, PersonName, Text, Version, CorpusInsights, TextReuseStats, A2BRelation, ReleaseVersion, SourceCollectionDetails, ReleaseInfo, RelationType
-from .serializers import TextSerializer, VersionSerializer, PersonNameSerializer, ReleaseVersionSerializer, AuthorSerializer, TextReuseStatsSerializer, CorpusInsightsSerializer, AllRelationSerializer,  SourceCollectionDetailsSerializer, ReleaseInfoSerializer, ShallowTextReuseStatsSerializer, TextReuseStatsSerializerB1, AllRelationTypesSerializer#, RelationTypeSerializer
-from .filters import AuthorFilter, VersionFilter, TextFilter, TextReuseFilter, ReleaseVersionFilter, CustomSearchFilter, VersionSearchFilter
+from .models import Author, PersonName, Text, Version, CorpusInsights, \
+                    TextReuseStats, A2BRelation, ReleaseVersion, SourceCollectionDetails,\
+                    ReleaseInfo, RelationType, GitHubIssue
+from .serializers import TextSerializer, VersionSerializer, PersonNameSerializer, ReleaseVersionSerializer, \
+                         AuthorSerializer, TextReuseStatsSerializer, CorpusInsightsSerializer, \
+                         AllRelationsSerializer,  SourceCollectionDetailsSerializer, ReleaseInfoSerializer, \
+                         ShallowTextReuseStatsSerializer, TextReuseStatsSerializerB1, AllRelationTypesSerializer, \
+                         GitHubIssueSerializer
+from .filters import AuthorFilter, VersionFilter, TextFilter, TextReuseFilter, ReleaseVersionFilter, \
+                     CustomSearchFilter, VersionSearchFilter
+
+# list all parameters (apart from view-specific filters)
+# that are allowed in a URL's querystring
+# (other parameters will throw an error):
+allowed_parameters = [
+    "search", 
+    "normalize",
+    "ordering", 
+    "page", 
+    "page_size",
+    "fields"
+] 
 
 
-    # path('all-releases/version/all/', views.ReleaseVersionListView.as_view(), name='all-releases-all-versions'),
-    # path('all-releases/version/', views.ReleaseVersionListView.as_view(), name='all-releases-all-versions'),
-    # #path('all-releases/version/<str:version_code>/', views.ReleaseVersionListView.as_view(), name='all-releases-one-version'), # multiple results possible!
-    # path('all-releases/version/<str:version_code>/', views.get_version, name='all-releases-one-version'),
+# fields to be excluded from search (because they are not string fields):
+excl_flds = [
+    # numeric fields:
+    "id", "date", "date_AH", "date_CE", "tok_length", "char_length",
+    # foreign key fields:
+    "text", "name_element", "version", "author", "text", "version_info",
+    "related_persons", "related_places", "related_texts", "place_relations",
+    "person_a", "person_b", "text_a", "text_b",
+    "place_a", "place_b", "relation_type", "parent_type",
+    # related fields:
+    'authormeta', 'textmeta', 'related_person_a', 'related_person_b',
+    "related_text_a", "related_text_b"]
+
+
+
+class CustomPagination(PageNumberPagination):
+    """Add customizable pagination to a list of results.
     
-    # path('<str:release_code>/version/all/', views.ReleaseVersionListView.as_view(), name='one-release-all-versions'),
-    # path('<str:release_code>/version/', views.ReleaseVersionListView.as_view(), name='one-release-all-versions'),
-    # path('<str:release_code>/version/<str:version_code>/', views.get_release_version, name='one-release-one-version'),
+    A specific page can be accessed using the "page=" parameter:
+    http://127.0.0.1:7000/2022.2.7/version/all/?page=12
 
-    # # text endpoints:  # TO DO: use other view for the texts
+    By default, 10 items are displayed per page; the user can change this using the "page_size=" querystring parameter
+    http://127.0.0.1:7000/2022.2.7/version/all/?page_size=50
 
-    # path('all-releases/text/', views.TextListView.as_view(), name='all-releases-all-texts'),
-    # path('all-releases/text/all/', views.TextListView.as_view(), name='all-releases-all-texts'),
-    # path('all-releases/text/<str:text_uri>/', views.get_text, name='all-releases-one-text'),
+    Documentation: https://www.django-rest-framework.org/api-guide/pagination/#pagenumberpagination
+    """
+    # set number of results per page by default to 10:
+    page_size = 10
 
-    # path('<str:release_code>/text/', views.TextListView.as_view(), name='one-release-all-texts'),
-    # path('<str:release_code>/text/all/', views.TextListView.as_view(), name='one-release-all-texts'),
-    # path('<str:release_code>/text/<str:text_uri>/', views.get_text, name='one-release-one-text'),
+    # set a query string parameter that can be used to change the number of items per page:
+    # (e.g., http://127.0.0.1:7000/2022.2.7/version/all/?page_size=50)
+    page_size_query_param = 'page_size'
 
-    # # author endpoints:
+    # set the maximum number of items per page (even if user requests larger page_size):
+    max_page_size = 200
 
-    # path('all-releases/author/', views.AuthorListView.as_view(), name='all-releases-all-authors'),
-    # path('all-releases/author/all/', views.AuthorListView.as_view(), name='all-releases-all-authors'),
-    # path('all-releases/author/<str:author_uri>/', views.get_author, name='all-releases-one-author'),
+    # set the strings that can be used to request the last page in the set:
+    # (e.g., http://127.0.0.1:7000/2022.2.7/version/all/?page=last)
+    last_page_strings = ('the_end', 'last')
 
-    # path('<str:release_code>/author/', views.AuthorListView.as_view(), name='one-release-all-authors'),
-    # path('<str:release_code>/author/all/', views.AuthorListView.as_view(), name='one-release-all-authors'),
-    # path('<str:release_code>/author/<str:author_uri>/', views.get_author, name='one-release-one-author'),
+    def get_paginated_response(self, data):
+        """Customize how the paginated list looks. 
+        
+        Documentation: https://www.django-rest-framework.org/api-guide/pagination/#custom-pagination-styles
+        """
 
-    # # release info endpoints:
+        return Response({
+            'links': {
+                'next': self.get_next_link(),
+                'previous': self.get_previous_link()
+            },
+            'page_size': self.page.paginator.per_page,
+            'has_pages': self.page.has_next(),
+            'count': self.page.paginator.count,
+            'pages': self.page.paginator.num_pages,
+            'results': data
+        })
 
-    # path('all-releases/release-details/', views.GetReleaseInfoList.as_view(), name='release-details-all'),
-    # path('<str:release_code>/release-details/', views.get_release_info, name='release-details'),
 
-    # # A2BRelations endpoints (independent of releases):
+class CustomListView(generics.ListAPIView):
+    """
+    Display the results as a paginated list.
+    Filter, sort and search are enabled, and fields to be displayed can be specified.
 
-    # path('all-releases/relation/all/', views.RelationsListView.as_view(), name='all-releases-relations'),
-    # path('all-releases/relation/', views.RelationsListView.as_view(), name='all-releases-relations'),
+    To create a ListView with filtering, sorting, search and pagination: 
+    define a subclass of this class (e.g., `class VersionListView(CustomListView):`)
 
-    # # source collections info (independent of releases):
+    Examples: 
+        /version/all/
+        /version/all/?fields=version_uri,version_code   # get only these two fields!
+        /version/all/?search=JK000001
+        /version/all/?search=JK000001&normalize=False   # 
+        /version/all/?ordering=version_uri
+        /version/all/?page=2
+        /version/all/?page_size=100     # default: 10, max: 200
+        /version/all/?fields=version_code&search=JK000001&page=2
+    """
+    pagination_class = CustomPagination    # number of pages can be controlled via the "page_size=" querystring parameter
+    filter_backends = (
+        # https://www.django-rest-framework.org/api-guide/filtering/#djangofilterbackend, https://django-filter.readthedocs.io/en/latest/index.html
+        django_filters.DjangoFilterBackend,  # allows the use of filtersets (in filters.py); set filterset_class in the subclass
+        # https://www.django-rest-framework.org/api-guide/filtering/#orderingfilter
+        filters.OrderingFilter,     # ?ordering=...   ; requires an ordering_fields variable to be set in the class instance
+        # https://www.django-rest-framework.org/api-guide/filtering/#searchfilter
+        #filters.SearchFilter,      # ?search= ... ; requires a search_fields variable to be set in the class instance 
+        CustomSearchFilter          # ?search= ... ; requires a search_fields variable to be set in the class instance 
+        )
+    # NB: the CustomSearchFilter normalizes search string by default; add "normalize=False" to the query to swith normalization off
 
-    # path('source-collections/all/', views.GetSourceCollectionDetailsList.as_view(), name='source-collections'),
-    # path('source-collections/', views.GetSourceCollectionDetailsList.as_view(), name='source-collections'),
-    # path('source-collections/<str:code>', views.GetSourceCollectionDetailsList.as_view(), name='source-collections'),
 
-    # # corpus insights (statistics on the number of books, largest book, etc. for each release):
-    
-    # path('all-releases/corpusinsights/', views.get_corpus_insights, name='corpusinsights'),
-    # path('<str:release_code>/corpusinsights/', views.get_corpus_insights, name='corpusinsights'),
-
-    # # Text reuse statistics:
-
-    # path('all-releases/text-reuse-stats/<str:book1>_<str:book2>/', views.get_pair_text_reuse_stats, name='text-reuse-pair'),
-    # path('all-releases/text-reuse-stats/all/', views.GetAllTextReuseStats.as_view(), name='all-text-reuse'),
-    # path('all-releases/text-reuse-stats/<str:book1>/', views.GetAllTextReuseStats.as_view(), name='all-text-reuse'),
-
-    # path('<str:release_code>/text-reuse-stats/<str:book1>_<str:book2>/', views.get_pair_text_reuse_stats, name='text-reuse-pair'),
-    # path('<str:release_code>/text-reuse-stats/all/', views.GetAllTextReuseStats.as_view(), name='all-text-reuse'),
-    # path('<str:release_code>/text-reuse-stats/<str:book1>/', views.GetAllTextReuseStats.as_view(), name='all-text-reuse'),
+    # in the subclass: define the following variables:
+    # * queryset (either as queryset=<model>.objects.all() or by defining a custom get_queryset() function)
+    # * serializer_class
+    # and, optionally:
+    # * search_fields      # list of fields the search query should search
+    # * ordering_fields    # list of fields by which results can be sorted
+    # * filterset_class    # custom filter class to be used (in filters.py)
 
 
 
 @api_view(['GET'])
 def api_overview(request):
     api_urls = {
-        'List all text versions:': '<release_code>/version/all/ e.g., `2022.1.6/version/all/',
-        'List all authors:': '<release_code>/author/all/',
-        'List all texts:': '<release_code>/text/all/',
-
-        'Get a text by its URI:': '<release_code>/text/<str:text_uri>/ e.g. `2022.1.6/text/0179MalikIbnAnas.Muwatta`',
-        'Get an author by their URI:': '<release_code>/author/<str:author_uri>/ e.g. `2022.1.6/author/0179MalikIbnAnas`',
-
-        'Search authors:': '<release_code>/author/all/author/?search= e.g., `2022.1.6/author/all/?search=الجاحظ 255`',
-        'Search texts:': '<release_code>/text/all/?search= e.g., `2022.1.6text/all/?search=الجاحظ Hayawan`',
-        'Search text versions:': '<release_code>/text/all/?search= e.g., `2022.1.6text/all/?search=الجاحظ Hayawan Shamela`',
-
+        'List all authors in a specific release:': '<release_code>/author/all/ e.g., `2022.1.6/author/all/`',
+        'List all texts in a specific release:': '<release_code>/text/all/ e.g., `2022.1.6/text/all/`',
+        'List all text versions in a specific release:': '<release_code>/version/all/ e.g., `2022.1.6/version/all/`',
+        '-----------------------------------------------':'-----------------------------------------------',
+        'Get a single author by their URI:': '<release_code>/author/<str:author_uri>/ e.g. `2022.1.6/author/0179MalikIbnAnas/`',
+        'Get a text by its URI:': '<release_code>/text/<str:text_uri>/ e.g. `2022.1.6/text/0179MalikIbnAnas.Muwatta/`',
+        'Get a text version by its URI:': '<release_code>/version/<str:version_code>/ e.g. `2022.1.6/version/JK000466/`',
+        '----------------------------------------------':'------------------------------------------------',
+        'Get text reuse statistics for a specific pair of texts:': '<release_code>/text-reuse-stats/<str:book1>_<str:book1>/ e.g. `2022.1.6/text-reuse-stats/JK000466_Shamela0009783BK1/`',
+        'Get all statistics for texts that have text reuse in common with a specific text:': '<release_code>/text-reuse-stats/<str:version_code>/ e.g. `2022.1.6/text-reuse-stats/JK000466/`',
+        'Get all pairwise text reuse statistics:': '<release_code>/text-reuse-stats/all/ e.g. `2022.1.6/text-reuse-stats/all/`',
+        '------------------------------------------------':'-----------------------------------------------',
+        'Get statistics about a corpus release': '<release_code>/corpusinsights/  e.g., `2022.1.6/corpusinsights/`',
+        'Get information on a specific release of the OpenITI corpus': '<release_code>/release-info  e.g. `2022.1.6/release-info`',
+        '--------------------------------------------':'-----------------------------------------------',
+        'Search authors:': '<release_code>/author/all/?search= e.g., `2022.1.6/author/all/?search=الجاحظ 255`',
+        'Search texts:': '<release_code>/text/all/?search= e.g., `2022.1.6/text/all/?search=الجاحظ Hayawan`',
+        'Search text versions:': '<release_code>/version/all/?search= e.g., `2022.1.6/version/all/?search=الجاحظ Hayawan pri`',
+        '-------------------------------------------------':'-----------------------------------------------',
         'Filter authors based on a specific field:': '<release_code>/author/?author_lat= e.g., `2022.1.6/author/?author_lat=Jahiz`',
-        'Filter texts based on a specific field:': '<release_code>/text/?author_lat= e.g., `2022.1.6author/?author_lat=Jahiz`',
+        'Filter texts based on a specific field:': '<release_code>/text/?author_ar= e.g., `2022.1.6author/?author_lat=الجاحظ`',    
+        '-----------------------------------------------------':'-----------------------------------------------',
+        'Get a list of all sources for our texts': 'source-collection/all/', 
+        'Get a list of all relation types in the database': 'relation-type/all/', 
+        'Get a list of all relations (between persons, books, places) in the database': 'relation/all/',
+        'Get a list of all manually entered person names in the database': 'person-name/all/', 
 
-        'Get statistics about the corpus': '<release_code>/corpusinsights/',
-        'Get pairwise text reuse data': '<release_code>/text-reuse-stats/'
     }
-
-
 
     return Response(api_urls)
 
-# Not in use but useful if we want everything in one go
-@api_view(['GET'])
-def book_list(request):
-    books = Version.objects.all()
-    serializer = VersionSerializer(books, many=True)
-    return Response(serializer.data)
 
 
 @api_view(['GET'])
 def get_text(request, text_uri, release_code=None):
-    """Get a single text by its URI (additionally, a release code"""
-    print("RELEASE_CODE:", release_code)
-
+    """Get a single text by its URI (additionally, a release code)"""
     try:
         if release_code:
-            print(release_code)
             text = Text.objects\
                 .filter(text_uri=text_uri, version__release_version__release_info__release_code=release_code)\
-                .first()  # .distinct() not necessary: will all be the same
-            print(text)
+                .first()  # multiple (identical) results will be returned because of the join strategy; take the first one
         else:
-            print(release_code)
             text = Text.objects.get(text_uri=text_uri)
         serializer = TextSerializer(text, many=False)
         return Response(serializer.data)
@@ -132,34 +204,27 @@ def get_text(request, text_uri, release_code=None):
 
 
 
-# @api_view(['GET'])
-# def get_release_text(request, release_code, text_uri):
-#     """Get a text version by its version_code and release_code"""
 
-#     try:
-#         text = Text.objects.filter(text_uri=text_uri, version__release_version__release_info__release_code=release_code).first()
-#         serializer = TextSerializer(text, many=False)
-#         return Response(serializer.data)
-#     except Text.DoesNotExist:
-#         raise Http404
-
-# Get a text version by its version_code
 @api_view(['GET'])
 def get_version(request, version_code, release_code=None):
-    if "-" in version_code:
+    """Get a text version by its version_code (and, if provided, release_code)"""
+
+    # if user provided a full version URI, extract the version_code
+    if "-" in version_code: 
         version_code = version_code.split("-")[0].split(".")[-1]
-    print("VERSION_CODE:", version_code)
-    print("RELEASE_CODE:", release_code)
 
     try:
         if release_code:
             version = Version.objects\
-                .filter(version_code=version_code, release_version__release_info__release_code=release_code)\
-                .distinct().first()
-            print(version)
-            serializer = VersionSerializer(version, many=False, context=dict(release_code=release_code))
+                .filter(version_code=version_code, 
+                        release_version__release_info__release_code=release_code)\
+                .first()  # multiple (identical) results will be returned because of the join strategy; take the first one
+            serializer = VersionSerializer(
+                version,
+                many=False,
+                context=dict(release_code=release_code)  # pass the release code to the serializer
+            )
         else:
-            #version = Version.objects.prefetch_related("divisions", "part_of").get(version_code=version_code).all()
             version = Version.objects.get(version_code=version_code)
             serializer = VersionSerializer(version, many=False)
         return Response(serializer.data)
@@ -167,35 +232,14 @@ def get_version(request, version_code, release_code=None):
         raise Http404
 
 
-
-@api_view(['GET'])
-def get_release_version(request, version_code, release_code=None):
-    """Get a text version by its version_code and release_code"""
-
-    try:
-        if release_code:
-            release_version = ReleaseVersion.objects.get(release_info__release_code=release_code, version__version_code=version_code)
-        else:
-            release_version = ReleaseVersion.objects.get(release_info__release_code=release_code, version__version_code=version_code)
-        serializer = ReleaseVersionSerializer(release_version, many=False)
-        return Response(serializer.data)
-    except Text.DoesNotExist:
-        raise Http404
-    
-
-# Get an author record by its author_uri
 @api_view(['GET'])
 def get_author(request, author_uri, release_code=None):
-    print("GETTING AUTHOR!")
-    print(author_uri)
-    print(release_code)
-
+    """Get an author record by its author_uri (and, if provided, release_code)"""
     try:
         if release_code:
             author = Author.objects\
                 .filter(author_uri=author_uri, text__version__release_version__release_info__release_code=release_code)\
-                .distinct().first()
-            print(author)
+                .first() # multiple (identical) results will be returned because of the join strategy; take the first one
         else:
             author = Author.objects.get(author_uri=author_uri)
         serializer = AuthorSerializer(author, many=False)
@@ -207,9 +251,9 @@ def get_author(request, author_uri, release_code=None):
         raise Http404
 
 
-# Get some aggregated stats on the corpus like authors no, book no. etc.
 @api_view(['GET'])
 def get_corpus_insights(request, release_code=None):
+    """Get some aggregated stats on the corpus (number of authors, texts, ...)"""
     try:
         if release_code:
             corpus_insight_stats = CorpusInsights.objects.get(release_info__release_code=release_code)
@@ -227,110 +271,45 @@ def get_corpus_insights(request, release_code=None):
     return Response(serializer.data)
 
 
-# Remove this before going live as we shouldn't allow any POST method
-@api_view(['POST'])
-def book_create(request):
-    serializer = VersionSerializer(data=request.data)
-    if serializer.is_valid():
-        serializer.save()
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
-
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-'''' Get all books by pagination, filter and search enable. we can select fields also.
-Example: /book/all/?fields=book_id or /book/all/?search=JK000001 or book/all/?fields=book_id&search=JK000001
-'''
 
 
-class CustomPagination(PageNumberPagination):
-    page_size = 10
-    page_size_query_param = 'page_size'
-    max_page_size = 200
-    last_page_strings = ('the_end',)
-
-    def get_paginated_response(self, data):
-
-        return Response({
-            'links': {
-                'next': self.get_next_link(),
-                'previous': self.get_previous_link()
-            },
-            'page_size': self.page.paginator.per_page,
-            'has_pages': self.page.has_next(),
-            'count': self.page.paginator.count,
-            'pages': self.page.paginator.num_pages,
-            'results': data
-        })
 
 
-# fields to be excluded from search (because they are not string fields):
-# excl_flds = ["id", "date", "date_AH", "date_CE", "tok_length", "char_length",  # numeric fields
-#             "text", "name_element", "version", "author", "version_code", "text"]      # foreign key fields
-excl_flds = [
-    # numeric fields:
-    "id", "date", "date_AH", "date_CE", "tok_length", "char_length",
-    # foreign key fields:
-    "text", "name_element", "version", "author", "version_code", "text",
-    "related_persons", "related_places", "related_texts", "place_relations",
-    "person_a", "person_b", "text_a", "text_b",
-    "place_a", "place_b", "relation_type", "parent_type",
-    # related fields:
-    'authormeta', 'textmeta', 'related_person_a', 'related_person_b',
-    "related_text_a", "related_text_b"]
-
-
-class AuthorListView(generics.ListAPIView):
+#class AuthorListView(generics.ListAPIView):
+class AuthorListView(CustomListView):
     """
     Return a paginated list of author metadata objects
     (each containing metadata on an author, their texts and versions of their texts)
+
+    Filter, sort and search are enabled, and fields can be selected.
+
+    Examples: 
+        /author/all/
+        /author/all/?fields=author_uri,texts   # get only these two fields!
+        /author/all/?search=طبري
+        /author/all/?ordering=author_uri
+        /author/all/?page=2
+        /author/all/?page_size=100     # default: 10, max: 200
+        /author/all/?fields=author_uri,texts&search=تاريخ&page=2   # TO DO: fix search Error: "Related Field got invalid lookup: icontains"
     """
-    #queryset = Author.objects.all()
     serializer_class = AuthorSerializer
-    pagination_class = CustomPagination
 
     # customize the search:
-
     search_fields = [field.name for field in Author._meta.get_fields() if (field.name not in excl_flds)] \
         + ["text__" + field.name for field in Text._meta.get_fields() if (field.name not in excl_flds)] \
         + ["text__version__" + field.name for field in Version._meta.get_fields() if (field.name not in excl_flds)] \
         + ["name_element__" + field.name for field in PersonName._meta.get_fields()
            if (field.name not in excl_flds)]
-    # print("AUTHOR SEARCH FIELDS:")
-    # print(search_fields)
-
-    # NB: excl_flds needs to be declared outside of the class for the list comprehension to work,
-    # otherwise you get a NameError; see https://stackoverflow.com/a/13913933
-    # print()
-    # print("Search fields:")
-    # print(search_fields)
-    # print()
     search_fields = (search_fields)
 
     # Customize filtering:
-
-    filter_backends = (django_filters.DjangoFilterBackend,
-                       filters.SearchFilter, filters.OrderingFilter)
     filterset_class = AuthorFilter
 
-    # old experiments with filters by Sohail:
-
-    # filter_fields ={
-    #     #'annotation_status': ['in', 'exact'], # note the 'in'
-    #     'text__text_uri': ['exact'],
-    #     'text__titles_ar':['exact'] ,
-    #     'text__titles_lat':['exact'],
-    #     'text__version__version_code':['exact']
-    # }
-
-    # print(filter_fields)
-    #filter_fields = ['titles_lat', 'book_id', 'titles_ar', 'annotation_status']
-    # filter_fields = (filter_fields)
-    #ordering_fields = ['titles_lat', 'titles_ar']
-    #ordering_fields = (ordering_fields)
-
     def get_queryset(self):
-        """Get the queryset, based on arguments provided in the URL"""
+        """Filter the author objects present in the specified release, 
+        if a release_code was specified in the URL"""
         try:
             release_code = self.kwargs['release_code']
         except: 
@@ -341,25 +320,39 @@ class AuthorListView(generics.ListAPIView):
                 .distinct()
         else:
             queryset = Author.objects.all()
+
+        # check if any of the parameters is invalid:
+        declared_filters = list(self.filterset_class.declared_filters.keys())
+        all_allowed_parameters = allowed_parameters + declared_filters
+        for p in self.request.GET:
+            if p not in all_allowed_parameters:
+                msg = {"message": "Invalid parameter: "+ p}
+                res = serializers.ValidationError(msg)
+                res.status_code=200
+                raise res
+
         return queryset
 
 
-class VersionListView(generics.ListAPIView):
-    queryset = Version.objects.all()
+
+# class VersionListView(generics.ListAPIView):
+class VersionListView(CustomListView):
+    """Display the version objects in the database as a paginated list.
+
+    Filter, sort and search are enabled, and fields can be selected.
+
+    Examples: 
+        /version/all/
+        /version/all/?fields=version_uri
+        /version/all/?search=JK000001
+        /version/all/?ordering=version_uri
+        /version/all/?page=2
+        /version/all/?page_size=100     # default: 10, max: 200
+        /version/all/?fields=book_id&search=JK000001&page=2
+    
+    """
+
     serializer_class = VersionSerializer
-    pagination_class = CustomPagination
-
-    # search_fields = [field.name for field in Author._meta.get_fields() if(field.name not in ["text","author_names", 'date', 'date_AH', 'date_CE', 'id'])]+ \
-    #["version__"+ field.name for field in Text._meta.get_fields() if(field.name not in ["version","id", 'Author'])]\
-    #+ ["text__version__"+ field.name for field in Version._meta.get_fields() if(field.name not in ["id", 'Text','tok_length','char_length'])]\
-    #+ ["author_names__"+ field.name for field in PersonName._meta.get_fields() if(field.name not in ["id", 'Author'])]
-    #print("FIELD", Version._meta.get_fields())
-    # search_fields = [field.name for field in Version._meta.get_fields() if (field.name not in excl_flds)] \
-    #     + ["text__" + field.name for field in Text._meta.get_fields() if (field.name not in excl_flds)] \
-    #     + ["text__author__" + field.name for field in Author._meta.get_fields() if (field.name not in excl_flds)] \
-    #     + ["text__author__name_element__" + field.name for field in PersonName._meta.get_fields() if (field.name not in excl_flds)] \
-    #     + ["release_version__" + field.name for field in ReleaseVersion._meta.get_fields() if (field.name not in excl_flds)] \
-
 
     # define the default search fields - these may be overridden 
     # by using the "&search_fields" switch in the query string 
@@ -370,12 +363,6 @@ class VersionListView(generics.ListAPIView):
         "text__author__author_ar", "text__author__author_lat", # contains all attested author names (incl. from the name elements)
         "release_version__analysis_priority", "release_version__annotation_status", 
         ]
-
-
-    # print("VERSION SEARCH FIELDS:")
-    # print(search_fields)
-
-    # Customize filtering:
 
     filter_backends = (django_filters.DjangoFilterBackend,
                        VersionSearchFilter, #filters.SearchFilter, 
@@ -399,85 +386,145 @@ class VersionListView(generics.ListAPIView):
         return context
 
     def get_queryset(self):
-        """Get the queryset, based on arguments provided in the URL"""
-        try:
-            release_code = self.kwargs['release_code']
-        except: 
-            release_code = None
+        """Get the queryset, based on whether or not
+        the version_code is defined in the URL"""
+
+        # check if any of the parameters is invalid:
+        declared_filters = list(self.filterset_class.declared_filters.keys())
+        all_allowed_parameters = allowed_parameters + declared_filters
+        for p in self.request.GET:
+            if p not in all_allowed_parameters:
+                msg = {"message": "Invalid parameter "+ p}
+                res = serializers.ValidationError(msg)
+                res.status_code=200
+                raise res
+            else:
+                print(p, ": parameter allowed")
+
+        # get the release and version code from the URL:
+        # try:
+        #     release_code = self.kwargs['release_code']
+        # except: 
+        #     release_code = None
+        # try:
+        #     version_code = self.kwargs['version_code']
+        # except:
+        #     version_code = None
+        # # filter the version objects based on release and version codes:
+        # if release_code:
+        #     if version_code: # this will in fact be handled by the get_release_version function
+        #         queryset = Version.objects\
+        #             .filter(version_code=version_code, release_version__release_info__release_code=release_code)\
+        #             .distinct()
+        #     else: # this will now in fact be handled by the ReleaseVersionListView
+        #         queryset = Version.objects\
+        #             .filter(release_version__release_info__release_code=release_code)\
+        #             .distinct()
+        # else:
+        #     if version_code:
+        #         queryset = Version.objects\
+        #             .filter(version_code=version_code)\
+        #             .distinct()
+        #     else:
+        #         queryset = Version.objects.all()
+ 
         try:
             version_code = self.kwargs['version_code']
         except:
             version_code = None
-        print("VERSION_CODE:", version_code)
-        if release_code:
+        if version_code:
             queryset = Version.objects\
-                .filter(release_version__release_info__release_code=release_code)\
+                .filter(version_code=version_code)\
                 .distinct()
         else:
-            if version_code:
-                queryset = Version.objects\
-                    .filter(version_code=version_code)\
-                    .distinct()
-            else:
-                queryset = Version.objects.all()
+            queryset = Version.objects.all()
+
         return queryset
 
 
-class TextListView(generics.ListAPIView):
-    #queryset = Text.objects.all()
-    #filter_fields = ['titles_lat', 'book_id', 'titles_ar', 'annotation_status']
+#class TextListView(generics.ListAPIView):
+class TextListView(CustomListView):
+    """
+    Display the Text objects as a paginated list.
+
+    Filter, sort and search are enabled, and fields can be selected.
+
+    Examples: 
+        /text/all/
+        /text/all/?fields=text_uri,titles_ar   # get only these two fields!
+        /text/all/?search=JK000001
+        /text/all/?ordering=text_uri
+        /text/all/?page=2
+        /text/all/?page_size=100     # default: 10, max: 200
+        /text/all/?fields=text_uri&search=JK000001&page=2
+    """
+    # Define the fields that will be searched when user uses "search=" query parameter
+    # TO DO: review the search_fields
     search_fields = [field.name for field in Text._meta.get_fields() if (field.name not in excl_flds)] \
         + ["author__" + field.name for field in Author._meta.get_fields() if (field.name not in excl_flds)] \
         + ["author__name_element__" + field.name for field in PersonName._meta.get_fields() if (field.name not in excl_flds)] \
         + ["version__" + field.name for field in Version._meta.get_fields() if (field.name not in excl_flds)] \
         + ["version__version__" + field.name for field in ReleaseVersion._meta.get_fields() if (field.name not in excl_flds)]
 
-    # print(search_fields)
+    # define the fields the user can sort the results by (using "ordering=" query parameter)
+    ordering_fields = ['text_uri']
+    ordering_fields = (ordering_fields)
 
-    #ordering_fields = ['titles_lat', 'titles_ar']
+    # define how the results should be represented in json format:
     serializer_class = TextSerializer
-    pagination_class = CustomPagination
-    filter_backends = (django_filters.DjangoFilterBackend,
-                       filters.SearchFilter, filters.OrderingFilter)
+
+    # define the ways the results can be filtered:
     filterset_class = TextFilter
-    #filter_backends = (django_filters.DjangoFilterBackend,filters.SearchFilter,filters.OrderingFilter)
-    # search_fields = (search_fields)
-    # filter_fields = (search_fields)
-    #ordering_fields = (ordering_fields)
+
 
     def get_queryset(self):
-        """Get the queryset, based on arguments provided in the URL"""
+        """Filter the text objects that are in a specific release
+        (if a release code is provided in the query URL)"""
+
+        # check if any of the parameters is invalid:
+        declared_filters = list(self.filterset_class.declared_filters.keys())
+        all_allowed_parameters = allowed_parameters + declared_filters
+        for p in self.request.GET:
+            if p not in all_allowed_parameters:
+                msg = {"message": "Invalid parameter "+ p}
+                res = serializers.ValidationError(msg)
+                res.status_code=200
+                raise res
+            else:
+                print(p, ": parameter allowed")
+
+        # check if the URL contains a release code:
         try:
             release_code = self.kwargs['release_code']
         except: 
             release_code = None
+        # filter the text objects related to the release: 
         if release_code:
             queryset = Text.objects\
                 .filter(version__release_version__release_info__release_code=release_code)\
-                .distinct()  # if using all, we get the number of rows for the joined table!
+                .distinct()  # if using all, we get the number of rows for the joined table (all identical)!
         else:
             queryset = Text.objects.all()
+
         return queryset
 
 
-class PersonNameListView(generics.ListAPIView):
-    """Get all relations in the A2BRelations model (independent of releases)"""
+#class PersonNameListView(generics.ListAPIView):
+class PersonNameListView(CustomListView):
+    """Display all person names (independent of releases) in a paginated list."""
     queryset = PersonName.objects.all()
-    # for q in queryset:
-    #    print(q.text_a)
     serializer_class = PersonNameSerializer
 
-class RelationsListView(generics.ListAPIView):
-    """Get all relations in the A2BRelations model (independent of releases)"""
+#class RelationsListView(generics.ListAPIView):
+class RelationsListView(CustomListView):
+    """Get all relations in the A2BRelations model (independent of releases) in a paginated list."""
     queryset = A2BRelation.objects.all()
-    pagination_class = CustomPagination
-    # for q in queryset:
-    #    print(q.text_a)
-    serializer_class = AllRelationSerializer
+    serializer_class = AllRelationsSerializer
 
 
-class RelationTypesListView(generics.ListAPIView):
-    """Get all relation types in the database (independent of releases)"""
+#class RelationTypesListView(generics.ListAPIView):
+class RelationTypesListView(CustomListView):
+    """Get all relation types in the database (independent of releases) in a paginated list."""
     queryset = RelationType.objects.all()
     serializer_class = AllRelationTypesSerializer
 
@@ -491,46 +538,67 @@ def get_relation_type(request, code):
         serializer = AllRelationTypesSerializer(rel, many=False)
         
         return Response(serializer.data)  
-    except TextReuseStats.DoesNotExist:
+    except RelationType.DoesNotExist:
         raise Http404
 
 
-class GetAllTextReuseStats(generics.ListAPIView):
-    """Get all text reuse stats for a specific release or all releases 
-    (include selected metadata for book 1 and book 2)"""
+#class TextReuseStatsListView(generics.ListAPIView):
+class TextReuseStatsListView(CustomListView):
+    """Get all text reuse stats for a specific release or all releases as a paginated list
+    (including selected metadata for book 1 and book 2)"""
 
+    # define the way the json output will look:
     serializer_class = ShallowTextReuseStatsSerializer
-    pagination_class = CustomPagination
-
-    filter_backends = (django_filters.DjangoFilterBackend,
-                       filters.SearchFilter, filters.OrderingFilter)
     
-    # allow additional query parameters like ?book_1=Tabari.Tarikh
+    # allow filtering using query parameters (e.g., ?book_1=Tabari.Tarikh )
     filterset_class = TextReuseFilter
 
-    # allow additional query parameters like ?ordering=instances_count
-    ordering_fields = ['instances_count', 'book1_word_match', 'book2_word_match']
+    # allow sorting using a query parameter (e.g., ?ordering=instances_count ) 
+    ordering_fields = ['instances_count', 'book1_words_matched', 'book2_words_matched', 
+                       'book1_pct_words_matched', 'book2_pct_words_matched',
+                       'book_1__version__version_uri', 'book_2__version__version_uri']
     ordering_fields = (ordering_fields)
 
-    # allow searching these fields using ?search=
+    # allow searching these fields using ?search= paramater
     search_fields = ["book_1__version__text__author__author_ar", 
                      "book_2__version__text__author__author_ar", 
+                     "book_1__version__text__author__author_lat", 
+                     "book_2__version__text__author__author_lat", 
                      "book_1__version__text__titles_ar", 
-                     "book_2__version__text__titles_ar", 
+                     "book_2__version__text__titles_lat",
+                     "book_1__version__text__titles_ar", 
+                     "book_2__version__text__titles_lat", 
                      "book_1__version__version_uri", 
                      "book_2__version__version_uri"]
 
     def get_queryset(self):
-        """Get the queryset, based on arguments provided in the URL"""
+        """Filter the queryset based on the release_code and/or book1 elements in the URL"""
+
+        # check if any of the parameters is invalid:
+        declared_filters = list(self.filterset_class.declared_filters.keys())
+        all_allowed_parameters = allowed_parameters + declared_filters
+        for p in self.request.GET:
+            if p not in all_allowed_parameters:
+                msg = {"message": "Invalid parameter "+ p}
+                res = serializers.ValidationError(msg)
+                res.status_code=200
+                raise res
+            else:
+                print(p, ": parameter allowed")
+
+        # check whether the URL contains a release_code:
         try:
             release_code = self.kwargs['release_code']
         except: 
             release_code = None
+        # check whether the URL contains a book1 element:
         try:
             book1 = self.kwargs['book1']
         except: 
             book1 = None
         print("---", release_code, book1)
+
+        # filter the TextReuseStats objects:
         if release_code:
             if book1:
                 queryset = TextReuseStats.objects\
@@ -552,11 +620,12 @@ class GetAllTextReuseStats(generics.ListAPIView):
             else:
                 print("book1 nor release defined")
                 queryset = TextReuseStats.objects.all()
+
         return queryset
 
-class GetAllTextReuseStatsB1(GetAllTextReuseStats):
+class TextReuseStatsB1ListView(TextReuseStatsListView):
     """Get all text reuse stats for book1 (include only metadata for book 2)"""
-    # NB: this view class inherits its get_queryset() and filters from GetAllTextReuseStats
+    # NB: this view class inherits its get_queryset() and filters from TextReuseStatsListView
     serializer_class = TextReuseStatsSerializerB1
 
 
@@ -579,77 +648,70 @@ def get_pair_text_reuse_stats(request, book1, book2, release_code=None):
         raise Http404
 
 
-class ReleaseVersionListView(generics.ListAPIView):
-    
-    search_fields = [field.name for field in ReleaseVersion._meta.get_fields() if (field.name not in excl_flds)] \
-        + ["version__" + field.name for field in Version._meta.get_fields() if (field.name not in excl_flds)] 
-        # + ["version__text__" + field.name for field in Text._meta.get_fields() if (field.name not in excl_flds)] \
-        # + ["version__text__author__" + field.name for field in Author._meta.get_fields() if (field.name not in excl_flds)] \
-        # + ["version__text__author__name_element__" +
-        #     field.name for field in PersonName._meta.get_fields() if (field.name not in excl_flds)]
+#class ReleaseVersionListView(generics.ListAPIView):
+class ReleaseVersionListView(CustomListView):
+    """Display the  release version objects in the database as a paginated list.
 
-         ## had to put the list manualy as above function add these two field which makes the code 'version_uri', 'version_uri__release' 
-    # search_fields = ['release_info__release_code', 'url', 'analysis_priority', 'annotation_status', 'version__version_uri',  
-    #                  'version__edition__editor', 'version__edition__edition_place', 'version__edition__publisher', 'version__edition__edition_date', 
-    #                  'version__edition__ed_info', 'version__language', 'version__release_version__tags', 'notes', 
-    #                  'analysis_priority', 'annotation_status', 'version__text__text_uri', 
-    #                  'version__text__titles_ar', 'version__text__titles_lat', 
-    #                  'version__text__title_ar_prefered', 'version__text__title_lat_prefered', 
-    #                  'version__text__text_type', 'version__text__tags', 'version__text__notes', 
-    #                  'version__text__author__author_uri', 
-    #                  'version__text__author__author_ar', 'version__text__author__author_lat', 
-    #                  'version__text__author__author_ar_prefered', 'version__text__author__author_lat_prefered', 
-    #                  'version__text__author__date_str', 'version__text__author__notes', 
-    #                  'version__text__author__name_element__language', 
-    #                  'version__text__author__name_element__shuhra', 'version__text__author__name_element__nasab', 
-    #                  'version__text__author__name_element__kunya', 'version__text__author__name_element__ism', 
-    #                  'version__text__author__name_element__laqab', 'version__text__author__name_element__nisba']
+    Filter, sort and search are enabled, and fields can be selected.
 
-    search_fields = ['analysis_priority', 'annotation_status', 'tags', 'notes', 
-                     'release_info__release_code', 
-                     'version__version_uri',  
-                     'version__edition__ed_info', 
-                     'version__text__titles_ar', 'version__text__titles_lat', 
-                     'version__text__tags', 'version__text__notes', 
-                     'version__text__author__author_uri', 
-                     'version__text__author__author_ar', 'version__text__author__author_lat', 
-                     'version__text__author__notes']
+    Examples: 
+        /version/all/
+        /version/all/?fields=version_uri
+        /version/all/?search=JK000001
+        /version/all/?ordering=version_uri
+        /version/all/?page=2
+        /version/all/?page_size=100     # default: 10, max: 200
+        /version/all/?fields=book_id&search=JK000001&page=2
+    """
 
-
-
-    
-    # print("RELEASE SEARCH FIELDS:")
-    # print(search_fields)
+    search_fields = [
+        'analysis_priority', 'annotation_status',
+        'version__version_uri',        # also contains the version_code, source_coll__code, text_uri, author_uri and text__author__date_str!
+        "version__text__titles_ar", "version__text__titles_lat", # contain all attested titles in a single string
+        "version__text__author__author_ar", "version__text__author__author_lat", # contains all attested author names (incl. from the name elements)
+        ]
 
     serializer_class = ReleaseVersionSerializer
-    pagination_class = CustomPagination
 
-    filter_backends = (django_filters.DjangoFilterBackend,
-                       filters.SearchFilter, filters.OrderingFilter)
     filterset_class = ReleaseVersionFilter
 
     ordering_fields = ['tok_length', 'analysis_priority', 'version__text__author__date', 
                        'version__text__title_lat_prefered', 'version__text__author__author_lat_prefered']
 
     def get_queryset(self):
-        """Get the queryset, based on arguments provided in the URL"""
+        """Filter the ReleaseVersion objects, based on the release_code in the query URL"""
+
+        # check if any of the parameters is invalid:
+        declared_filters = list(self.filterset_class.declared_filters.keys())
+        all_allowed_parameters = allowed_parameters + declared_filters
+        for p in self.request.GET:
+            if p not in all_allowed_parameters:
+                msg = {"message": "Invalid parameter: "+ p}
+                res = serializers.ValidationError(msg)
+                res.status_code=200
+                raise res
+
+        # get the release code from the URL:
         try:
             release_code = self.kwargs['release_code']
         except: 
             release_code = None
+        # filter the ReleaseVersion objects based on the release code:
         if release_code:
             queryset = ReleaseVersion.objects\
                 .filter(release_info__release_code=release_code)\
                 .distinct()
         else:
             queryset = ReleaseVersion.objects.all()
+
         return queryset
 
 
-class GetReleaseInfoList(generics.ListAPIView):
-
+#class GetReleaseInfoList(generics.ListAPIView):
+class GetReleaseInfoList(CustomListView):
     queryset = ReleaseInfo.objects.all()
     serializer_class = ReleaseInfoSerializer
+
 
 @api_view(['GET'])
 def get_release_info(request, release_code):
@@ -661,8 +723,8 @@ def get_release_info(request, release_code):
     except Text.DoesNotExist:
         raise Http404
     
-class GetSourceCollectionDetailsList(generics.ListAPIView):
-
+#class GetSourceCollectionDetailsList(generics.ListAPIView):
+class GetSourceCollectionDetailsList(CustomListView):
     queryset = SourceCollectionDetails.objects.all()
     serializer_class = SourceCollectionDetailsSerializer
 
@@ -678,3 +740,76 @@ def get_source_collection(request, code):
         raise Http404
 
 
+#class GitHubIssuesListView(generics.ListAPIView):
+class GitHubIssuesListView(CustomListView):
+    """
+    Return a paginated list of GitHub Issues
+    """
+    queryset = GitHubIssue.objects.all()
+    serializer_class = GitHubIssueSerializer
+
+
+
+#########################  UNUSED FUNCTIONS  #############################################
+
+
+# @api_view(['GET'])
+# def get_release_text(request, release_code, text_uri):
+#     """Get a text version by its version_code and release_code"""
+
+#     try:
+#         text = Text.objects.filter(text_uri=text_uri, version__release_version__release_info__release_code=release_code).first()
+#         serializer = TextSerializer(text, many=False)
+#         return Response(serializer.data)
+#     except Text.DoesNotExist:
+#         raise Http404
+
+
+
+# # Remove this before going live as we shouldn't allow any POST method
+# @api_view(['POST'])
+# def book_create(request):
+#     serializer = VersionSerializer(data=request.data)
+#     if serializer.is_valid():
+#         serializer.save()
+#         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+#     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+# # Not in use but useful if we want everything in one go
+# @api_view(['GET'])
+# def book_list(request):
+#     books = Version.objects.all()
+#     serializer = VersionSerializer(books, many=True)
+#     return Response(serializer.data)
+
+
+@api_view(['GET'])
+def get_release_version(request, version_code, release_code=None):
+    """Get a single release version by its version_code and release_code
+    """
+
+    # if user provided a full version URI, extract the version_code
+    if "-" in version_code: 
+        version_code = version_code.split("-")[0].split(".")[-1]
+
+    try:
+        if release_code:
+            release_version = ReleaseVersion.objects\
+                .get(version__version_code=version_code,
+                     release_info__release_code=release_code)
+            serializer = ReleaseVersionSerializer(
+                release_version,
+                many=False,
+                context=dict(release_code=release_code)  # pass the release code to the serializer
+            )
+        else:
+            release_version = ReleaseVersion.objects.get(release_info__release_code=release_code, version__version_code=version_code)
+            serializer = ReleaseVersionSerializer(
+                release_version, 
+                many=False)
+        return Response(serializer.data)
+    except Text.DoesNotExist:
+        raise Http404
+    

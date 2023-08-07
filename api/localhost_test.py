@@ -1,7 +1,7 @@
-"""Test whether all enpoints are working correctly on localhost
+"""Test whether all enpoints are working correctly.
 
 To use this file, make sure the django application is running
-on http://127.0.0.1:8000
+
 
 Then simply run python -m localhost_test.py from another terminal.
 
@@ -78,7 +78,11 @@ endpoints = [
 
     # Person names endpoints: 
 
-    'person-names/all/',
+    'person-name/all/',
+
+    # GitHub Issues endpoints:
+
+    'github-issue/all/',
 
     # should fail:
     '2022.2.7/nonexistent-endpoint/'

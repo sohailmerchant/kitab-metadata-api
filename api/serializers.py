@@ -1,25 +1,50 @@
+"""
+This module contains serializers, whose job it is to map the database response
+to a json representation. 
+
+We are using drf-flex-fields app, which (in theory) would allow us to select 
+particular fields which allows fields to be selected/omitted/expanded
+(https://github.com/rsinger86/drf-flex-fields);
+but this functionality has not been put to use yet.
+
+Examples:
+
+version/all/?fields=version_uri,texts
+version/all/?omit=id,texts.author
+version/all/?expand=organization,friends
+
+In order to be able to expand fields on request, 
+the relevant fields must be added to an expandable_fields variable.
+Example:
+
+class CountrySerializer(FlexFieldsModelSerializer):
+    class Meta:
+        model = Country
+        fields = ('id', 'name', 'population', 'states')
+        expandable_fields = {
+          'states': (StateSerializer, {'many': True})
+        }
+
+TO DO: implement flex fields?
+"""
+
+
 from argparse import Namespace
 from operator import truediv
 from rest_framework import serializers
 from .models import PersonName, Text, Author, Version,\
                     CorpusInsights, TextReuseStats, ReleaseVersion,\
                     RelationType, A2BRelation, ReleaseInfo,\
-                    SourceCollectionDetails, Edition
+                    SourceCollectionDetails, Edition, GitHubIssue
 from rest_flex_fields import FlexFieldsModelSerializer
 from django.db.models import Q
-
-
-'''
-Using drf-flex-fields app to select particular fields which allows fields to be expanded
-https://github.com/rsinger86/drf-flex-fields
-'''
-
 
 
 class ShallowNameElementsSerializer(FlexFieldsModelSerializer):
     """This serializer is used to serialize the name elements in author queries.
     It excludes the author field. If you want to serialize the full PersonName model,
-    use the PersonNameSerializer"""
+    use the PersonNameSerializer.
+    """
 
     class Meta:
         model = PersonName
@@ -37,6 +62,18 @@ class ShallowEditionSerializer(FlexFieldsModelSerializer):
         model = Edition
         fields = ("id", "editor", "edition_place", "publisher", 
                   "edition_date", "ed_info", "pdf_url", "worldcat_url")
+        depth = 1
+
+class ShallowTextSerializer(FlexFieldsModelSerializer):
+    """This serializer is used to serialize the metadata from the Edition model
+    for use in serialization of the Version model 
+    (without the foreign key to the Text model).
+    If you want to serialize the full Edition model, use the EditionSerializer"""
+
+    class Meta:
+        model = Text
+        fields = ("id", "text_uri", "author", "titles_ar", "titles_lat", "title_ar_prefered", 
+                  "title_lat_prefered", "text_type", "tags", "bibliography", "notes")
         depth = 1
 
 
@@ -153,13 +190,19 @@ class ShallowAuthorSerializer(FlexFieldsModelSerializer):
     def to_representation(self, instance):
         json_rep = super().to_representation(instance)
         #del json_rep["texts"]
-        for d in json_rep["texts"]:
-            # remove the fields below the text level:
-            del d["author"]
-            del d["related_texts"]
-            del d["related_persons"]
-            del d["related_places"]
-        json_rep = {**json_rep, **self.serialize_relations(instance)}
+        try:  # deal with the situation when user doesn't request the texts field:
+            for d in json_rep["texts"]:
+                # remove the fields below the text level:
+                del d["author"]
+                del d["related_texts"]
+                del d["related_persons"]
+                del d["related_places"]
+        except Exception as e:
+            print(e)
+        try:
+            json_rep = {**json_rep, **self.serialize_relations(instance)}
+        except Exception as e:
+            print(e)
         # return the dictionary inside a list (we may have multiple authors later)
         return [json_rep]
 
@@ -190,7 +233,7 @@ class RelationTypeSerializer(FlexFieldsModelSerializer):
         # depth=0
 
 
-class AllRelationSerializer(FlexFieldsModelSerializer):
+class AllRelationsSerializer(FlexFieldsModelSerializer):
 
     def to_representation(self, instance):
         """Override the default json representation"""
@@ -295,13 +338,25 @@ class TextSerializer(FlexFieldsModelSerializer):
         return d
 
     def to_representation(self, instance):
+        """Override the default json representation"""
+
         # make the default serialization:
         json_rep = super().to_representation(instance)
+
         # remove the "texts" list nested within author:
-        for i in range(len(json_rep["author"])):
-            del json_rep["author"][i]["texts"]
+        try: # deal with the situation in which the user doesn't request the "author" field:
+            for i in range(len(json_rep["author"])):
+                del json_rep["author"][i]["texts"]
+        except Exception as e:
+            print(e)
+
         # add the relationships to the default representation (__all__ fields):
-        return {**json_rep, **self.serialize_relations(instance)}
+        try:
+            json_rep = {**json_rep, **self.serialize_relations(instance)}
+        except Exception as e:
+            print(e)
+
+        return json_rep
 
     class Meta:
         model = Text
@@ -351,14 +406,16 @@ class ShallowReleaseVersionSerializer(FlexFieldsModelSerializer):
 
     def to_representation(self, instance):
         json_rep = super().to_representation(instance)
-        release_meta = json_rep["release_info"]
-        del release_meta["id"]
-        del release_meta["release_notes"]
-        del json_rep["release_info"]
-        del json_rep["id"]
-        del json_rep["version"]
-
-        return {**release_meta, **json_rep}
+        try:
+            release_meta = json_rep["release_info"]
+            del release_meta["id"]
+            del release_meta["release_notes"]
+            del json_rep["release_info"]
+            del json_rep["id"]
+            del json_rep["version"]
+            return {**release_meta, **json_rep}
+        except Exception as e:
+            return json_rep
 
     class Meta:
         model = ReleaseVersion
@@ -384,32 +441,35 @@ class VersionSerializer(FlexFieldsModelSerializer):
         """Customize the default json representation"""
         # get the default representation:
         json_rep = super().to_representation(instance)
-        # remove the nested list of all versions of the text:
-        del json_rep["text"]["versions"]
-        # remove the nested list of all texts by the same author: (not necessary anymore: is now already done TextSerializer!)
-        #for i in range(len(json_rep["text"]["author"])):
-        #    del json_rep["text"]["author"][i]["texts"]
-        # remove the release_versions dictionary if a specific release was requested:
-        release_code = self.context.get('release_code')
-        if release_code:
-            requested_release = [d for d in json_rep["release_versions"] if d["release_code"] == release_code]
-            del json_rep["release_versions"]
-            json_rep["release_version"] = requested_release
-        # add the version URIs of the parts: 
-        parts = self.serialize_relations(instance)
-        # use only the version URI for the part_of key:
-        part_of = json_rep.pop("part_of")
+
         try:
-            part_of = {"part_of": part_of["version_uri"]}
-        except:
-            part_of = {"part_of": None}
-        
-        return {**json_rep, **parts, **part_of}
+            # remove the nested list of all versions of the text:
+            del json_rep["text"]["versions"]
+            # remove the release_versions dictionary if a specific release was requested:
+            release_code = self.context.get('release_code')
+            if release_code:
+                requested_release = [d for d in json_rep["release_versions"] if d["release_code"] == release_code]
+                del json_rep["release_versions"]
+                json_rep["release_version"] = requested_release
+            # add the version URIs of the parts: 
+            parts = self.serialize_relations(instance)
+            # use only the version URI for the part_of key:
+            part_of = json_rep.pop("part_of")
+            try:
+                part_of = {"part_of": part_of["version_uri"]}
+            except:
+                part_of = {"part_of": None}
+            
+            return {**json_rep, **parts, **part_of}
+        except Exception as e:
+            print(e)
+            return json_rep
 
     class Meta:
         model = Version
         #fields = ("__all__")
-        fields = ("id", "version_code", "version_uri", "language", "text", "edition", "release_versions", "part_of")
+        fields = ("id", "version_code", "version_uri", "language", "text", "edition", 
+                  "release_versions", "part_of", "github_issues")
         depth = 3  # expand text and author metadata
 
 
@@ -486,12 +546,19 @@ class AuthorSerializer(FlexFieldsModelSerializer):
     def to_representation(self, instance):
         # create the default json representation of the author metadata
         json_rep = super().to_representation(instance)
-        # add the relationships to the default representation:
-        json_rep = {**json_rep, **self.serialize_relations(instance)}
-        # remove the author dictionary nested inside the texts dictionaries:
-        for d in json_rep["texts"]:
-            del d["author"]
 
+        # add the relationships to the default representation:
+        try:
+            json_rep = {**json_rep, **self.serialize_relations(instance)}
+        except Exception as e:
+            print(e)
+
+        # remove the author dictionary nested inside the texts dictionaries:
+        try:  
+            for d in json_rep["texts"]:
+                del d["author"]
+        except Exception as e: # deal with the situation when the user doesn't request the texts
+            print(e)
 
         return json_rep
  
@@ -563,10 +630,19 @@ class TextReuseStatsSerializerB1(FlexFieldsModelSerializer):
     def to_representation(self, instance):
         # create the default json representation of the author metadata
         json_rep = super().to_representation(instance)
+        
         # add the relationships to the default representation:
-        json_rep = {**json_rep, **self.serialize_relations(instance)}
-        json_rep["release_code"] = json_rep["release_info"]["release_code"]
-        del json_rep["release_info"]
+        try:
+            json_rep = {**json_rep, **self.serialize_relations(instance)}
+        except Exception as e:
+            print(e)
+        
+        # replace the full release_info dictionary with only the release_code:
+        try:
+            json_rep["release_code"] = json_rep["release_info"]["release_code"]
+            del json_rep["release_info"]
+        except Exception as e:
+            print(e)
         return json_rep
 
     class Meta:
@@ -614,10 +690,16 @@ class ShallowTextReuseStatsSerializer(FlexFieldsModelSerializer):
         # create the default json representation of the author metadata
         json_rep = super().to_representation(instance)
         # add the relationships to the default representation:
-        json_rep = {**json_rep, **self.serialize_relations(instance)}
+        try:
+            json_rep = {**json_rep, **self.serialize_relations(instance)}
+        except Exception as e:
+            print(e)
         # flatten the release_info dictionary:
-        json_rep["release_code"] = json_rep["release_info"]["release_code"]
-        del json_rep["release_info"]
+        try:
+            json_rep["release_code"] = json_rep["release_info"]["release_code"]
+            del json_rep["release_info"]
+        except Exception as e:
+            print(e)
         return json_rep
 
     class Meta:
@@ -640,18 +722,63 @@ class TextReuseStatsSerializer(serializers.ModelSerializer):
 
 
 class ReleaseVersionSerializer(serializers.ModelSerializer):
+    """Serializes the ReleaseVersion table in the same way as the
+    VersionSerializer does. This is necessary because release-version-
+    specific metadata cannot be reliably filtered starting from the
+    Version model for a specific release. 
+    E.g., if one filters the versions based on "pri",
+    all versions that have "pri" priority in at least one release
+    will be returned, even if it has "sec" priority in the 
+    requested release. 
+    """
     version = VersionSerializer(read_only=True)
-    
+
+    def serialize_relations(self, instance):
+        """serialize a version's parts 
+        (for books split into pieces because of their length, like BiharAnwar)"""
+        # select the versions that are part of the current version_instance:
+        parts = ReleaseVersion.objects\
+            .filter(version__part_of__version_uri=instance.version.version_uri)
+        return {"parts": [d.version.version_uri for d in parts]}
+
     def to_representation(self, instance):
+        """Format the result in the same way as the VersionSerializer"""
         json_rep = super().to_representation(instance)
+
         # replace the full release_info dictionary with only the release_code:
-        json_rep["release_code"] = json_rep["release_info"]["release_code"]
-        del json_rep["release_info"]
-        # remove the versions dictionary (nested in the text dictionary):
-        del json_rep["version"]["text"]["versions"]
-        # remove the texts dictionary (nested in the author dictionary):
-        for i in range(len(json_rep["version"]["text"]["author"])):
-            del json_rep["version"]["text"]["author"][i]["texts"]
+        try:
+            json_rep["release_code"] = json_rep["release_info"]["release_code"]
+            json_rep["release_date"] = json_rep["release_info"]["release_date"]
+            json_rep["zenodo_link"] = json_rep["release_info"]["zenodo_link"]
+        except Exception as e:
+            print(e)
+        # import json
+        # print(json.dumps(json_rep, indent=2))
+        # extract the relation_version metadata from the result:
+        rel_version = {
+            "release_code": json_rep["release_code"],
+            "release_date": json_rep["release_date"],
+            "zenodo_link": json_rep["zenodo_link"],
+            "char_length": json_rep["char_length"],
+            "tok_length": json_rep["tok_length"],
+            "url": json_rep["url"],
+            "analysis_priority": json_rep["analysis_priority"],
+            "annotation_status": json_rep["annotation_status"],
+            "tags": json_rep["tags"],
+            "notes": json_rep["notes"],
+        }
+        # make the version dictionary the main part of the returned dictionary:
+        json_rep = json_rep["version"]
+
+        # insert the release_version metadata into it:
+        json_rep["release_version"] = rel_version
+
+        # remove the list with all release versions of this version:
+        try:
+            del json_rep["release_versions"]
+        except Exception as e:
+            print(e)
+
         return json_rep
 
     class Meta:
@@ -680,3 +807,13 @@ class EditionSerializer(serializers.ModelSerializer):
         model = Edition
         depth = 4
         fields = ("__all__")
+
+class GitHubIssueSerializer(serializers.ModelSerializer):
+    about_author = ShallowAuthorSerializer(read_only=True, many=False)
+    about_text = ShallowTextSerializer(read_only=True, many=False)
+    about_version = ShallowVersionSerializer(read_only=True, many=False)
+
+    class Meta:
+        model = GitHubIssue
+        depth = 4
+        fields = ("id", "title", "labels", "state", "about_author", "about_text", "about_version")
