@@ -484,7 +484,7 @@ class ReleaseVersionFilter(django_filters.FilterSet):
     release_code = django_filters.CharFilter(
         field_name="release_info__release_code", lookup_expr='exact')
     
-    version_uri = django_filters.CharFilter(
+    version_uri_contains = django_filters.CharFilter(
         field_name="version__version_uri", lookup_expr='icontains')  # "exact" is default
     char_count_lte = django_filters.NumberFilter(
         field_name="char_length", lookup_expr="lte")
@@ -545,4 +545,4 @@ class ReleaseVersionFilter(django_filters.FilterSet):
     class Meta:
         model = ReleaseVersion
         # additional fields with the default lookup ("exact"):
-        fields = ["id"]
+        fields = ["id", "version"]

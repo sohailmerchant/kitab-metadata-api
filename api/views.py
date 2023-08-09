@@ -322,7 +322,9 @@ class AuthorListView(CustomListView):
             queryset = Author.objects.all()
 
         # check if any of the parameters is invalid:
-        declared_filters = list(self.filterset_class.declared_filters.keys())
+        declared_filters = list(self.filterset_class.declared_filters.keys())  # get all filters defined in the body of the filter class
+        declared_filters += list(self.filterset_class.get_fields().keys())     # get all fields listed for exact lookup in the filter class' Meta class
+        
         all_allowed_parameters = allowed_parameters + declared_filters
         for p in self.request.GET:
             if p not in all_allowed_parameters:
@@ -390,7 +392,12 @@ class VersionListView(CustomListView):
         the version_code is defined in the URL"""
 
         # check if any of the parameters is invalid:
-        declared_filters = list(self.filterset_class.declared_filters.keys())
+        declared_filters = list(self.filterset_class.declared_filters.keys())  # get all filters defined in the body of the filter class
+        declared_filters += list(self.filterset_class.get_fields().keys())     # get all fields listed for exact lookup in the filter class' Meta class
+        
+        print(declared_filters)
+        print("fields:", self.filterset_class.fields())
+
         all_allowed_parameters = allowed_parameters + declared_filters
         for p in self.request.GET:
             if p not in all_allowed_parameters:
@@ -486,7 +493,9 @@ class TextListView(CustomListView):
         (if a release code is provided in the query URL)"""
 
         # check if any of the parameters is invalid:
-        declared_filters = list(self.filterset_class.declared_filters.keys())
+        declared_filters = list(self.filterset_class.declared_filters.keys())  # get all filters defined in the body of the filter class
+        declared_filters += list(self.filterset_class.get_fields().keys())     # get all fields listed for exact lookup in the filter class' Meta class
+        
         all_allowed_parameters = allowed_parameters + declared_filters
         for p in self.request.GET:
             if p not in all_allowed_parameters:
@@ -579,7 +588,8 @@ class TextReuseStatsListView(CustomListView):
         """Filter the queryset based on the release_code and/or book1 elements in the URL"""
 
         # check if any of the parameters is invalid:
-        declared_filters = list(self.filterset_class.declared_filters.keys())
+        declared_filters = list(self.filterset_class.declared_filters.keys())  # get all filters defined in the body of the filter class
+        declared_filters += list(self.filterset_class.get_fields().keys())     # get all fields listed for exact lookup in the filter class' Meta class
         all_allowed_parameters = allowed_parameters + declared_filters
         for p in self.request.GET:
             if p not in all_allowed_parameters:
@@ -686,7 +696,10 @@ class ReleaseVersionListView(CustomListView):
         """Filter the ReleaseVersion objects, based on the release_code in the query URL"""
 
         # check if any of the parameters is invalid:
-        declared_filters = list(self.filterset_class.declared_filters.keys())
+        declared_filters = list(self.filterset_class.declared_filters.keys())  # get all filters defined in the body of the filter class
+        declared_filters += list(self.filterset_class.get_fields().keys())     # get all fields listed for exact lookup in the filter class' Meta class
+        #print(declared_filters)
+        #print(dir(self.filterset_class))
         all_allowed_parameters = allowed_parameters + declared_filters
         for p in self.request.GET:
             if p not in all_allowed_parameters:
