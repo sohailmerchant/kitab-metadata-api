@@ -545,4 +545,4 @@ class ReleaseVersionFilter(django_filters.FilterSet):
     class Meta:
         model = ReleaseVersion
         # additional fields with the default lookup ("exact"):
-        fields = ["release_info__release_code", "id", "version__version_uri"]
+        fields = ["id", "version"]
