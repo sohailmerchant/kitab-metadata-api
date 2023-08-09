@@ -237,7 +237,9 @@ class ReleaseVersion(models.Model):
     id = models.AutoField(primary_key=True)
     #release_code = models.CharField(max_length=10, null=False) # e.g., 2021.2.5
     release_info = models.ForeignKey("ReleaseInfo", blank=False, on_delete=models.DO_NOTHING) # e.g., 2021.2.5
-    version = models.ForeignKey(Version, related_name='release_versions', related_query_name="release_version", on_delete=models.DO_NOTHING)
+    version = models.ForeignKey(Version, on_delete=models.DO_NOTHING, 
+                                related_name='release_versions', 
+                                related_query_name="release_version")
     char_length = models.IntegerField(null=True, blank=True)
     tok_length = models.IntegerField(null=True, blank=True)
     url = models.CharField(max_length=255, null=False, blank=True)

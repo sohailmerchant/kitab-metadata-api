@@ -401,7 +401,7 @@ class VersionListView(CustomListView):
             else:
                 print(p, ": parameter allowed")
 
-        # get the release and version code from the URL:
+        # # get the release and version code from the URL:
         # try:
         #     release_code = self.kwargs['release_code']
         # except: 
@@ -418,8 +418,10 @@ class VersionListView(CustomListView):
         #             .distinct()
         #     else: # this will now in fact be handled by the ReleaseVersionListView
         #         queryset = Version.objects\
+        #             .prefetch_related("release_versions__release_info")\
         #             .filter(release_version__release_info__release_code=release_code)\
         #             .distinct()
+        #         print(queryset)
         # else:
         #     if version_code:
         #         queryset = Version.objects\
@@ -428,10 +430,12 @@ class VersionListView(CustomListView):
         #     else:
         #         queryset = Version.objects.all()
  
+        # get the release code from the URL:
         try:
             version_code = self.kwargs['version_code']
         except:
             version_code = None
+        # filter the version objects based on the version_code:
         if version_code:
             queryset = Version.objects\
                 .filter(version_code=version_code)\

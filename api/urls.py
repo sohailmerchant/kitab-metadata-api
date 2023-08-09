@@ -28,9 +28,9 @@ urlpatterns = [
     path('all-releases/version/<str:version_code>/', views.VersionListView.as_view(), name='all-releases-one-version'), # multiple results possible!
     
     # problem: filtering on release_version - specific metadata (pri/sec, markdown/completed) does not work!
-    # path('<str:release_code>/version/all/', views.VersionListView.as_view(), name='all-releases-all-versions'),
-    # path('<str:release_code>/version/', views.VersionListView.as_view(), name='all-releases-all-versions'),
-    # path('<str:release_code>/version/<str:version_code>/', views.get_version, name='one-release-one-version'),
+    #path('<str:release_code>/version/all/', views.VersionListView.as_view(), name='all-releases-all-versions'),
+    #path('<str:release_code>/version/', views.VersionListView.as_view(), name='all-releases-all-versions'),
+    #path('<str:release_code>/version/<str:version_code>/', views.get_version, name='one-release-one-version'),
     path('<str:release_code>/version/all/', views.ReleaseVersionListView.as_view(), name='one-release-all-versions'),
     path('<str:release_code>/version/', views.ReleaseVersionListView.as_view(), name='one-release-all-versions'),
     path('<str:release_code>/version/<str:version_code>/', views.get_release_version, name='one-release-one-version'),
