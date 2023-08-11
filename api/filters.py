@@ -431,6 +431,7 @@ class TextReuseFilter(django_filters.FilterSet):
     Examples:
     http://127.0.0.1:7000/2022.2.7/text-reuse-stats/?book_1=Tabari  # any part of the version URI
     http://127.0.0.1:7000/2022.2.7/text-reuse-stats/?book_2=Shamela # any part of the version URI
+    http://127.0.0.1:7000/2022.2.7/text-reuse-stats/?book_1_in=Shamela0009783BK1,Shamela0009783BK4
     http://127.0.0.1:7000/2022.2.7/text-reuse-stats/?instances_count_gt=500  # pairs with more than 500 text reuse instances
     http://127.0.0.1:7000/2022.2.7/text-reuse-stats/?instances_count_range_min=500&instances_count_range_max=600
     http://127.0.0.1:7000/2022.2.7/text-reuse-stats/?book2_words_matched_gt=100000 # pairs with more than 100.000 words matched in book 2
@@ -441,6 +442,10 @@ class TextReuseFilter(django_filters.FilterSet):
         field_name="book_1__version__version_uri", label="Version URI of book 1")
     book_2 = django_filters.CharFilter(lookup_expr='icontains', 
         field_name="book_2__version__version_uri", label="Version URI of book 2")
+    book_1_in = CharInFilter(lookup_expr='in', 
+        field_name="book_1__version__version_code", label="Comma-separated list of book 1 genre codes")
+    book_2_in = CharInFilter(lookup_expr='in', 
+        field_name="book_2__version__version_code", label="Comma-separated list of book 2 genre codes")
     
     # filter on the number of text reuse instances:
     instances_count_gt = django_filters.NumberFilter(lookup_expr="gt", 
