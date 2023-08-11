@@ -321,11 +321,20 @@ class AuthorListView(CustomListView):
         else:
             queryset = Author.objects.all()
 
-        # check if any of the parameters is invalid:
-        declared_filters = list(self.filterset_class.declared_filters.keys())  # get all filters defined in the body of the filter class
-        declared_filters += list(self.filterset_class.get_fields().keys())     # get all fields listed for exact lookup in the filter class' Meta class
-        
+        # Create a list of all valid filters to validate the request:
+        # 1. get all filters defined in the body of the filter class: 
+        declared_filters = list(self.filterset_class.declared_filters.keys())  
+        # 2. get all fields listed for exact lookup in the filter class' Meta class:
+        declared_filters += list(self.filterset_class.get_fields().keys())     
+        #print(dir(self.filterset_class))  # gets you a list of all available properties of the filterset_class
+        # 3. add the default allowed parameters (like search, page, fields, ...):
         all_allowed_parameters = allowed_parameters + declared_filters
+        # # 3. create an additional filter "__in" for each declared filter; this allows "OR" filtering:
+        # declared_filters_in = [f+"__in" for f in declared_filters]
+        # # 4. add the default allowed parameters (like search, page, fields, ...):
+        # all_allowed_parameters = allowed_parameters + declared_filters + declared_filters_in
+
+        # Now check all elements in the query URL to check if they are valid:
         for p in self.request.GET:
             if p not in all_allowed_parameters:
                 msg = {"message": "Invalid parameter: "+ p}
@@ -391,14 +400,20 @@ class VersionListView(CustomListView):
         """Get the queryset, based on whether or not
         the version_code is defined in the URL"""
 
-        # check if any of the parameters is invalid:
-        declared_filters = list(self.filterset_class.declared_filters.keys())  # get all filters defined in the body of the filter class
-        declared_filters += list(self.filterset_class.get_fields().keys())     # get all fields listed for exact lookup in the filter class' Meta class
-        
-        print(declared_filters)
-        print("fields:", self.filterset_class.fields())
-
+        # Create a list of all valid filters to validate the request:
+        # 1. get all filters defined in the body of the filter class: 
+        declared_filters = list(self.filterset_class.declared_filters.keys())  
+        # 2. get all fields listed for exact lookup in the filter class' Meta class:
+        declared_filters += list(self.filterset_class.get_fields().keys())     
+        #print(dir(self.filterset_class))  # gets you a list of all available properties of the filterset_class
+        # 3. add the default allowed parameters (like search, page, fields, ...):
         all_allowed_parameters = allowed_parameters + declared_filters
+        # # 3. create an additional filter "__in" for each declared filter; this allows "OR" filtering:
+        # declared_filters_in = [f+"__in" for f in declared_filters]
+        # # 4. add the default allowed parameters (like search, page, fields, ...):
+        # all_allowed_parameters = allowed_parameters + declared_filters + declared_filters_in
+
+        # Now check all elements in the query URL to check if they are valid:
         for p in self.request.GET:
             if p not in all_allowed_parameters:
                 msg = {"message": "Invalid parameter "+ p}
@@ -492,11 +507,20 @@ class TextListView(CustomListView):
         """Filter the text objects that are in a specific release
         (if a release code is provided in the query URL)"""
 
-        # check if any of the parameters is invalid:
-        declared_filters = list(self.filterset_class.declared_filters.keys())  # get all filters defined in the body of the filter class
-        declared_filters += list(self.filterset_class.get_fields().keys())     # get all fields listed for exact lookup in the filter class' Meta class
-        
+        # Create a list of all valid filters to validate the request:
+        # 1. get all filters defined in the body of the filter class: 
+        declared_filters = list(self.filterset_class.declared_filters.keys())  
+        # 2. get all fields listed for exact lookup in the filter class' Meta class:
+        declared_filters += list(self.filterset_class.get_fields().keys())     
+        #print(dir(self.filterset_class))  # gets you a list of all available properties of the filterset_class
+        # 3. add the default allowed parameters (like search, page, fields, ...):
         all_allowed_parameters = allowed_parameters + declared_filters
+        # # 3. create an additional filter "__in" for each declared filter; this allows "OR" filtering:
+        # declared_filters_in = [f+"__in" for f in declared_filters]
+        # # 4. add the default allowed parameters (like search, page, fields, ...):
+        # all_allowed_parameters = allowed_parameters + declared_filters + declared_filters_in
+
+        # Now check all elements in the query URL to check if they are valid:
         for p in self.request.GET:
             if p not in all_allowed_parameters:
                 msg = {"message": "Invalid parameter "+ p}
@@ -587,10 +611,20 @@ class TextReuseStatsListView(CustomListView):
     def get_queryset(self):
         """Filter the queryset based on the release_code and/or book1 elements in the URL"""
 
-        # check if any of the parameters is invalid:
-        declared_filters = list(self.filterset_class.declared_filters.keys())  # get all filters defined in the body of the filter class
-        declared_filters += list(self.filterset_class.get_fields().keys())     # get all fields listed for exact lookup in the filter class' Meta class
+        # Create a list of all valid filters to validate the request:
+        # 1. get all filters defined in the body of the filter class: 
+        declared_filters = list(self.filterset_class.declared_filters.keys())  
+        # 2. get all fields listed for exact lookup in the filter class' Meta class:
+        declared_filters += list(self.filterset_class.get_fields().keys())     
+        #print(dir(self.filterset_class))  # gets you a list of all available properties of the filterset_class
+        # 3. add the default allowed parameters (like search, page, fields, ...):
         all_allowed_parameters = allowed_parameters + declared_filters
+        # # 3. create an additional filter "__in" for each declared filter; this allows "OR" filtering:
+        # declared_filters_in = [f+"__in" for f in declared_filters]
+        # # 4. add the default allowed parameters (like search, page, fields, ...):
+        # all_allowed_parameters = allowed_parameters + declared_filters + declared_filters_in
+
+        # Now check all elements in the query URL to check if they are valid:
         for p in self.request.GET:
             if p not in all_allowed_parameters:
                 msg = {"message": "Invalid parameter "+ p}
@@ -695,12 +729,21 @@ class ReleaseVersionListView(CustomListView):
     def get_queryset(self):
         """Filter the ReleaseVersion objects, based on the release_code in the query URL"""
 
-        # check if any of the parameters is invalid:
-        declared_filters = list(self.filterset_class.declared_filters.keys())  # get all filters defined in the body of the filter class
-        declared_filters += list(self.filterset_class.get_fields().keys())     # get all fields listed for exact lookup in the filter class' Meta class
-        #print(declared_filters)
-        #print(dir(self.filterset_class))
+        # Create a list of all valid filters to validate the request:
+        # 1. get all filters defined in the body of the filter class: 
+        declared_filters = list(self.filterset_class.declared_filters.keys())  
+        # 2. get all fields listed for exact lookup in the filter class' Meta class:
+        declared_filters += list(self.filterset_class.get_fields().keys())     
+        #print(dir(self.filterset_class))  # gets you a list of all available properties of the filterset_class
+        # 3. add the default allowed parameters (like search, page, fields, ...):
         all_allowed_parameters = allowed_parameters + declared_filters
+        # # 3. create an additional filter "__in" for each declared filter; this allows "OR" filtering:
+        # declared_filters_in = [f+"__in" for f in declared_filters]
+        # # 4. add the default allowed parameters (like search, page, fields, ...):
+        # all_allowed_parameters = allowed_parameters + declared_filters + declared_filters_in
+        
+
+        # Now check all elements in the query URL to check if they are valid:
         for p in self.request.GET:
             if p not in all_allowed_parameters:
                 msg = {"message": "Invalid parameter: "+ p}

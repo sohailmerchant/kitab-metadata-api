@@ -14,8 +14,11 @@ import regex
 
 from django_filters import rest_framework as django_filters
 from rest_framework import filters
+from django.db.models import Field
+from django.db.models.lookups import In
 
 from .models import Author, PersonName, Text, Version, CorpusInsights, ReleaseVersion, TextReuseStats
+
 
 # normalization functions:
 from openiti.helper.ara import normalize_ara_light
@@ -46,6 +49,32 @@ class NumberRangeFilter(django_filters.BaseRangeFilter, django_filters.NumberFil
     https://django-filter.readthedocs.io/en/latest/ref/filters.html#baserangefilter
     """
     pass  # no need to do anything more than this!
+
+
+
+@Field.register_lookup
+class IIn(In):
+    """
+    Case-insensitive version of `__in` filters. Adapted from `In` and `IExact` transformers.
+
+    See https://groups.google.com/g/django-developers/c/sFXjwyCK66A
+    """
+
+    lookup_name = 'iin'
+
+    def process_lhs(self, *args, **kwargs):
+        sql, params = super().process_lhs(*args, **kwargs)
+
+        sql = f'LOWER({sql})'
+
+        return sql, params
+
+    def process_rhs(self, qn, connection):
+        rhs, params = super().process_rhs(qn, connection)
+
+        params = tuple(p.lower() for p in params)
+
+        return rhs, params
 
 
 ########################### SEARCH FILTERS ####################################
@@ -247,15 +276,23 @@ class VersionFilter(django_filters.FilterSet):
         field_name="edition__ed_info", lookup_expr='icontains',
         label="All edition-related metadata")
 
-    language = django_filters.CharFilter(
-        field_name="language", lookup_expr='icontains',
-        label="Language of the text")
-    analysis_priority = django_filters.CharFilter(lookup_expr='icontains',
-        field_name="release_version__analysis_priority",
-        label="Analysis priority (pri/sec)")
-    annotation_status = django_filters.CharFilter(
-        field_name="release_version__annotation_status", lookup_expr='icontains',
-        label="Annotation status (mARkdown/completed)")
+    # language = django_filters.CharFilter(
+    #     field_name="language", lookup_expr='icontains',
+    #     label="Language of the text")
+    # analysis_priority = django_filters.CharFilter(lookup_expr='icontains',
+    #     field_name="release_version__analysis_priority",
+    #     label="Analysis priority (pri/sec)")
+    # annotation_status = django_filters.CharFilter(
+    #     field_name="release_version__annotation_status", lookup_expr='icontains',
+    #     label="Annotation status (mARkdown/completed)")
+    
+    language = CharInFilter(lookup_expr='iin',    # case insensitive version of "in"
+        field_name="language", label="Language (three-letter code, separate multiple options with comma)")
+    analysis_priority = CharInFilter(lookup_expr='iin',    # case insensitive version of "in"
+        field_name="release_version__analysis_priority", label="Analysis priority (pri/sec)")
+    annotation_status = CharInFilter(lookup_expr='iin',  # case insensitive version of "in"
+        field_name="release_version__annotation_status", label="Annotation status (inProgress/completed/mARkdown/(not yet annotated))")
+
 
     release_tags = django_filters.CharFilter(
         field_name="release_version__tags", lookup_expr='icontains',
@@ -394,6 +431,7 @@ class TextReuseFilter(django_filters.FilterSet):
     Examples:
     http://127.0.0.1:7000/2022.2.7/text-reuse-stats/?book_1=Tabari  # any part of the version URI
     http://127.0.0.1:7000/2022.2.7/text-reuse-stats/?book_2=Shamela # any part of the version URI
+    http://127.0.0.1:7000/2022.2.7/text-reuse-stats/?book_1_in=Shamela0009783BK1,Shamela0009783BK4
     http://127.0.0.1:7000/2022.2.7/text-reuse-stats/?instances_count_gt=500  # pairs with more than 500 text reuse instances
     http://127.0.0.1:7000/2022.2.7/text-reuse-stats/?instances_count_range_min=500&instances_count_range_max=600
     http://127.0.0.1:7000/2022.2.7/text-reuse-stats/?book2_words_matched_gt=100000 # pairs with more than 100.000 words matched in book 2
@@ -404,6 +442,10 @@ class TextReuseFilter(django_filters.FilterSet):
         field_name="book_1__version__version_uri", label="Version URI of book 1")
     book_2 = django_filters.CharFilter(lookup_expr='icontains', 
         field_name="book_2__version__version_uri", label="Version URI of book 2")
+    book_1_in = CharInFilter(lookup_expr='in', 
+        field_name="book_1__version__version_code", label="Comma-separated list of book 1 genre codes")
+    book_2_in = CharInFilter(lookup_expr='in', 
+        field_name="book_2__version__version_code", label="Comma-separated list of book 2 genre codes")
     
     # filter on the number of text reuse instances:
     instances_count_gt = django_filters.NumberFilter(lookup_expr="gt", 
@@ -479,41 +521,42 @@ class ReleaseVersionFilter(django_filters.FilterSet):
     http://127.0.0.1:8000/version/all/?author_uri=0310Tabari
 
     """
-    release_code_contains = django_filters.CharFilter(
-        field_name="release_info__release_code", lookup_expr='icontains')
-    release_code = django_filters.CharFilter(
-        field_name="release_info__release_code", lookup_expr='exact')
-    
-    version_uri_contains = django_filters.CharFilter(
-        field_name="version__version_uri", lookup_expr='icontains')  # "exact" is default
-    char_count_lte = django_filters.NumberFilter(
-        field_name="char_length", lookup_expr="lte")
-    char_count_gte = django_filters.NumberFilter(
-        field_name="char_length", lookup_expr="gte")
-    tok_count_lte = django_filters.NumberFilter(
-        field_name="tok_length", lookup_expr="lte")
-    tok_count_gte = django_filters.NumberFilter(
-        field_name="tok_length", lookup_expr="gte")
 
-    editor = django_filters.CharFilter(
-        field_name="version__edition__editor", lookup_expr='icontains')
-    edition_place = django_filters.CharFilter(
-        field_name="version__edition__edition_place", lookup_expr='icontains')
-    publisher = django_filters.CharFilter(
-        field_name="version__edition__publisher", lookup_expr='icontains')
-    edition_date = django_filters.CharFilter(
-        field_name="version__edition__edition_date", lookup_expr='icontains')
-    edition = django_filters.CharFilter(
-        field_name="version__edition__ed_info", lookup_expr='icontains')
-    # this field is currently always null
-    language = CharInFilter(
-        field_name="version__language", lookup_expr='in')
-    tags = django_filters.CharFilter(
-        field_name="version__release_version__tags", lookup_expr='icontains')  # /?tags=_SHICR
-    analysis_priority = django_filters.CharFilter(
-        field_name="analysis_priority", lookup_expr='icontains')
-    annotation_status = django_filters.CharFilter(
-        field_name="annotation_status", lookup_expr='icontains')
+    release_code = django_filters.CharFilter(lookup_expr='exact',
+        field_name="release_info__release_code", label="Release code")
+    release_code_contains = django_filters.CharFilter(lookup_expr='icontains',
+        field_name="release_info__release_code", label="Release code contains")
+    
+    version_uri = django_filters.CharFilter(lookup_expr='icontains',
+        field_name="version__version_uri", label="Version URI contains")  # "exact" is default
+    char_count_lte = django_filters.NumberFilter(lookup_expr="lte",
+        field_name="char_length", label="Maximum character count")
+    char_count_gte = django_filters.NumberFilter(lookup_expr="gte",
+        field_name="char_length", label="Minimum character count")
+    tok_count_lte = django_filters.NumberFilter(lookup_expr="lte",
+        field_name="tok_length", label="Maximum token count")
+    tok_count_gte = django_filters.NumberFilter(lookup_expr="gte",
+        field_name="tok_length", label="Minimum token count")
+
+    editor = django_filters.CharFilter(lookup_expr='icontains',
+        field_name="version__edition__editor", label="Editor of the paper version")
+    edition_place = django_filters.CharFilter(lookup_expr='icontains',
+        field_name="version__edition__edition_place", label="Place of the edition of the paper version")
+    publisher = django_filters.CharFilter(lookup_expr='icontains',
+        field_name="version__edition__publisher", label="Publisher of the paper version")
+    edition_date = django_filters.CharFilter(lookup_expr='icontains',
+        field_name="version__edition__edition_date", label="Edition date of the paper version")
+    edition = django_filters.CharFilter(lookup_expr='icontains',
+        field_name="version__edition__ed_info", label="Any information on the edition of the paper version")
+
+    language = CharInFilter(lookup_expr='iin',    # case insensitive version of "in"
+        field_name="version__language", label="Language (three-letter code, separate multiple options with comma)")
+    tags = django_filters.CharFilter(lookup_expr='icontains',
+        field_name="version__release_version__tags", label="Version tags contain")  # /?tags=_SHICR
+    analysis_priority = CharInFilter(lookup_expr='iin',    # case insensitive version of "in"
+        field_name="analysis_priority", label="Analysis priority (pri/sec)")
+    annotation_status = CharInFilter(lookup_expr='iin',  # case insensitive version of "in"
+        field_name="annotation_status", label="Annotation status (inProgress/completed/mARkdown/(not yet annotated))")
 
     title_ar = django_filters.CharFilter(
         field_name="version__text__titles_ar", lookup_expr='icontains')
