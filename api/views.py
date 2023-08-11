@@ -327,10 +327,12 @@ class AuthorListView(CustomListView):
         # 2. get all fields listed for exact lookup in the filter class' Meta class:
         declared_filters += list(self.filterset_class.get_fields().keys())     
         #print(dir(self.filterset_class))  # gets you a list of all available properties of the filterset_class
-        # 3. create an additional filter "__in" for each declared filter; this allows "OR" filtering:
-        declared_filters_in = [f+"__in" for f in declared_filters]
-        # 4. add the default allowed parameters (like search, page, fields, ...):
-        all_allowed_parameters = allowed_parameters + declared_filters + declared_filters_in
+        # 3. add the default allowed parameters (like search, page, fields, ...):
+        all_allowed_parameters = allowed_parameters + declared_filters
+        # # 3. create an additional filter "__in" for each declared filter; this allows "OR" filtering:
+        # declared_filters_in = [f+"__in" for f in declared_filters]
+        # # 4. add the default allowed parameters (like search, page, fields, ...):
+        # all_allowed_parameters = allowed_parameters + declared_filters + declared_filters_in
 
         # Now check all elements in the query URL to check if they are valid:
         for p in self.request.GET:
@@ -404,10 +406,12 @@ class VersionListView(CustomListView):
         # 2. get all fields listed for exact lookup in the filter class' Meta class:
         declared_filters += list(self.filterset_class.get_fields().keys())     
         #print(dir(self.filterset_class))  # gets you a list of all available properties of the filterset_class
-        # 3. create an additional filter "__in" for each declared filter; this allows "OR" filtering:
-        declared_filters_in = [f+"__in" for f in declared_filters]
-        # 4. add the default allowed parameters (like search, page, fields, ...):
-        all_allowed_parameters = allowed_parameters + declared_filters + declared_filters_in
+        # 3. add the default allowed parameters (like search, page, fields, ...):
+        all_allowed_parameters = allowed_parameters + declared_filters
+        # # 3. create an additional filter "__in" for each declared filter; this allows "OR" filtering:
+        # declared_filters_in = [f+"__in" for f in declared_filters]
+        # # 4. add the default allowed parameters (like search, page, fields, ...):
+        # all_allowed_parameters = allowed_parameters + declared_filters + declared_filters_in
 
         # Now check all elements in the query URL to check if they are valid:
         for p in self.request.GET:
@@ -509,10 +513,12 @@ class TextListView(CustomListView):
         # 2. get all fields listed for exact lookup in the filter class' Meta class:
         declared_filters += list(self.filterset_class.get_fields().keys())     
         #print(dir(self.filterset_class))  # gets you a list of all available properties of the filterset_class
-        # 3. create an additional filter "__in" for each declared filter; this allows "OR" filtering:
-        declared_filters_in = [f+"__in" for f in declared_filters]
-        # 4. add the default allowed parameters (like search, page, fields, ...):
-        all_allowed_parameters = allowed_parameters + declared_filters + declared_filters_in
+        # 3. add the default allowed parameters (like search, page, fields, ...):
+        all_allowed_parameters = allowed_parameters + declared_filters
+        # # 3. create an additional filter "__in" for each declared filter; this allows "OR" filtering:
+        # declared_filters_in = [f+"__in" for f in declared_filters]
+        # # 4. add the default allowed parameters (like search, page, fields, ...):
+        # all_allowed_parameters = allowed_parameters + declared_filters + declared_filters_in
 
         # Now check all elements in the query URL to check if they are valid:
         for p in self.request.GET:
@@ -611,10 +617,12 @@ class TextReuseStatsListView(CustomListView):
         # 2. get all fields listed for exact lookup in the filter class' Meta class:
         declared_filters += list(self.filterset_class.get_fields().keys())     
         #print(dir(self.filterset_class))  # gets you a list of all available properties of the filterset_class
-        # 3. create an additional filter "__in" for each declared filter; this allows "OR" filtering:
-        declared_filters_in = [f+"__in" for f in declared_filters]
-        # 4. add the default allowed parameters (like search, page, fields, ...):
-        all_allowed_parameters = allowed_parameters + declared_filters + declared_filters_in
+        # 3. add the default allowed parameters (like search, page, fields, ...):
+        all_allowed_parameters = allowed_parameters + declared_filters
+        # # 3. create an additional filter "__in" for each declared filter; this allows "OR" filtering:
+        # declared_filters_in = [f+"__in" for f in declared_filters]
+        # # 4. add the default allowed parameters (like search, page, fields, ...):
+        # all_allowed_parameters = allowed_parameters + declared_filters + declared_filters_in
 
         # Now check all elements in the query URL to check if they are valid:
         for p in self.request.GET:
@@ -727,10 +735,12 @@ class ReleaseVersionListView(CustomListView):
         # 2. get all fields listed for exact lookup in the filter class' Meta class:
         declared_filters += list(self.filterset_class.get_fields().keys())     
         #print(dir(self.filterset_class))  # gets you a list of all available properties of the filterset_class
-        # 3. create an additional filter "__in" for each declared filter; this allows "OR" filtering:
-        declared_filters_in = [f+"__in" for f in declared_filters]
-        # 4. add the default allowed parameters (like search, page, fields, ...):
-        all_allowed_parameters = allowed_parameters + declared_filters + declared_filters_in
+        # 3. add the default allowed parameters (like search, page, fields, ...):
+        all_allowed_parameters = allowed_parameters + declared_filters
+        # # 3. create an additional filter "__in" for each declared filter; this allows "OR" filtering:
+        # declared_filters_in = [f+"__in" for f in declared_filters]
+        # # 4. add the default allowed parameters (like search, page, fields, ...):
+        # all_allowed_parameters = allowed_parameters + declared_filters + declared_filters_in
         
 
         # Now check all elements in the query URL to check if they are valid:
