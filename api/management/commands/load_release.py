@@ -28,6 +28,8 @@ import json
 from openiti.helper.ara import normalize_ara_light
 from api.util.betacode import betacodeToSearch
 
+from itertools import islice
+
 version_codes = dict()
 VERBOSE = False
 
@@ -39,14 +41,24 @@ class Command(BaseCommand):
 
         # provide the release details here:
 
-        release_code = "2022.2.7"
-        release_date = datetime.date(2023, 2, 24) # YYYY, M, D
-        meta_fp = "meta/OpenITI_metadata_2022-2-7_wNoor.csv"
-        base_url = "https://raw.githubusercontent.com/OpenITI/RELEASE/v2022.2.7/data"
-        zenodo_link = "https://zenodo.org/record/7687795"
-        release_notes_fp = "meta/release_notes_2022-2-7.txt"
-        reuse_data_fp = "reuse_data/stats-v2022-2-7_bi-dir.csv"
-        reuse_data_base_url = "http://dev.kitab-project.org/passim01122022-v7/"
+        release_code = "2023.1.8"
+        release_date = datetime.date(2023, 10, 17) # YYYY, M, D
+        meta_fp = "meta/OpenITI_metadata_2023-1-8_wNoor.csv"
+        base_url = "https://raw.githubusercontent.com/OpenITI/RELEASE/v2023.1.8/data"
+        zenodo_link = "https://zenodo.org/records/10007820"
+        release_notes_fp = "meta/release_notes_2023-1-8.txt"
+        reuse_data_fp = "reuse_data/stats-v8_uni-dir.csv"
+        reuse_data_base_url = "http://dev.kitab-project.org/2023.1.8/"
+
+
+        # release_code = "2022.2.7"
+        # release_date = datetime.date(2023, 2, 24) # YYYY, M, D
+        # meta_fp = "meta/OpenITI_metadata_2022-2-7_wNoor.csv"
+        # base_url = "https://raw.githubusercontent.com/OpenITI/RELEASE/v2022.2.7/data"
+        # zenodo_link = "https://zenodo.org/record/7687795"
+        # release_notes_fp = "meta/release_notes_2022-2-7.txt"
+        # reuse_data_fp = "reuse_data/stats-v2022-2-7_bi-dir.csv"
+        # reuse_data_base_url = "http://dev.kitab-project.org/passim01122022-v7/"
 
         # release_code = "2022.1.6"
         # release_date = datetime.date(2022, 7, 8) # YYYY, M, D
@@ -103,10 +115,12 @@ def main(meta_fp, base_url, release_info, reuse_data_fp, reuse_data_base_url, te
     if no_duplicates:
         print("No duplicate version IDs found")
     print("-"*60)
-    # upload the text reuse stats:
     
-    upload_reuse_stats(reuse_data_fp, release_info["release_code"], release_obj, reuse_data_base_url, version_codes_d, test=test)
+    # upload the text reuse stats:
+    #upload_reuse_stats(reuse_data_fp, release_info["release_code"], release_obj, reuse_data_base_url, version_codes_d, test=test)
+    
     # create the corpus insights data:
+    # TO DO
     
 
 def get_version_lang(version_uri):
@@ -138,6 +152,8 @@ def split_tag_list(tag_list):
             version_tags.append("COMPLETED")
         elif "INPROGRESS" in tag:
             version_tags.append("INPROGRESS")
+        elif "CLEANED_VERSION" in tag:
+            version_tags.append("CLEANED_VERSION")
         elif "NO_MAJOR_ISSUES" in tag:
             version_tags.append("NO_MAJOR_ISSUES")
         elif "born@" in tag or "died@" in tag or "resided@" in tag or "visited@" in tag:
@@ -147,6 +163,10 @@ def split_tag_list(tag_list):
         else:
             version_tags.append(tag)
     return version_tags, text_tags, author_tags
+
+def clean(s):
+    s = re.sub(" *¶ *", " ", s)
+    return s.strip()
         
 def format_fields(data, base_url):
     record = dict()
@@ -158,13 +178,13 @@ def format_fields(data, base_url):
     record['date_CE'] = ah2ce(data['date'])
     record['date_str'] = int(data['date'])
     # add normalized versions + prefered version of the arabic-script author name:
-    author_ar = re.split(' *:: *| *, *| *; *',data['author_ar'])
-    normalized_author_ar = [normalize_ara_light(a.strip()) for a in author_ar if a]
+    author_ar = re.split(' *:: *| *, *| *; *', clean(data['author_ar']))
+    normalized_author_ar = [normalize_ara_light(clean(a)) for a in author_ar if a]
     record['author_ar'] = " :: ".join(list(set(author_ar + normalized_author_ar)))
     record['author_ar_prefered'] = author_ar[0]
     # add normalized versions + prefered version of the latin-script author name:
-    author_lat_shuhra = re.split(' *:: *| *, *| *; *',data['author_lat_shuhra'])
-    author_lat = re.split(' *:: *| *, *| *; *',data['author_lat'])
+    author_lat_shuhra = re.split(' *:: *| *, *| *; *', clean(data['author_lat_shuhra']))
+    author_lat = re.split(' *:: *| *, *| *; *', clean(data['author_lat']))
     if data['author_lat_shuhra']:
         record['author_lat_prefered'] = author_lat_shuhra[0]
     else:
@@ -177,12 +197,12 @@ def format_fields(data, base_url):
     record['author_uri'] = data['book'].split(".")[0]
 
     # add normalized version of the Arabic-script titles:
-    titles_ar = re.split(' *:: *| *, *| *; *', data['title_ar'])
-    normalized_titles_ar = [normalize_ara_light(t.strip()) for t in titles_ar if t]
+    titles_ar = re.split(' *:: *| *, *| *; *', clean(data['title_ar']))
+    normalized_titles_ar = [normalize_ara_light(clean(t)) for t in titles_ar if t]
     record['titles_ar'] = " :: ".join(list(set(titles_ar + normalized_titles_ar)))
 
     # add normalized version of the Latin-script titles:
-    titles_lat = re.split(' *:: *| *, *| *; *', data['title_lat'])
+    titles_lat = re.split(' *:: *| *, *| *; *', clean(data['title_lat']))
     normalized_titles_lat = [betacodeToSearch(t) for t in titles_lat if t]
     record['titles_lat'] = " :: ".join(list(set(titles_lat + normalized_titles_lat)))
 
@@ -190,7 +210,7 @@ def format_fields(data, base_url):
     record['title_ar_prefered'] = titles_ar[0]
     record['title_lat_prefered'] = titles_lat[0]
 
-    record['ed_info'] = data['ed_info']
+    record['ed_info'] = clean(data['ed_info'])
     record['version_code'] = data['id']
 
     # check if the version is part of a text file that was split because of its size:
@@ -211,7 +231,7 @@ def format_fields(data, base_url):
 
     record['author_from_uri'] = data['author_from_uri']
     record['author_lat_shuhra'] = data['author_lat_shuhra']
-    record['author_lat_full_name'] = data['author_lat_full_name']
+    record['author_lat_full_name'] = clean(data['author_lat_full_name'])
 
     ##releasefields
     record['char_length'] = data['char_length']
@@ -401,9 +421,12 @@ def upload_release_meta(meta_fp, base_url, release_info):
 def upload_reuse_stats(reuse_data_fp, release_code, release_obj, reuse_data_base_url, version_codes_d, test=False):
     print("Loading text reuse stats...")
     book_cache = dict() # to avoid unnecessary lookups in the database
+    batch = []
+    batch_size = 100
     with open(reuse_data_fp, 'r', encoding='utf-8') as f:
         reader = csv.DictReader(f, delimiter='\t')
-        for data in reader:
+        
+        for i, data in enumerate(reader):
             if test:
                 # for testing: only load 0179MalikIbnAnas.Muwatta and 0310Tabari.Tarikh stats:
                 if not (("Shamela0009783" in data['_T1'] or "Shamela0009783" in data['_T2']) \
@@ -421,7 +444,7 @@ def upload_reuse_stats(reuse_data_fp, release_code, release_obj, reuse_data_base
                 version_code2 = version_code2[:-1]
 
             # get the last part of the filename (version_code + lang + number + extension),
-            # which form part of the URL
+            # which form part of the csv URL
             try:
                 ref1 = version_codes_d[version_code1]
                 ref2 = version_codes_d[version_code2]
@@ -449,18 +472,35 @@ def upload_reuse_stats(reuse_data_fp, release_code, release_obj, reuse_data_base
             
             tsv_url = f"{reuse_data_base_url}{ref1}/{ref1}_{ref2}.csv"
             
-            tr, created = TextReuseStats.objects.update_or_create(
+            # tr, created = TextReuseStats.objects.update_or_create(
+            #     book_1 = b1,
+            #     book_2 = b2,
+            #     release_info=release_obj,
+            #     defaults=dict(
+            #         tsv_url=tsv_url,
+            #         instances_count=data['instances'],
+            #         book1_words_matched=data['WM1_Total'],
+            #         book2_words_matched=data['WM2_Total'],
+            #         book1_pct_words_matched=data['WM_B1inB2'],
+            #         book2_pct_words_matched=data['WM_B2inB1'],
+            #     )
+            # )
+            #if created and VERBOSE:
+            #    print("NEW TEXT REUSE ENTRY CREATED:", tr)
+            batch.append(dict(
                 book_1 = b1,
                 book_2 = b2,
                 release_info=release_obj,
-                defaults=dict(
-                    tsv_url=tsv_url,
-                    instances_count=data['instances'],
-                    book1_words_matched=data['WM1_Total'],
-                    book2_words_matched=data['WM2_Total'],
-                    book1_pct_words_matched=data['WM_B1inB2'],
-                    book2_pct_words_matched=data['WM_B2inB1'],
+                tsv_url=tsv_url,
+                instances_count=data['instances'],
+                book1_words_matched=data['WM1_Total'],
+                book2_words_matched=data['WM2_Total'],
+                book1_pct_words_matched=data['WM_B1inB2'],
+                book2_pct_words_matched=data['WM_B2inB1'],
                 )
             )
-            if created and VERBOSE:
-                print("NEW TEXT REUSE ENTRY CREATED:", tr)
+            if len(batch) == batch_size:
+                print("loading batch no.", i)
+                TextReuseStats.objects.bulk_create(batch)
+                batch = []
+            
