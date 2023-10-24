@@ -35,10 +35,15 @@ from rest_framework import serializers
 from .models import PersonName, Text, Author, Version,\
                     CorpusInsights, TextReuseStats, ReleaseVersion,\
                     RelationType, A2BRelation, ReleaseInfo,\
-                    SourceCollectionDetails, Edition, GitHubIssue
+                    SourceCollectionDetails, Edition, GitHubIssue, VersionwiseReuseStats
 from rest_flex_fields import FlexFieldsModelSerializer
 from django.db.models import Q
 
+class VersionReuseStatsSerializer(FlexFieldsModelSerializer):
+    class Meta:
+        model = VersionwiseReuseStats
+        fields = ('__all__')
+        depth = 0
 
 class ShallowNameElementsSerializer(FlexFieldsModelSerializer):
     """This serializer is used to serialize the name elements in author queries.
@@ -88,7 +93,16 @@ class ShallowVersionSerializer(FlexFieldsModelSerializer):
         # select the versions that are part of the current version_instance:
         parts = Version.objects\
             .filter(part_of__version_uri=version_instance.version_uri)
-        return {"parts": [d.version_uri for d in parts]}
+        # get the bookwise text reuse statistics: 
+        version_reuse_stats = VersionwiseReuseStats.objects\
+            .filter(release_version__version__version_uri=version_instance.version_uri)\
+            .first()
+        try:
+            return {"parts": [d.version.version_uri for d in parts], 
+                    "n_reuse_instances": version_reuse_stats.n_instances}
+        except:
+            return {"parts": [d.version.version_uri for d in parts], 
+                    "n_reuse_instances": 0}
 
     def to_representation(self, instance):
         """Customize the default json representation"""
@@ -98,7 +112,7 @@ class ShallowVersionSerializer(FlexFieldsModelSerializer):
         release_codes = [d["release_info"]["release_code"] for d in json_rep.pop("release_versions")]
         releases = {"releases": release_codes}
         # add the version URIs of the parts: 
-        parts = self.serialize_relations(instance)
+        reverse_foreign_keys = self.serialize_relations(instance)
         # use only the version URI for the part_of key:
         part_of = json_rep.pop("part_of")
         try:
@@ -106,7 +120,7 @@ class ShallowVersionSerializer(FlexFieldsModelSerializer):
         except:
             part_of = {"part_of": None}
 
-        return {**json_rep, **parts, **part_of, **releases}
+        return {**json_rep, **reverse_foreign_keys, **part_of, **releases}
 
     class Meta:
         model = Version
@@ -408,6 +422,7 @@ class ShallowReleaseVersionSerializer(FlexFieldsModelSerializer):
         json_rep = super().to_representation(instance)
         try:
             release_meta = json_rep["release_info"]
+
             del release_meta["id"]
             del release_meta["release_notes"]
             del json_rep["release_info"]
@@ -419,8 +434,12 @@ class ShallowReleaseVersionSerializer(FlexFieldsModelSerializer):
 
     class Meta:
         model = ReleaseVersion
-        fields = ('__all__')
+        #fields = ('__all__')
+        fields = ("id", "char_length", "tok_length", "url", "analysis_priority", 
+                  "annotation_status", "tags", "notes")
         depth=1
+
+
 
 class VersionSerializer(FlexFieldsModelSerializer):
     """This serializer is used to serialize the version metadata in version queries,
@@ -435,7 +454,17 @@ class VersionSerializer(FlexFieldsModelSerializer):
         # select the versions that are part of the current version_instance:
         parts = Version.objects\
             .filter(part_of__version_uri=version_instance.version_uri)
-        return {"parts": [d.version_uri for d in parts]}
+        # get the bookwise text reuse statistics: 
+        version_reuse_stats = VersionwiseReuseStats.objects\
+            .filter(release_version__version__version_uri=version_instance.version_uri)\
+            .first()
+        return {"parts": [d.version.version_uri for d in parts]}
+        try:
+            return {"parts": [d.version.version_uri for d in parts], 
+                    "n_reuse_instances": version_reuse_stats.n_instances}
+        except:
+            return {"parts": [d.version.version_uri for d in parts], 
+                    "n_reuse_instances": 0}
 
     def to_representation(self, instance):
         """Customize the default json representation"""
@@ -739,11 +768,20 @@ class ReleaseVersionSerializer(serializers.ModelSerializer):
         # select the versions that are part of the current version_instance:
         parts = ReleaseVersion.objects\
             .filter(version__part_of__version_uri=instance.version.version_uri)
-        return {"parts": [d.version.version_uri for d in parts]}
+        # get the bookwise text reuse statistics: 
+        version_reuse_stats = VersionwiseReuseStats.objects\
+            .filter(release_version=instance).first()
+        try:
+            return {"parts": [d.version.version_uri for d in parts], 
+                    "n_reuse_instances": version_reuse_stats.n_instances}
+        except:
+            return {"parts": [d.version.version_uri for d in parts], 
+                    "n_reuse_instances": 0}
 
     def to_representation(self, instance):
         """Format the result in the same way as the VersionSerializer"""
         json_rep = super().to_representation(instance)
+        inverse_foreign_keys = self.serialize_relations(instance)
 
         # replace the full release_info dictionary with only the release_code:
         try:
@@ -766,6 +804,7 @@ class ReleaseVersionSerializer(serializers.ModelSerializer):
             "annotation_status": json_rep["annotation_status"],
             "tags": json_rep["tags"],
             "notes": json_rep["notes"],
+            **inverse_foreign_keys
         }
         # make the version dictionary the main part of the returned dictionary:
         json_rep = json_rep["version"]

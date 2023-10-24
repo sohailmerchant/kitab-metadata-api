@@ -9,7 +9,8 @@ import json
 class Command(BaseCommand):
     def handle(self, **options):
         #release_codes = ["2021.1.4", "2021.2.5", "2022.1.6", "2022.2.7"]
-        release_codes = ["2021.2.5", "2022.1.6", "2022.2.7", "post-release"]
+        #release_codes = ["2021.2.5", "2022.1.6", "2022.2.7", "post-release"]
+        release_codes = ["2023.1.8"]
         for release_code in release_codes:
             print(release_code)
             load_aggregated_data(release_code)
