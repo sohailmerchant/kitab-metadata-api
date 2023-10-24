@@ -250,6 +250,20 @@ class ReleaseVersion(models.Model):
 
     def __str__(self):
         return f"{self.version} ({self.release_info})"
+    
+class VersionwiseReuseStats(models.Model):
+    """Describes text reuse statistics on the single release version level
+    (how many versions does it share text reuse with? How many text reuse instances?)
+    """
+    id = models.AutoField(primary_key=True)
+    release_version = models.ForeignKey(ReleaseVersion, on_delete=models.DO_NOTHING, 
+                                           related_name='versionwise_reuse_stats', 
+                                           related_query_name="versionwise_reuse")
+    n_instances = models.IntegerField(null=True, blank=True)
+    n_versions = models.IntegerField(null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.release_version}: {self.n_instances}, {self.n_versions}"
 
 
 class ReleaseInfo(models.Model):
