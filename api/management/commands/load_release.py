@@ -440,8 +440,9 @@ def upload_reuse_stats(reuse_data_fp, release_code, release_obj, reuse_data_base
         for data in reader:
             if test:
                 # for testing: only load 0179MalikIbnAnas.Muwatta and 0310Tabari.Tarikh stats:
-                if not (("Shamela0009783" in data['_T1'] or "Shamela0009783" in data['_T2']) \
-                    or ("Shamela0028107" in data['_T1'] or "Shamela0028107" in data['_T1'])):  # 0179MalikIbnAnas.Muwatta
+                #if not (("Shamela0009783" in data['_T1'] or "Shamela0009783" in data['_T2']) \
+                #    or ("Shamela0028107" in data['_T1'] or "Shamela0028107" in data['_T1'])):  # 0179MalikIbnAnas.Muwatta
+                if not (("ER004" in data['_T1'] or "ER004" in data['_T2'])):  # Eugénie's text
                     continue
             version_code1 = data['_T1'].split("-")[0].split(".")[0]
             version_code2 = data['_T2'].split("-")[0].split(".")[0]
@@ -513,8 +514,7 @@ def upload_reuse_stats(reuse_data_fp, release_code, release_obj, reuse_data_base
             if len(batch) == batch_size:
                 batch_no += 1
                 print("loading batch no.", batch_no)
-                if batch_no > 50:
-                    TextReuseStats.objects.bulk_create(batch)
+                TextReuseStats.objects.bulk_create(batch)
                 batch = []
         
     # load the remainder of the last batch:
