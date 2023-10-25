@@ -6,8 +6,11 @@ import csv
 
 class Command(BaseCommand):
     def handle(self, **options):
-        versionwise_stats_fp = "reuse_data/bookwise-stats-v7-2022_uni-dir.csv"
-        release_code = "2022.2.7"
+        #VersionwiseReuseStats.objects.all().delete()
+        #versionwise_stats_fp = "reuse_data/bookwise-stats-v7-2022_uni-dir.csv"
+        #release_code = "2022.2.7"
+        versionwise_stats_fp = "reuse_data/bookwise-stats-v8_uni-dir.csv"
+        release_code = "2023.1.8"
         main(versionwise_stats_fp, release_code)
 
 
@@ -22,19 +25,18 @@ def main(versionwise_stats_fp, release_code):
         header = next(reader)
 
         for row in reader:
-            version_obj = Version.objects.filter(
-                version_code = row["id"]
-            ).first()
             try:
                 release_version_obj = ReleaseVersion.objects.get(
-                    version = version_obj,
+                    version__version_code = row["id"],
                     release_info = release_obj
                 )
-            except:
-                print("No release version found for", version_obj)
+            except Exception as e:
+                print(e)
+                print(row["id"])
+                print(release_obj)
+                print("No release version found for", row["id"])
                 print("skipping...")
                 continue
-            #print(release_version_obj)
             vrs_obj, created = VersionwiseReuseStats.objects.get_or_create(
                 release_version = release_version_obj,
                 n_instances = row["instances"]
