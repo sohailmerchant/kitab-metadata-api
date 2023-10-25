@@ -724,7 +724,8 @@ class ReleaseVersionListView(CustomListView):
     filterset_class = ReleaseVersionFilter
 
     ordering_fields = ['tok_length', 'analysis_priority', 'version__text__author__date', 
-                       'version__text__title_lat_prefered', 'version__text__author__author_lat_prefered']
+                       'version__text__title_lat_prefered', 'version__text__author__author_lat_prefered',
+                       'versionwise_reuse__n_instances']
 
     def get_queryset(self):
         """Filter the ReleaseVersion objects, based on the release_code in the query URL"""
