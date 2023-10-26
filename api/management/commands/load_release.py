@@ -37,6 +37,11 @@ class Command(BaseCommand):
     def handle(self, **options):
         # if testing, only upload text reuse data for Tabari.Tarikh and MalikIbnAnas.Muwatta
         test = True
+
+        # if uploading only text reuse stats: set upload to False:
+        meta_upload=False
+
+
         #TextReuseStats.objects.all().delete()
 
         # provide the release details here:
@@ -98,12 +103,12 @@ class Command(BaseCommand):
             release_notes=release_notes,
         )
 
-        main(meta_fp, base_url, release_info, reuse_data_fp, reuse_data_base_url, test=test)
+        main(meta_fp, base_url, release_info, reuse_data_fp, reuse_data_base_url, test=test, meta_upload=meta_upload)
 
 
-def main(meta_fp, base_url, release_info, reuse_data_fp, reuse_data_base_url, test=False):
+def main(meta_fp, base_url, release_info, reuse_data_fp, reuse_data_base_url, test=False, meta_upload=True):
     # load the release metadata:
-    release_obj, version_codes_d = upload_release_meta(meta_fp, base_url, release_info)
+    release_obj, version_codes_d = upload_release_meta(meta_fp, base_url, release_info, meta_upload=meta_upload)
     # check for duplicate version_codes:
     print("-"*60)
     no_duplicates=True
@@ -115,9 +120,10 @@ def main(meta_fp, base_url, release_info, reuse_data_fp, reuse_data_base_url, te
     if no_duplicates:
         print("No duplicate version IDs found")
     print("-"*60)
+
     
     # upload the text reuse stats:
-    #upload_reuse_stats(reuse_data_fp, release_info["release_code"], release_obj, reuse_data_base_url, version_codes_d, test=test)
+    upload_reuse_stats(reuse_data_fp, release_info["release_code"], release_obj, reuse_data_base_url, version_codes_d, test=test)
     
     # create the corpus insights data:
     # TO DO
@@ -248,8 +254,22 @@ def format_fields(data, base_url):
     return record
 
 
-def upload_release_meta(meta_fp, base_url, release_info):
+def upload_release_meta(meta_fp, base_url, release_info, meta_upload=True):
     print(f"Uploading release {release_info['release_code']} metadata...")
+
+            # first, create the new release itself in the database:
+
+    release_obj, created = ReleaseInfo.objects.update_or_create(
+        release_code=release_info["release_code"],
+        defaults=dict(
+            release_date=release_info["release_date"],
+            zenodo_link=release_info["zenodo_link"],
+            release_notes=release_info["release_notes"]
+        )
+    )
+    if created:
+        print("NEW RELEASE ENTRY CREATED:", release_obj)
+
     version_codes_d = dict()
     fieldnames = ['versionUri', 'date', 'author_ar', 'author_lat', 'book', 'title_ar', 'title_lat', 'ed_info', 'id', 'status', 'tok_length', 'url', 'tags', 'author_from_uri', 'author_lat_shuhra', 'author_lat_full_name', 'char_length']
     with open(meta_fp, 'r', encoding='utf-8') as f:
@@ -270,22 +290,12 @@ def upload_release_meta(meta_fp, base_url, release_info):
                     print("add whole:", whole_version_code, whole_s)
             except: 
                 print("version_code", version_code, "not found in url", version_data["url"])
+            
+            if not meta_upload:
+                continue
 
             # read in the metadata for a version and format it:
             record = format_fields(version_data, base_url)
-
-            # first, create the new release itself in the database:
-
-            release_obj, created = ReleaseInfo.objects.update_or_create(
-                release_code=release_info["release_code"],
-                defaults=dict(
-                    release_date=release_info["release_date"],
-                    zenodo_link=release_info["zenodo_link"],
-                    release_notes=release_info["release_notes"]
-                )
-            )
-            if created:
-                print("NEW RELEASE ENTRY CREATED:", release_obj)
 
             # check if the version uri is already in the database:
 
@@ -422,15 +432,17 @@ def upload_reuse_stats(reuse_data_fp, release_code, release_obj, reuse_data_base
     print("Loading text reuse stats...")
     book_cache = dict() # to avoid unnecessary lookups in the database
     batch = []
+    batch_no = 0
     batch_size = 100
     with open(reuse_data_fp, 'r', encoding='utf-8') as f:
         reader = csv.DictReader(f, delimiter='\t')
         
-        for i, data in enumerate(reader):
+        for data in reader:
             if test:
                 # for testing: only load 0179MalikIbnAnas.Muwatta and 0310Tabari.Tarikh stats:
-                if not (("Shamela0009783" in data['_T1'] or "Shamela0009783" in data['_T2']) \
-                    or ("Shamela0028107" in data['_T1'] or "Shamela0028107" in data['_T1'])):  # 0179MalikIbnAnas.Muwatta
+                #if not (("Shamela0009783" in data['_T1'] or "Shamela0009783" in data['_T2']) \
+                #    or ("Shamela0028107" in data['_T1'] or "Shamela0028107" in data['_T1'])):  # 0179MalikIbnAnas.Muwatta
+                if not (("ER004" in data['_T1'] or "ER004" in data['_T2'])):  # Eugénie's text
                     continue
             version_code1 = data['_T1'].split("-")[0].split(".")[0]
             version_code2 = data['_T2'].split("-")[0].split(".")[0]
@@ -487,7 +499,7 @@ def upload_reuse_stats(reuse_data_fp, release_code, release_obj, reuse_data_base
             # )
             #if created and VERBOSE:
             #    print("NEW TEXT REUSE ENTRY CREATED:", tr)
-            batch.append(dict(
+            batch.append(TextReuseStats(
                 book_1 = b1,
                 book_2 = b2,
                 release_info=release_obj,
@@ -500,7 +512,14 @@ def upload_reuse_stats(reuse_data_fp, release_code, release_obj, reuse_data_base
                 )
             )
             if len(batch) == batch_size:
-                print("loading batch no.", i)
+                batch_no += 1
+                print("loading batch no.", batch_no)
                 TextReuseStats.objects.bulk_create(batch)
                 batch = []
+        
+    # load the remainder of the last batch:
+    if len(batch) > 0:
+        batch_no += 1
+        print("loading batch no.", batch_no)
+        TextReuseStats.objects.bulk_create(batch)
             

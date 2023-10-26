@@ -36,18 +36,19 @@ from .serializers import TextSerializer, VersionSerializer, PersonNameSerializer
                          ShallowTextReuseStatsSerializer, TextReuseStatsSerializerB1, AllRelationTypesSerializer, \
                          GitHubIssueSerializer
 from .filters import AuthorFilter, VersionFilter, TextFilter, TextReuseFilter, ReleaseVersionFilter, \
-                     CustomSearchFilter, VersionSearchFilter
+                     CustomSearchFilter, VersionSearchFilter, ReleaseVersionSearchFilter
 
 # list all parameters (apart from view-specific filters)
 # that are allowed in a URL's querystring
 # (other parameters will throw an error):
 allowed_parameters = [
     "search", 
-    "normalize",
+    "normalize",     # allowed options: "true" (default), "false"
     "ordering", 
     "page", 
     "page_size",
-    "fields"
+    "fields",
+    "search_fields"  # allowed options: "related", "extended"
 ] 
 
 
@@ -719,12 +720,19 @@ class ReleaseVersionListView(CustomListView):
         "version__text__author__author_ar", "version__text__author__author_lat", # contains all attested author names (incl. from the name elements)
         ]
 
+
+
+    filter_backends = (django_filters.DjangoFilterBackend,
+                       ReleaseVersionSearchFilter, 
+                       filters.OrderingFilter) 
+
     serializer_class = ReleaseVersionSerializer
 
     filterset_class = ReleaseVersionFilter
 
     ordering_fields = ['tok_length', 'analysis_priority', 'version__text__author__date', 
-                       'version__text__title_lat_prefered', 'version__text__author__author_lat_prefered']
+                       'version__text__title_lat_prefered', 'version__text__author__author_lat_prefered',
+                       'versionwise_reuse__n_instances']
 
     def get_queryset(self):
         """Filter the ReleaseVersion objects, based on the release_code in the query URL"""
