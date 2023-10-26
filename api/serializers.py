@@ -98,10 +98,10 @@ class ShallowVersionSerializer(FlexFieldsModelSerializer):
             .filter(release_version__version__version_uri=version_instance.version_uri)\
             .first()
         try:
-            return {"parts": [d.version.version_uri for d in parts], 
+            return {"parts": sorted(list(set([d.version_uri for d in parts]))), 
                     "n_reuse_instances": version_reuse_stats.n_instances}
         except:
-            return {"parts": [d.version.version_uri for d in parts], 
+            return {"parts": sorted(list(set([d.version_uri for d in parts]))), 
                     "n_reuse_instances": 0}
 
     def to_representation(self, instance):
@@ -772,10 +772,10 @@ class ReleaseVersionSerializer(serializers.ModelSerializer):
         version_reuse_stats = VersionwiseReuseStats.objects\
             .filter(release_version=instance).first()
         try:
-            return {"parts": [d.version.version_uri for d in parts], 
+            return {"parts": sorted(list(set([d.version.version_uri for d in parts]))), 
                     "n_reuse_instances": version_reuse_stats.n_instances}
         except:
-            return {"parts": [d.version.version_uri for d in parts], 
+            return {"parts": sorted(list(set([d.version.version_uri for d in parts]))), 
                     "n_reuse_instances": 0}
 
     def to_representation(self, instance):
