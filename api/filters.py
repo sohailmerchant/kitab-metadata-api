@@ -145,7 +145,9 @@ class VersionSearchFilter(CustomSearchFilter):
             "text__related_persons__author_uri", "text__related_persons__author_ar", "text__related_persons__author_lat",
             "text__author__related_persons__author_uri", 
             "text__author__related_persons__author_ar", "text__author__related_persons__author_lat",
-            # TO DO: add through fields: A2BRelation.relation_type.code, A2BRelation.relation_type.name, A2BRelation.relation_type.name_inverted, A2BRelation.relation_type.descr
+            # TO DO: add through fields: A2BRelation.relation_type.code, 
+            # A2BRelation.relation_type.name, A2BRelation.relation_type.name_inverted, 
+            # A2BRelation.relation_type.descr
             ]
 
         extended_search_fields = search_fields + [
@@ -153,6 +155,70 @@ class VersionSearchFilter(CustomSearchFilter):
             "edition__ed_info",   # includes all edition fields in a single string
             "source_coll__name",  "source_coll__description", 
             "text__text_type", "text__tags", "text__notes"
+            ]
+
+        # check whether the user wants to use other search fields than the basic search fields:
+        search_fields_q = request.query_params.get('search_fields', "")
+        if not search_fields_q:
+            return search_fields
+        elif search_fields_q == "extended":
+            search_fields = extended_search_fields
+            print("SEARCHING IN EXTENDED SEARCH FIELDS!")
+        elif search_fields_q == "related":
+            search_fields = related_search_fields
+            print("SEARCHING IN RELATED SEARCH FIELDS!")
+        # perhaps a last option could be added: user/app could send the desired search fields as a comma-separated list
+
+        return search_fields
+    
+class ReleaseVersionSearchFilter(CustomSearchFilter):
+    """This is an implementation of the CustomSearchFilter especially for the VersionListView.
+    It allows for defining specific search fields.
+    """
+
+    def get_search_fields(self, view, request):
+        """Override the default way Django sets the search fields;
+        give the option to use a basic set of search fields,
+        a set of search fields that includes related books/persons/places,
+        or a set of extended search fields."""
+
+        # get the default search fields:
+        search_fields = super().get_search_fields(view, request)
+
+        related_search_fields = search_fields + [ 
+            "version__text__related_texts__text_uri", 
+            "version__text__related_texts__titles_ar", 
+            "version__text__related_texts__titles_lat", 
+            "version__text__related_texts__author__author_ar", 
+            "version__text__related_texts__author__author_lat", 
+            "version__text__related_persons__author_uri", 
+            "version__text__related_persons__author_ar", 
+            "version__text__related_persons__author_lat",
+            "version__text__text_related__text_uri", 
+            "version__text__text_related__titles_ar", 
+            "version__text__text_related__titles_lat",
+            "version__text__text_related__author__author_ar", 
+            "version__text__text_related__author__author_lat", 
+            "version__text__related_persons__author_uri", 
+            "version__text__related_persons__author_ar", 
+            "version__text__related_persons__author_lat",
+            "version__text__author__related_persons__author_uri", 
+            "version__text__author__related_persons__author_ar", 
+            "version__text__author__related_persons__author_lat",
+            #"version__text__author__related_places__relation_type__code"
+            # TO DO: add through fields: A2BRelation.relation_type.code, 
+            # A2BRelation.relation_type.name, A2BRelation.relation_type.name_inverted, 
+            # A2BRelation.relation_type.descr
+            ]
+
+        extended_search_fields = search_fields + [
+            "notes", "tags", 
+            "version__edition__ed_info",   # includes all edition fields in a single string
+            "version__source_coll__name",  
+            "version__source_coll__description", 
+            "version__text__text_type", 
+            "version__text__tags", 
+            "version__text__notes"
             ]
 
         # check whether the user wants to use other search fields than the basic search fields:
