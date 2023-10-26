@@ -43,12 +43,12 @@ from .filters import AuthorFilter, VersionFilter, TextFilter, TextReuseFilter, R
 # (other parameters will throw an error):
 allowed_parameters = [
     "search", 
-    "normalize",
+    "normalize",     # allowed options: "true" (default), "false"
     "ordering", 
     "page", 
     "page_size",
     "fields",
-    "search_fields"
+    "search_fields"  # allowed options: "related", "extended"
 ] 
 
 
