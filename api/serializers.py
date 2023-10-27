@@ -99,10 +99,14 @@ class ShallowVersionSerializer(FlexFieldsModelSerializer):
             .first()
         try:
             return {"parts": sorted(list(set([d.version_uri for d in parts]))), 
-                    "n_reuse_instances": version_reuse_stats.n_instances}
+                    "n_reuse_instances": version_reuse_stats.n_instances,
+                    "n_reuse_versions": version_reuse_stats.n_versions
+                    }
         except:
             return {"parts": sorted(list(set([d.version_uri for d in parts]))), 
-                    "n_reuse_instances": 0}
+                    "n_reuse_instances": 0,
+                    "n_reuse_versions": 0
+                    }
 
     def to_representation(self, instance):
         """Customize the default json representation"""
@@ -461,10 +465,13 @@ class VersionSerializer(FlexFieldsModelSerializer):
         return {"parts": [d.version.version_uri for d in parts]}
         try:
             return {"parts": [d.version.version_uri for d in parts], 
-                    "n_reuse_instances": version_reuse_stats.n_instances}
+                    "n_reuse_instances": version_reuse_stats.n_instances,
+                    "n_reuse_versions": version_reuse_stats.n_versions}
         except:
             return {"parts": [d.version.version_uri for d in parts], 
-                    "n_reuse_instances": 0}
+                    "n_reuse_instances": 0,
+                    "n_reuse_versions": 0
+                    }
 
     def to_representation(self, instance):
         """Customize the default json representation"""
@@ -773,10 +780,13 @@ class ReleaseVersionSerializer(serializers.ModelSerializer):
             .filter(release_version=instance).first()
         try:
             return {"parts": sorted(list(set([d.version.version_uri for d in parts]))), 
-                    "n_reuse_instances": version_reuse_stats.n_instances}
+                    "n_reuse_instances": version_reuse_stats.n_instances,
+                    "n_reuse_versions": version_reuse_stats.n_versions
+                    }
         except:
             return {"parts": sorted(list(set([d.version.version_uri for d in parts]))), 
-                    "n_reuse_instances": 0}
+                    "n_reuse_instances": 0,
+                    "n_reuse_versions": 0}
 
     def to_representation(self, instance):
         """Format the result in the same way as the VersionSerializer"""
