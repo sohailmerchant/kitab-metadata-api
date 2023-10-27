@@ -41,19 +41,19 @@ class Command(BaseCommand):
         # if uploading only text reuse stats: set upload to False:
         meta_upload=False
 
-
         #TextReuseStats.objects.all().delete()
 
         # provide the release details here:
 
-        release_code = "2023.1.8"
-        release_date = datetime.date(2023, 10, 17) # YYYY, M, D
-        meta_fp = "meta/OpenITI_metadata_2023-1-8_wNoor.csv"
-        base_url = "https://raw.githubusercontent.com/OpenITI/RELEASE/v2023.1.8/data"
-        zenodo_link = "https://zenodo.org/records/10007820"
-        release_notes_fp = "meta/release_notes_2023-1-8.txt"
-        reuse_data_fp = "reuse_data/stats-v8_uni-dir.csv"
-        reuse_data_base_url = "http://dev.kitab-project.org/2023.1.8/"
+        # release_code = "2023.1.8"
+        # release_date = datetime.date(2023, 10, 17) # YYYY, M, D
+        # meta_fp = "meta/OpenITI_metadata_2023-1-8_wNoor.csv"
+        # base_url = "https://raw.githubusercontent.com/OpenITI/RELEASE/v2023.1.8/data"
+        # zenodo_link = "https://zenodo.org/records/10007820"
+        # release_notes_fp = "meta/release_notes_2023-1-8.txt"
+        # reuse_data_fp = "reuse_data/stats-v8_uni-dir.csv"
+        # #reuse_data_base_url = "http://dev.kitab-project.org/2023.1.8/"
+        # reuse_data_base_url = "http://dev.kitab-project.org/2023.1.8-pairwise/"
 
 
         # release_code = "2022.2.7"
@@ -63,7 +63,8 @@ class Command(BaseCommand):
         # zenodo_link = "https://zenodo.org/record/7687795"
         # release_notes_fp = "meta/release_notes_2022-2-7.txt"
         # reuse_data_fp = "reuse_data/stats-v2022-2-7_bi-dir.csv"
-        # reuse_data_base_url = "http://dev.kitab-project.org/passim01122022-v7/"
+        # #reuse_data_base_url = "http://dev.kitab-project.org/passim01122022-v7/"
+        # reuse_data_base_url = "http://dev.kitab-project.org/2022.2.7-pairwise/"
 
         # release_code = "2022.1.6"
         # release_date = datetime.date(2022, 7, 8) # YYYY, M, D
@@ -72,16 +73,18 @@ class Command(BaseCommand):
         # zenodo_link = "https://zenodo.org/record/6808108"
         # release_notes_fp = "meta/release_notes_2022-1-6.txt"
         # reuse_data_fp = "reuse_data/stats-v2022-1-6_bi-dir.csv"
-        # reuse_data_base_url = "http://dev.kitab-project.org/passim01102022/"
+        # #reuse_data_base_url = "http://dev.kitab-project.org/passim01102022/"
+        # reuse_data_base_url = "http://dev.kitab-project.org/2022.1.6-pairwise/"
 
-        # release_code = "2021.2.5"
-        # release_date = datetime.date(2021, 10, 18) # YYYY, M, D
-        # meta_fp = "meta/OpenITI_metadata_2021-2-5_wNoor.csv"
-        # base_url = "https://raw.githubusercontent.com/OpenITI/RELEASE/v2021.2.5/data"
-        # zenodo_link = "https://zenodo.org/record/5550338"
-        # release_notes_fp="meta/release_notes_2021-2-5.txt"
-        # reuse_data_fp = "reuse_data/stats-v2021-2-5_bi-dir.csv"
-        # reuse_data_base_url = "http://dev.kitab-project.org/passim01102021/"
+        release_code = "2021.2.5"
+        release_date = datetime.date(2021, 10, 18) # YYYY, M, D
+        meta_fp = "meta/OpenITI_metadata_2021-2-5_wNoor.csv"
+        base_url = "https://raw.githubusercontent.com/OpenITI/RELEASE/v2021.2.5/data"
+        zenodo_link = "https://zenodo.org/record/5550338"
+        release_notes_fp="meta/release_notes_2021-2-5.txt"
+        reuse_data_fp = "reuse_data/stats-v2021-2-5_bi-dir.csv"
+        #reuse_data_base_url = "http://dev.kitab-project.org/passim01102021/"
+        reuse_data_base_url = "http://dev.kitab-project.org/2021.2.5-pairwise/"
 
 
         # release_code = "2021.1.4"
@@ -439,10 +442,28 @@ def upload_reuse_stats(reuse_data_fp, release_code, release_obj, reuse_data_base
         
         for data in reader:
             if test:
-                # for testing: only load 0179MalikIbnAnas.Muwatta and 0310Tabari.Tarikh stats:
-                #if not (("Shamela0009783" in data['_T1'] or "Shamela0009783" in data['_T2']) \
-                #    or ("Shamela0028107" in data['_T1'] or "Shamela0028107" in data['_T1'])):  # 0179MalikIbnAnas.Muwatta
-                if not (("ER004" in data['_T1'] or "ER004" in data['_T2'])):  # Eugénie's text
+                # for testing: only load stats for 
+                #   * 0179MalikIbnAnas.Muwatta 
+                #   * 0310Tabari.Tarikhbooks
+                #   * all books on the first page of the metadata table for each release:
+                if not (("JK007501" in data['_T1'] or "JK007501" in data['_T2']) \
+                    or ("Shamela0009783" in data['_T1'] or "Shamela0009783" in data['_T2']) \
+                    or ("Shamela0028107" in data['_T1'] or "Shamela0028107" in data['_T2']) \
+                    or ("JK007502" in data['_T1'] or "JK007502" in data['_T2'])\
+                    or ("ShamAY0037936" in data['_T1'] or "ShamAY0037936" in data['_T2'])\
+                    or ("JK007522" in data['_T1'] or "JK007522" in data['_T2'])\
+                    or ("JK007524" in data['_T1'] or "JK007524" in data['_T2'])\
+                    or ("ShamAY0038526" in data['_T1'] or "ShamAY0038526" in data['_T2'])\
+                    or ("JK007525" in data['_T1'] or "JK007525" in data['_T2'])\
+                    or ("JK007523" in data['_T1'] or "JK007523" in data['_T2'])\
+                    or ("JK007526" in data['_T1'] or "JK007526" in data['_T2'])\
+                    or ("ShamAY0038527" in data['_T1'] or "ShamAY0038527" in data['_T2'])\
+                    or ("JK007521" in data['_T1'] or "JK007521" in data['_T2'])\
+                    or ("JK007527" in data['_T1'] or "JK007527" in data['_T2']) \
+                    or ("ShamAY0037906" in data['_T1'] or "ShamAY0037906" in data['_T2']) \
+                    or ("JK007529" in data['_T1'] or "JK007529" in data['_T2'])\
+                    or ("ShamAY0037959" in data['_T1'] or "ShamAY0037959" in data['_T2']) \
+                    ):  
                     continue
             version_code1 = data['_T1'].split("-")[0].split(".")[0]
             version_code2 = data['_T2'].split("-")[0].split(".")[0]
