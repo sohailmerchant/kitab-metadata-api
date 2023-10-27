@@ -26,8 +26,8 @@ class Command(BaseCommand):
 
         TextReuseStats.objects.update(\
             tsv_url=Replace("tsv_url", 
-                            Value("http://dev.kitab-project.org/2023.1.8"), 
-                            Value("https://dev.kitab-project.org/2023.1.8-pairwise")))
+                            Value("http://dev.kitab-project.org/2023.1.8/"), 
+                            Value("https://dev.kitab-project.org/2023.1.8-pairwise/")))
         TextReuseStats.objects.update(\
                         tsv_url=Replace("tsv_url", 
                             Value("http://dev.kitab-project.org/passim01122022-v7"), 

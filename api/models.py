@@ -261,6 +261,10 @@ class VersionwiseReuseStats(models.Model):
                                            related_query_name="versionwise_reuse")
     n_instances = models.IntegerField(null=True, blank=True)
     n_versions = models.IntegerField(null=True, blank=True)
+    # TO DO: 
+    #passim_run = models.ForeignKey("PassimRun", blank=False, 
+    #                               related_name='passim_runs', related_query_name="passim_run",
+    #                               on_delete=models.DO_NOTHING)
 
     def __str__(self):
         return f"{self.release_version}: {self.n_instances}, {self.n_versions}"
@@ -309,3 +313,20 @@ class GitHubIssue(models.Model):
 class GitHubIssueLabel(models.Model):
     """Describes a GitHub Issue label"""
     name = models.CharField(max_length=15, null=False)
+
+
+# TO DO: 
+# class PassimRun(models.Model):
+#     """Describes a passim run"""
+#     name = models.CharField(max_length=25, null=False)
+#     parameters = models.CharField(max_length=200, null=False)
+#     date = models.DateField(auto_now=False, auto_now_add=False, null=True, blank=True)
+#     release = models.ForeignKey("ReleaseInfo", blank=False, 
+#                                 related_name='passim_runs', related_query_name="passim_run",
+#                                 on_delete=models.DO_NOTHING) # e.g., 2021.2.5
+#     description = models.TextField(null=False, blank=True)
+#     runtype = models.CharField(max_length=25, null=False) # pri, all, versions
+
+#     def __str__(self):
+#         return self.name
+
