@@ -91,12 +91,17 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:8080",
     "http://127.0.0.1:8080",
     "http://127.0.0.1:4000",
+    # Github Pages deployments:
     "https://kitab-project.org",
+    "https://mabarber.github.io",
+    "https://pverkind.github.io",
+    "https://sohailmerchant.github.io",
+    "https://masoumeh.github.io",
+    # Azure deployments:
     "https://kitabwebportal.azurewebsites.net",
     "https://nice-water-065dc9510.2.azurestaticapps.net",
     "https://green-stone-06c3c5810.3.azurestaticapps.net",
-    "https://mabarber.github.io",
-    "https://pverkind.github.io"
+    "https://witty-bay-0dafe9a10.4.azurestaticapps.net",
 ]
 
 ROOT_URLCONF = 'kitab.urls'
