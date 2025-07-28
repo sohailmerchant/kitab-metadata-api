@@ -88,15 +88,15 @@ MIDDLEWARE = [
 ]
 CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOWED_ORIGINS = [
-
     "http://localhost:8080",
     "http://127.0.0.1:8080",
-    "https://kitab-project.org",
     "http://127.0.0.1:4000",
+    "https://kitab-project.org",
     "https://kitabwebportal.azurewebsites.net",
     "https://nice-water-065dc9510.2.azurestaticapps.net",
-    "https://green-stone-06c3c5810.3.azurestaticapps.net"
-
+    "https://green-stone-06c3c5810.3.azurestaticapps.net",
+    "https://mabarber.github.io",
+    "https://pverkind.github.io"
 ]
 
 ROOT_URLCONF = 'kitab.urls'
