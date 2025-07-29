@@ -93,7 +93,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:4000",
     # Github Pages deployments:
     "https://kitab-project.org",
-    "https://mabarber.github.io",
+    "https://mabarber92.github.io",
     "https://pverkind.github.io",
     "https://sohailmerchant.github.io",
     "https://masoumeh.github.io",
