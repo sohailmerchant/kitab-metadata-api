@@ -1,0 +1,32 @@
+OpenITI: a Machine-Readable Corpus of Islamicate Texts
+
+Authors/Creators: Nigst, Lorenz; Romanov, Maxim; Savant, Sarah Bowen; Seydi, Masoumeh; Verkinderen, Peter 
+
+Description
+
+Co-PIs: Matthew Thomas Miller (University of Maryland, College Park), Maxim G. Romanov (University of Hamburg), Sarah Bowen Savant (Aga Khan University-ISMC, London).
+
+The OpenITI corpus is a multi-lingual, machine-actionable and scholarly corpus of Islamicate texts that aims to provide a key component for rendering the Islamicate textual tradition accessible to computational analysis and to new forms of digital scholarship.
+
+As indicated by its name, the OpenITI corpus forms part of the broader and multi-institutional efforts of the Open Islamicate Texts Initiative (OpenITI), which were first assembled into a corpus within the OpenArabic project, developed first at Tufts University (at The Perseus Project, 2013–2015) and then at Leipzig University (at the Alexander von Humboldt Chair for Digital Humanities, 2015–2017)—in both cases with the support and under the patronage of Prof. Gregory Crane. It aims to develop the digital infrastructure for the study of Islamicate cultures and to foster synergies and collaboration between computer science, digital humanities, and fields such as Islamic, Arabic, Persian, and Ottoman studies, and which is led by researchers at the Aga Khan University’s Institute for the Study of Muslim Civilisations (AKU-ISMC) in London, the University of Hamburg (UHH), Roshan Institute for Persian Studies at the University of Maryland (College Park), and an interdisciplinary advisory board of leading scholars from relevant fields and has received funding from the European Research Council (ERC) under the European Union’s Horizon 2020 research and innovation programme, awarded to the KITAB (Grant Agreement No. 772989, PI Sarah Bowen Savant) and KITAB-Transform projects (Grant Agreement No. 101199672, PI Sarah Bowen Savant), the Mellon Foundation, and the Qatar National Library in addition to support from the researchers’ home institutions.
+ 
+The present release of the OpenITI corpus contains all digital versions of a text that are available in the corpus (also available at the https://github.com/OpenITI/RELEASE). In case more than one version for a text exists, one of these versions will, however, be singled out as the primary version (referred to as 'PRI' in the metadata) while all the others will be categorised as secondary versions (referred to as 'SEC' in the metadata). OpenITI also releases a primary version of the OpenITI corpus consisting only of the primary versions which may be more convenient for most use cases.
+
+Note on Release Numbering: Version 2019.1.1—where 2019 is the year of the release, the first dotted number—.1—is the ordinal release number in 2019, and the second dotted number—.1—is the overall release number; the first dotted number will reset every year, while the second one will continue on increasing.
+
+Persian Subcorpus 
+
+This release is the first to contain a Persian subcorpus, which currently contains 354 texts. 
+
+Manuscript and Documents Subcorpus 
+
+In addition to the new Arabic and Persian texts, this release contains a new subcorpus (OpenITI-mss) of 433 transcriptions of various hand-written materials: codices, letters, administrative documents, etc. The first batch of documentary materials comes from the Invisible East corpus (https://www.invisible-east.org/); these documents were written in Arabic, New Persian, Middle Persian, Bactrian, and Judaeo-Persian (Persian written in Hebrew script). First manuscript transcriptions were provided by Lorenz Nigst and Stefan Kamola. We hope to grow this part of the corpus through cooperation with libraries, research projects and other scholars. 
+
+Contrary to the texts in the Arabic and Persian subcorpus, which are identified by URIs for their authors, titles and digital versions, the texts in the manuscript corpus are identified by URIs for the collection they are held in, the material object they are on, and their transcription. Full documentation of the manuscript corpus URIs and metadata files is available at https://github.com/OpenITI/MSS. 
+
+Uncorrected OCR 
+
+The corpus contains a growing number of texts generated using OCR. These texts have varying error rates, and have not been corrected. They are marked as TRUE in the "uncorrected_OCR" column in the metadata so that they can be excluded where required.
+
+
+For more details on this specific version see the release notes on https://zenodo.org/records/17767721.
