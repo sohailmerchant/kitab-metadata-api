@@ -1,23 +1,667 @@
 # TO DO: add a tags model!
 
 from django.db import models
+from django.db.models import Q
+import datetime
+import convertdate
 
+###############################
+# MANY TO MANY HELPERS: NAMES #
+###############################
+
+class ObjectName(models.Model):
+    """
+    Combination of name, language and name_type, 
+    useful for enabling multiple names for the same object
+    (e.g., shuhra in Arabic, nisba in English, official name in French)
+    """
+    name = models.CharField(max_length=255)
+    normalized_name = models.CharField(max_length=255)
+    # Language tag (3 characters): 
+    language = models.CharField(max_length=3, blank=True, db_index=True)
+
+    # optional name type
+    name_type = models.CharField(max_length=50, blank=True,
+        help_text="e.g. 'shuhra', 'nisba', 'official', 'variant', 'short'")
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["language", "name"]),
+            models.Index(fields=["name"]),
+        ]
+
+    def __str__(self):
+        return f"{self.language or 'und'}: {self.name}"
+
+class ObjectNameLink(models.Model):
+    """
+    Single link table: links objects with names, languages and name_types.
+    
+    If you create a new model that should allow multiple names,
+    add a key here and add it to the uniqueness constraints.
+    """
+    object_name = models.ForeignKey(ObjectName, on_delete=models.CASCADE, 
+                                    related_name="links")
+
+    # exactly ONE of these must be set
+    author = models.ForeignKey(
+        "Author", on_delete=models.CASCADE, null=True, blank=True,
+        related_name="object_name_links"
+    )
+    text = models.ForeignKey(
+        "Text", on_delete=models.CASCADE, null=True, blank=True,
+        related_name="object_name_links"
+    )
+    manuscript_holding = models.ForeignKey(
+        "ManuscriptHolding", on_delete=models.CASCADE, null=True, blank=True,
+        related_name="object_name_links"
+    )
+    manuscript = models.ForeignKey(
+        "Manuscript", on_delete=models.CASCADE, null=True, blank=True,
+        related_name="object_name_links"
+    )
+    country = models.ForeignKey(
+        "Country", on_delete=models.CASCADE, null=True, blank=True,
+        related_name="object_name_links"
+    )
+    place = models.ForeignKey(
+        "Place", on_delete=models.CASCADE, null=True, blank=True,
+        related_name="object_name_links"
+    )
+
+    is_preferred = models.BooleanField(default=False,
+        help_text="Is this the preferred name of the object?")
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["author"]),
+            models.Index(fields=["text"]),
+            models.Index(fields=["manuscript_holding"]),
+            models.Index(fields=["manuscript"]),
+            models.Index(fields=["country"]),
+            models.Index(fields=["place"]),
+        ]
+        constraints = [
+            # Enforce exactly one FK is non-null
+            models.CheckConstraint(
+                name="exactly_one_target_object",
+                condition=(
+                    (Q(author__isnull=False) & Q(text__isnull=True) & Q(manuscript__isnull=True) & Q(manuscript_holding__isnull=True) & Q(country__isnull=True) & Q(place__isnull=True))
+                    | (Q(author__isnull=True) & Q(text__isnull=False) & Q(manuscript__isnull=True) & Q(manuscript_holding__isnull=True) & Q(country__isnull=True) & Q(place__isnull=True))
+                    | (Q(author__isnull=True) & Q(text__isnull=True) & Q(manuscript__isnull=False) & Q(manuscript_holding__isnull=True) & Q(country__isnull=True) & Q(place__isnull=True))
+                    | (Q(author__isnull=True) & Q(text__isnull=True) & Q(manuscript__isnull=True) & Q(manuscript_holding__isnull=False) & Q(country__isnull=True) & Q(place__isnull=True))
+                    | (Q(author__isnull=True) & Q(text__isnull=True) & Q(manuscript__isnull=True) & Q(manuscript_holding__isnull=True) & Q(country__isnull=False) & Q(place__isnull=True))
+                    | (Q(author__isnull=True) & Q(text__isnull=True) & Q(manuscript__isnull=True) & Q(manuscript_holding__isnull=True) & Q(country__isnull=True) & Q(place__isnull=False))
+                )
+            )
+        ]
+
+    def __str__(self):
+        target = self.author or self.text or self.manuscript_holding or self.country or self.place
+        return f"{target} ↔ {self.object_name}"
+
+###############################
+# MANY TO MANY HELPERS: DATES #
+###############################
+
+class Calendar(models.Model):
+    slug = models.SlugField(unique=True)  # "gregorian", "hijri", "julian", ...
+    name = models.CharField(max_length=100)
+
+    def __str__(self):
+        return self.name
+
+class DateType(models.Model):
+    slug = models.SlugField(unique=True)  # "birth", "death", ...
+    label = models.CharField(max_length=100)
+
+    def __str__(self):
+        return self.label
+
+class DatePrecision(models.TextChoices):
+    DAY = "day", "Day"
+    MONTH = "month", "Month"
+    YEAR = "year", "Year"
+    TEXT = "text", "Text/Unparsed"
+
+class Date(models.Model):
+    """Describes a date in any calendar.
+    
+    Each date is converted to a date range in CE for querying.
+    This conversion is done automatically when manually adding
+    a date to the database (using the model's save method). 
+
+    IMPORTANT: when bulk uploading, the save method is not
+    called and the date range not computed. 
+    Pre-calculate the date range for bulk upload instead!
+    """
+    date_type = models.ForeignKey(DateType, on_delete=models.PROTECT, related_name="dates")
+    calendar = models.ForeignKey(Calendar, on_delete=models.PROTECT, related_name="dates")
+
+    # What the source said (keep this even if you parse it)
+    original_text = models.CharField(max_length=255, blank=True)
+
+    # Parsed components *in the original calendar* (nullable for unknown/partial)
+    year = models.IntegerField(null=True, blank=True)
+    month = models.IntegerField(null=True, blank=True)
+    day = models.IntegerField(null=True, blank=True)
+    precision = models.CharField(max_length=10, choices=DatePrecision.choices, default=DatePrecision.DAY)
+
+    # Normalized CE/Gregorian range for querying/sorting
+    ce_start = models.DateField(null=True, blank=True, db_index=True)
+    ce_end = models.DateField(null=True, blank=True, db_index=True)
+
+    # optional:
+    source = models.CharField(max_length=255, blank=True)
+    confidence = models.IntegerField(null=True, blank=True)
+    
+    def __str__(self):
+        return f"{self.date_type.slug}: {self.original_text or self.iso_like}"
+
+    @property
+    def iso_like(self):
+        # helpful for display when original_text not provided
+        if self.year is None:
+            return ""
+        if self.precision == DatePrecision.YEAR:
+            return f"{self.year:04d}"
+        if self.precision == DatePrecision.MONTH and self.month:
+            return f"{self.year:04d}-{self.month:02d}"
+        if self.month and self.day:
+            return f"{self.year:04d}-{self.month:02d}-{self.day:02d}"
+        return f"{self.year:04d}"
+
+    def compute_ce_range(self):
+        """
+        Compute ce_start/ce_end from (calendar, year, month, day, precision).
+        Implement calendar conversions here.
+        """
+        if self.calendar.slug == "gregorian":
+            return self._compute_ce_range_from_gregorian()
+        else:
+            return self._compute_ce_range_from_other_calendar()
+
+    def _compute_ce_range_from_gregorian(self):
+        if self.year is None:
+            return (None, None)
+
+        if self.precision == DatePrecision.YEAR:
+            start = datetime.date(self.year, 1, 1)
+            end = datetime.date(self.year, 12, 31)
+            return (start, end)
+
+        if self.precision == DatePrecision.MONTH and self.month:
+            start = datetime.date(self.year, self.month, 1)
+            # last day of month
+            if self.month == 12:
+                end = datetime.date(self.year, 12, 31)
+            else:
+                end = datetime.date(self.year, self.month + 1, 1) - datetime.timedelta(days=1)
+            return (start, end)
+
+        if self.month and self.day:
+            d = datetime.date(self.year, self.month, self.day)
+            return (d, d)
+
+        return (None, None)
+
+    def _compute_ce_range_from_other_calendar(self):
+        """
+        Compute the CE range from hijri qamari, hijri shamsi, persian, coptic, armenian and hebrew calendar.
+        """
+        if self.year is None:
+            return (None, None)
+        
+        converters = {
+            "hijri": convertdate.islamic,
+            "qamari": convertdate.islamic,
+            "shamsi": convertdate.persian,
+            "persian": convertdate.persian,
+            "coptic": convertdate.coptic,
+            "armenian": convertdate.armenian,
+            "hebrew": convertdate.hebrew
+        }
+        date_converter = converters.get(self.calendar.slug, None)
+        if date_converter is None:
+            return (None, None)
+        
+        # define the precision if it is not given:
+        if self.precision in (DatePrecision.YEAR, DatePrecision.MONTH, DatePrecision.DAY):
+            precision = self.precision
+        elif not self.month:  # year is defined anyway, otherwise we had already returned (None, None)
+            precision = DatePrecision.YEAR
+        elif not self.day:
+            precision = DatePrecision.MONTH
+        else:
+            precision = DatePrecision.DAY
+        
+        # calculate the date range given the precision
+        if precision == DatePrecision.YEAR:
+            start = date_converter.to_gregorian(self.year, 1, 1)
+            # calculate the last day of the last month in the given year (29 or 30 days!):
+            last_day = convertdate.islamic.month_length(self.year, 12)
+            end = convertdate.islamic.to_gregorian(self.year, 12, last_day)
+            return (start, end)
+
+        if precision == DatePrecision.MONTH and self.month:
+            start = date_converter.to_gregorian(self.year, self.month, 1)
+            # last day of month
+            last_day = date_converter.month_length(self.year, self.month)
+            end = date_converter.to_gregorian(self.year, self.month, last_day)
+            return (start, end)
+
+        if self.month and self.day:
+            d = date_converter.to_gregorian(self.year, self.month, self.day)
+            return (d, d)
+
+        return (None, None)
+
+    def save(self, *args, **kwargs):
+        """This will automatically convert the CE ranges if a date is manually added.
+        However, this does not work with bulk_upload because that doesn't call the save function!
+        Pre-calculate the CE ranges for bulk upload instead."""
+        if self.precision != DatePrecision.TEXT:
+            self.ce_start, self.ce_end = self.compute_ce_range()
+        else:
+            self.ce_start, self.ce_end = (None, None)
+        super().save(*args, **kwargs)
+
+class DateLink(models.Model):
+    """
+    Single link table: Links an author, text or edition object to a date.
+    If you want to add dates to another model, make sure to add a foreignkey
+    to that model here, and to include it in the constraints
+    """
+    date = models.ForeignKey("Date", on_delete=models.CASCADE, related_name="links")
+
+    author = models.ForeignKey("Author", on_delete=models.CASCADE, null=True, blank=True, 
+                               related_name="date_links")
+    text = models.ForeignKey("Text", on_delete=models.CASCADE, null=True, blank=True, 
+                            related_name="date_links")
+    edition = models.ForeignKey("Edition", on_delete=models.CASCADE, null=True, blank=True, 
+                               related_name="date_links")
+    manuscript = models.ForeignKey("Manuscript", on_delete=models.CASCADE, null=True, blank=True, 
+                               related_name="date_links")
+
+    # Optional relationship metadata: 
+    is_preferred = models.BooleanField(default=False)
+    note = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["author"]),
+            models.Index(fields=["text"]),
+            models.Index(fields=["edition"]),
+            models.Index(fields=["manuscript"]),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                name="date_exactly_one_target_author_text_edition",
+                condition=(
+                    (Q(author__isnull=False) & Q(text__isnull=True) & Q(edition__isnull=True) & Q(manuscript__isnull=True))
+                    | (Q(author__isnull=True) & Q(text__isnull=False) & Q(edition__isnull=True) & Q(manuscript__isnull=True))
+                    | (Q(author__isnull=True) & Q(text__isnull=True) & Q(edition__isnull=False) & Q(manuscript__isnull=True))
+                    | (Q(author__isnull=True) & Q(text__isnull=True) & Q(edition__isnull=True) & Q(manuscript__isnull=False))
+
+                ),
+            )
+        ]
+
+    def __str__(self):
+        target = self.author or self.text or self.edition
+        return f"{target} ↔ {self.date}"
+
+##############################################
+# MANY TO MANY HELPERS: EXTERNAL IDENTIFIERS #
+##############################################
+
+class IdentifierProvider(models.Model):
+    """
+    The namespace/provider for authority control: VIAF, Wikidata, GeoNames, ISNI, ...
+    """
+    slug = models.SlugField(unique=True)   # e.g. "viaf", "wikidata", "geonames"
+    name = models.CharField(max_length=100)
+    # optionally, provide the base link that, combined with the ID,
+    # gives you a direct link to the object: e.g. https://www.wikidata.org/wiki/
+    base_url = models.URLField(blank=True) 
+
+    def __str__(self):
+        return self.name
+
+class ExternalID(models.Model):
+    """External identifier (e.g. Wikidata QID, VIAF id, GeoNames id)"""
+    provider = models.ForeignKey(IdentifierProvider,on_delete=models.PROTECT,related_name="external_ids")
+    external_id = models.CharField(max_length=255)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["provider", "external_id"]),
+            models.Index(fields=["external_id"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["provider", "external_id"],
+                name="uniq_provider_external_id",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.provider.slug}:{self.external_id}"
+
+    @property
+    def url(self):
+        if self.provider.base_url:
+            return f"{self.provider.base_url}{self.external_id}"
+        return ""
+
+
+class ExternalIDLink(models.Model):
+    """
+    Single link table: links an ExternalID to exactly one of
+    (Author, Text, ManuscriptHolding, Place, Edition, Version, Country).
+    """
+    identifier = models.ForeignKey("ExternalID", on_delete=models.CASCADE, related_name="links")
+
+    # Exactly ONE of these must be set:
+    author = models.ForeignKey("Author", on_delete=models.CASCADE, 
+                               null=True, blank=True, related_name="external_id_links")
+    text = models.ForeignKey("Text", on_delete=models.CASCADE, 
+                             null=True, blank=True, related_name="external_id_links")
+    manuscript_holding = models.ForeignKey("ManuscriptHolding", on_delete=models.CASCADE, 
+                                           null=True, blank=True, related_name="external_id_links")
+    place = models.ForeignKey("Place", on_delete=models.CASCADE, 
+                              null=True, blank=True, related_name="external_id_links")
+    edition = models.ForeignKey("Edition", on_delete=models.CASCADE, 
+                                null=True, blank=True, related_name="external_id_links")
+    version = models.ForeignKey("Version", on_delete=models.CASCADE, 
+                                null=True, blank=True, related_name="external_id_links")
+    country = models.ForeignKey("Country", on_delete=models.CASCADE,
+                                 null=True, blank=True, related_name="external_id_links")
+
+    is_preferred = models.BooleanField(default=False)
+    source = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["identifier"]),
+            models.Index(fields=["author"]),
+            models.Index(fields=["text"]),
+            models.Index(fields=["manuscript_holding"]),
+            models.Index(fields=["place"]),
+            models.Index(fields=["edition"]),
+            models.Index(fields=["version"]),
+            models.Index(fields=["country"]),
+        ]
+        constraints = [
+            # Enforce exactly one target object
+            models.CheckConstraint(
+                name="externalid_exactly_one_target",
+                condition=(
+                    # author only
+                    (Q(author__isnull=False) & Q(text__isnull=True) & Q(manuscript_holding__isnull=True) & Q(place__isnull=True)
+                     & Q(edition__isnull=True) & Q(version__isnull=True) & Q(country__isnull=True))
+                    |
+                    # text only
+                    (Q(author__isnull=True) & Q(text__isnull=False) & Q(manuscript_holding__isnull=True) & Q(place__isnull=True)
+                     & Q(edition__isnull=True) & Q(version__isnull=True) & Q(country__isnull=True))
+                    |
+                    # manuscript_holding only
+                    (Q(author__isnull=True) & Q(text__isnull=True) & Q(manuscript_holding__isnull=False) & Q(place__isnull=True)
+                     & Q(edition__isnull=True) & Q(version__isnull=True) & Q(country__isnull=True))
+                    |
+                    # place only
+                    (Q(author__isnull=True) & Q(text__isnull=True) & Q(manuscript_holding__isnull=True) & Q(place__isnull=False)
+                     & Q(edition__isnull=True) & Q(version__isnull=True) & Q(country__isnull=True))
+                    |
+                    # edition only
+                    (Q(author__isnull=True) & Q(text__isnull=True) & Q(manuscript_holding__isnull=True) & Q(place__isnull=True)
+                     & Q(edition__isnull=False) & Q(version__isnull=True) & Q(country__isnull=True))
+                    |
+                    # version only
+                    (Q(author__isnull=True) & Q(text__isnull=True) & Q(manuscript_holding__isnull=True) & Q(place__isnull=True)
+                     & Q(edition__isnull=True) & Q(version__isnull=False) & Q(country__isnull=True))
+                    |
+                    # country only
+                    (Q(author__isnull=True) & Q(text__isnull=True) & Q(manuscript_holding__isnull=True) & Q(place__isnull=True)
+                     & Q(edition__isnull=True) & Q(version__isnull=True) & Q(country__isnull=False))
+                ),
+            ),
+        ]
+
+    def __str__(self):
+        target = (
+            self.author or self.text or self.manuscript_holding or
+            self.place or self.edition or self.version or self.country
+        )
+        return f"{target} <-> {self.identifier}"
+
+##################################
+# MANY TO MANY HELPERS: TEXTTYPE #
+##################################
+
+class TextType(models.Model):
+    """
+    Controlled vocabulary for classifying texts/manuscripts
+    (e.g. poetry, commentary, legal, biography, etc.)
+    """
+    slug = models.SlugField(unique=True)
+    label = models.CharField(max_length=100)
+    description = models.TextField(blank=True)
+
+    def __str__(self):
+        return self.label
+
+
+class TextTypeLink(models.Model):
+    text_type = models.ForeignKey(TextType, on_delete=models.CASCADE, related_name="links")
+
+    # Exactly ONE must be set
+    text = models.ForeignKey("Text", on_delete=models.CASCADE, 
+        null=True, blank=True, related_name="text_type_links")
+
+    manuscript = models.ForeignKey("Manuscript", on_delete=models.CASCADE, 
+        null=True, blank=True, related_name="text_type_links")
+
+    # Optional metadata
+    is_preferred = models.BooleanField(default=False)
+    note = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["text_type"]),
+            models.Index(fields=["text"]),
+            models.Index(fields=["manuscript"]),
+        ]
+        constraints = [
+            # Enforce exactly one target object
+            models.CheckConstraint(
+                name="texttype_exactly_one_target",
+                condition=(
+                    (Q(text__isnull=False) & Q(manuscript__isnull=True))
+                    | (Q(text__isnull=True) & Q(manuscript__isnull=False))
+                ),
+            )
+        ]
+
+    def __str__(self):
+        target = self.text or self.manuscript
+        return f"{target} <-> {self.text_type}"
+
+####################################
+# MANY TO MANY HELPERS: AUTHORSHIP #
+####################################
+
+class AuthorshipRole(models.Model):
+    slug = models.SlugField(unique=True)   # "author", "translator", "commentator"
+    label = models.CharField(max_length=100)
+    description = models.TextField(blank=True)
+
+    def __str__(self):
+        return self.label
+
+
+class AuthorshipRoleLink(models.Model):
+    author = models.ForeignKey("Author", on_delete=models.CASCADE, related_name="text_links")
+    role = models.ForeignKey("TextType", on_delete=models.CASCADE, related_name="links")
+
+    # Exactly ONE must be set
+    text = models.ForeignKey("Text", on_delete=models.CASCADE, 
+        null=True, blank=True, related_name="author_links")
+
+    manuscript = models.ForeignKey("Manuscript", on_delete=models.CASCADE, 
+        null=True, blank=True, related_name="author_links")
+    
+    edition = models.ForeignKey("Edition", on_delete=models.CASCADE, 
+        null=True, blank=True, related_name="author_links")
+
+    # Optional metadata
+    note = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["author"]),
+            models.Index(fields=["role"]),
+            models.Index(fields=["text"]),
+            models.Index(fields=["edition"]),
+            models.Index(fields=["manuscript"]),
+        ]
+        constraints = [
+            # Enforce exactly one target object
+            models.CheckConstraint(
+                name="authorship_exactly_one_target",
+                condition=(
+                    (Q(text__isnull=False) & Q(edition__isnull=True) & Q(manuscript__isnull=True))
+                    | (Q(text__isnull=True) & Q(edition__isnull=False) & Q(manuscript__isnull=True))
+                    | (Q(text__isnull=True) & Q(edition__isnull=True) & Q(manuscript__isnull=False))
+                ),
+            )
+        ]
+
+    def __str__(self):
+        target = self.text or self.edition or self.manuscript
+        return f"{self.author} - {self.role} - {target}"
+    
+
+
+################################
+# MANY TO MANY HELPERS: PLACES #
+################################
+
+
+class PlaceRelationType(models.Model):
+    """
+    Controlled vocabulary for how something relates to a place.
+    Examples:
+      - Person: born_in, died_in, resided_in
+      - Text / Manuscript: written_in, copied_in, composed_in
+      - Edition: published_in, edited_in
+      - ManuscriptHolding: located_in
+    """
+    slug = models.SlugField(unique=True)   # e.g. "born_in", "written_in", "held_in"
+    label = models.CharField(max_length=100)
+    description = models.TextField(blank=True)
+
+    # Optional: specify which entity types this relation applies to
+    applies_to = models.CharField(
+        max_length=50,
+        blank=True,
+        help_text="Optional hint: 'author', 'text', 'edition', 'manuscript', 'holding' (or leave blank)."
+    )
+
+    def __str__(self):
+        return self.label
+
+
+class PlaceLink(models.Model):
+    """
+    Single link table: links exactly one target object (Author/Text/Edition/ManuscriptHolding/Manuscript)
+    to a Place, with a controlled relation type.
+    """
+    place = models.ForeignKey("Place", on_delete=models.CASCADE, related_name="place_links")
+    relation_type = models.ForeignKey(PlaceRelationType, on_delete=models.PROTECT, related_name="links")
+
+    # Exactly ONE of these must be set:
+    author = models.ForeignKey("Author", on_delete=models.CASCADE, 
+        null=True, blank=True, related_name="place_links")
+    text = models.ForeignKey("Text", on_delete=models.CASCADE, 
+        null=True, blank=True, related_name="place_links")
+    edition = models.ForeignKey("Edition", on_delete=models.CASCADE, 
+        null=True, blank=True, related_name="place_links")
+    manuscript_holding = models.ForeignKey("ManuscriptHolding", on_delete=models.CASCADE, 
+        null=True, blank=True, related_name="place_links")
+    manuscript = models.ForeignKey("Manuscript", on_delete=models.CASCADE, 
+        null=True, blank=True, related_name="place_links")
+
+    # Optional metadata
+    start_date = models.ForeignKey("Date", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    end_date = models.ForeignKey("Date", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    note = models.CharField(max_length=255, blank=True)
+    source = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["place"]),
+            models.Index(fields=["relation_type"]),
+            models.Index(fields=["author"]),
+            models.Index(fields=["text"]),
+            models.Index(fields=["edition"]),
+            models.Index(fields=["manuscript_holding"]),
+            models.Index(fields=["manuscript"]),
+        ]
+        constraints = [
+            # Exactly one target object
+            models.CheckConstraint(
+                name="placelink_exactly_one_target",
+                condition=(
+                    (Q(author__isnull=False) & Q(text__isnull=True) & Q(edition__isnull=True) & Q(manuscript_holding__isnull=True) & Q(manuscript__isnull=True))
+                    | (Q(author__isnull=True) & Q(text__isnull=False) & Q(edition__isnull=True) & Q(manuscript_holding__isnull=True) & Q(manuscript__isnull=True))
+                    | (Q(author__isnull=True) & Q(text__isnull=True) & Q(edition__isnull=False) & Q(manuscript_holding__isnull=True) & Q(manuscript__isnull=True))
+                    | (Q(author__isnull=True) & Q(text__isnull=True) & Q(edition__isnull=True) & Q(manuscript_holding__isnull=False) & Q(manuscript__isnull=True))
+                    | (Q(author__isnull=True) & Q(text__isnull=True) & Q(edition__isnull=True) & Q(manuscript_holding__isnull=True) & Q(manuscript__isnull=False))
+                ),
+            ),
+        ]
+
+    def __str__(self):
+        target = self.author or self.text or self.edition or self.manuscript_holding or self.manuscript
+        return f"{target} — {self.relation_type.slug} — {self.place}"
+
+###############
+# MAIN MODELS #
+###############
 
 class Author(models.Model):
     """Describes a person in the database."""
-    #author_uri = models.CharField(max_length=50, unique=True, null=False)
     author_uri = models.CharField(max_length=50, null=False)
-    author_ar = models.CharField(max_length=255, blank=True)
-    author_lat = models.CharField(max_length=255, blank=True)
-    author_ar_prefered = models.CharField(max_length=255, blank=True)
-    author_lat_prefered = models.CharField(max_length=255, blank=True)
-    date = models.IntegerField(null=True, blank=True)
-    date_AH = models.IntegerField(null=True, blank=True)
-    date_CE = models.IntegerField(null=True, blank=True)
-    date_str = models.CharField(max_length=255, blank=True)
+
+    # names of different types (shuhra, nisba, ...) and in different languages/scripts: 
+
+    #author_ar = models.CharField(max_length=255, blank=True)
+    #author_lat = models.CharField(max_length=255, blank=True)
+    #author_ar_prefered = models.CharField(max_length=255, blank=True)
+    #author_lat_prefered = models.CharField(max_length=255, blank=True)
+
+    names =  models.ManyToManyField(ObjectName, through=ObjectNameLink,
+        through_fields=("object_name", "author"), related_name="authors", blank=True
+    )
+
+    # multiple types of dates (birth, death, ...) for the author, in different calendars:
+
+    #date = models.IntegerField(null=True, blank=True)
+    #date_AH = models.IntegerField(null=True, blank=True)
+    #date_CE = models.IntegerField(null=True, blank=True)
+    #date_str = models.CharField(max_length=255, blank=True)
+
+    dates = models.ManyToManyField(Date, through=DateLink,
+        through_fields=("date", "author"), related_name="authors", blank=True
+    )
+
     tags =  models.CharField(max_length=255, blank=True)
     bibliography = models.TextField(null=False, blank=True)
     notes = models.TextField(null=False, blank=True)
+    external_ids = models.ManyToManyField(ExternalID, through=ExternalIDLink,
+                    through_fields=("identifier", "author"),  
+                    related_name="authors", blank=True)
 
     # Create a relationship between two persons (e.g., person A is a student of person B)
     # using a many-to-many field:
@@ -38,20 +682,45 @@ class Author(models.Model):
     def __str__(self):
         return self.author_uri
 
-
 class Text(models.Model):
     """Describes a text in the database."""
     text_uri = models.CharField(max_length=100, unique=True, null=False)
-    author = models.ForeignKey(Author, on_delete=models.DO_NOTHING,
-                                   related_name='texts', related_query_name="text")
-    titles_ar = models.CharField(max_length=255, blank=True)
-    titles_lat = models.CharField(max_length=255, blank=True)
-    title_ar_prefered = models.CharField(max_length=255, blank=True)
-    title_lat_prefered = models.CharField(max_length=255, blank=True)
-    text_type = models.CharField(max_length=15, blank=True)  # document, inscription, ...
+    
+    #author = models.ForeignKey(Author, on_delete=models.DO_NOTHING,
+    #                               related_name='texts', related_query_name="text")
+    # multiple authors (with different roles):
+    authors = models.ManyToManyField("Author", through=AuthorshipRoleLink,
+        through_fields=("author", "text"), related_name="texts", blank=True
+    )
+
+    # multiple titles for the text, in multiple languages:
+
+    #titles_ar = models.CharField(max_length=255, blank=True)
+    #titles_lat = models.CharField(max_length=255, blank=True)
+    #title_ar_prefered = models.CharField(max_length=255, blank=True)
+    #title_lat_prefered = models.CharField(max_length=255, blank=True)
+
+    titles = models.ManyToManyField(ObjectName, through=ObjectNameLink,
+        through_fields=("object_name", "text"), related_name="texts", blank=True
+    )
+
+    # multiple types of dates (written, ...) for the text, in different calendars:
+    
+    dates = models.ManyToManyField(Date, through=DateLink,
+        through_fields=("date", "text"), related_name="texts", blank=True
+    )
+    
+    #text_type = models.CharField(max_length=15, blank=True)  # document, inscription, ...
+    text_types = models.ManyToManyField(TextType, through=TextTypeLink,
+        through_fields=("text_type", "text"), related_name="texts", blank=True
+    )
     tags =  models.CharField(max_length=255, blank=True)
     bibliography = models.TextField(null=False, blank=True)
     notes = models.TextField(null=False, blank=True)
+    external_ids = models.ManyToManyField(ExternalID, through=ExternalIDLink,
+        through_fields=("identifier", "text"),  
+        related_name="texts", blank=True
+    )
 
     # Create a relationship between two texts (e.g., text A is a commentary on text B)
     # using a many-to-many field:
@@ -70,66 +739,161 @@ class Text(models.Model):
         return self.text_uri
 
 
-class PersonName(models.Model):
-    """Describes the elements of a person's name in the database."""
-    language = models.CharField(max_length=3, blank=False)
-    shuhra = models.CharField(max_length=255, blank=True)
-    nasab = models.CharField(max_length=255, blank=True)
-    kunya = models.CharField(max_length=255, blank=True)
-    ism = models.CharField(max_length=255, blank=True)
-    laqab = models.CharField(max_length=255, blank=True)
-    nisba = models.CharField(max_length=255, blank=True)
-    author = models.ForeignKey(Author, related_name='name_elements',
-                                    related_query_name="name_element", on_delete=models.DO_NOTHING)
+# !Now Replaced with many-to-many relationship with ObjectName model!
+# class PersonName(models.Model):
+#     """Describes the elements of a person's name in the database."""
+#     language = models.CharField(max_length=3, blank=False)
+#     shuhra = models.CharField(max_length=255, blank=True)
+#     nasab = models.CharField(max_length=255, blank=True)
+#     kunya = models.CharField(max_length=255, blank=True)
+#     ism = models.CharField(max_length=255, blank=True)
+#     laqab = models.CharField(max_length=255, blank=True)
+#     nisba = models.CharField(max_length=255, blank=True)
+#     author = models.ForeignKey(Author, related_name='name_elements',
+#                                     related_query_name="name_element", on_delete=models.DO_NOTHING)
 
-    def __str__(self):
-        return self.language
+#     def __str__(self):
+#         return self.language
 
 
 class Version(models.Model):
-    """Describes a digital version of a text in the database."""
+    """Describes a digital version of a text in the database.
+    
+    Only metadata of the version that cannot change
+    (or, if it is changed, should be overwritten: e.g., typos)
+    are stored in this model; store metadata that can change
+    across versions (e.g., notes, char_lenght, tok length, url, 
+    status and annotation status) in ReleaseVersion.
+    """
     version_code = models.CharField(max_length=50, null=False)
     version_uri = models.CharField(max_length=100, unique=True, blank=True)
-    text = models.ForeignKey(Text, related_name='versions',
-                                  related_query_name="version", on_delete=models.DO_NOTHING)
+    text = models.ForeignKey(Text, blank=True, null=True,
+        related_name='versions', related_query_name="version", 
+        on_delete=models.DO_NOTHING)
+    manuscript = models.ForeignKey("Manuscript", blank=True, null=True,
+        related_name='transcriptions', related_query_name="transcription", 
+        on_delete=models.DO_NOTHING)
+    page_range = models.CharField(max_length=50, blank=True, null=False)
     language = models.CharField(max_length=9, blank=True)
-    edition = models.ForeignKey("Edition", related_name='editions',
-                                     related_query_name="edition", on_delete=models.DO_NOTHING)
-    source_coll = models.ForeignKey("SourceCollectionDetails", related_name='versions',
-                                     related_query_name="version", on_delete=models.DO_NOTHING, blank=True, null=True)
+    edition = models.ForeignKey("Edition", 
+        related_name='versions', related_query_name="version", 
+        on_delete=models.DO_NOTHING)
+    source_coll = models.ForeignKey("SourceCollectionDetails", 
+        related_name='versions', related_query_name="version", 
+        on_delete=models.DO_NOTHING, blank=True, null=True)
     part_of = models.ForeignKey("self", related_name='parts', related_query_name="part", 
                                 on_delete=models.DO_NOTHING, blank=True, null=True)
-    # NB: - notes, char_lenght, tok length, url, status and annotation status were moved to Release table
-    #     - editor, edition_place, publisher, edition_date, ed_info fields were moved to Edition model
+    external_ids = models.ManyToManyField(ExternalID, through=ExternalIDLink,
+                    through_fields=("identifier", "version"),  
+                    related_name="versions", blank=True)
 
     def __str__(self):
         return self.version_uri
 
 class Edition(models.Model):
-    editor = models.CharField(max_length=100, blank=True)
+    #editor = models.CharField(max_length=100, blank=True)
+    editors = models.ManyToManyField("Author", through=AuthorshipRoleLink,
+        through_fields=("author", "edition"), related_name="editions", blank=True
+    )
     edition_place = models.CharField(max_length=100, blank=True)
     publisher = models.CharField(max_length=100, blank=True)
-    edition_date = models.CharField(max_length=100, blank=True)
+    #edition_date = models.CharField(max_length=100, blank=True)
+    # multiple types of dates (edition, translation, ...) for the edition, in different calendars:
+    dates = models.ManyToManyField(Date, through=DateLink,
+        through_fields=("date", "edition"), related_name="editions", blank=True
+    )
     ed_info = models.CharField(max_length=255, blank=True)
     pdf_url = models.CharField(max_length=255, blank=True)
-    worldcat_url = models.CharField(max_length=255, blank=True)
     text = models.ForeignKey(Text, related_name='editions',
                              related_query_name="edition", on_delete=models.DO_NOTHING)
+    external_ids = models.ManyToManyField(ExternalID, through=ExternalIDLink,
+                    through_fields=("identifier", "edition"),  
+                    related_name="editions", blank=True)
     
     def __str__(self):
         return self.ed_info
 
 
+class ManuscriptHolding(models.Model):
+    """Describes a manuscript holding location in the database."""
+    #author_uri = models.CharField(max_length=50, unique=True, null=False)
+    loc_uri = models.CharField(max_length=50, null=False)
+    names = models.ManyToManyField(ObjectName, through=ObjectNameLink,
+        through_fields=("object_name", "manuscript_holding"), 
+        related_name="manuscript_holdings", blank=True
+    )
+    country = models.ForeignKey("Country", related_name="manuscript_holdings", 
+                                on_delete=models.DO_NOTHING, null=True, blank=True)
+    city = models.ForeignKey("Place", related_name="manuscript_holdings", 
+                             on_delete=models.DO_NOTHING, null=True, blank=True)
+    external_ids = models.ManyToManyField(ExternalID, through=ExternalIDLink,
+                    through_fields=("identifier", "manuscript_holding"),  
+                    related_name="manuscript_holdings", blank=True)
+    notes = models.TextField(null=False, blank=True)
+
+    def __str__(self):
+        return self.loc_uri
+
+
+
+class Manuscript(models.Model):
+    """Describes a manuscript in the database."""
+    manuscript_holding = models.ForeignKey(ManuscriptHolding,
+        related_name="manuscripts", related_query_name="manuscript",
+        on_delete=models.DO_NOTHING)
+    manuscript_uri = models.CharField(max_length=50, null=False)
+    manuscript_types = models.ManyToManyField(TextType, 
+        through=TextTypeLink,
+        through_fields=("text_type", "manuscript"), 
+        related_name="manuscripts", blank=True
+    )
+    authors = models.ManyToManyField("Author", through=AuthorshipRoleLink,
+        through_fields=("author", "manuscript"), related_name="manuscripts", blank=True
+    )
+    titles = models.ManyToManyField(ObjectName, through=ObjectNameLink,
+        through_fields=("object_name", "manuscript"), related_name="manuscripts", blank=True
+    )
+    dates = models.ManyToManyField(Date, through=DateLink,
+        through_fields=("date", "manuscript"), related_name="manuscripts", blank=True
+    )
+    places = models.ManyToManyField("PlaceLink", through=PlaceLink,
+        through_fields=("place", "manuscript"), related_name="manuscripts", blank=True
+    )
+
+
+class Country(models.Model):
+    """Describes a country/state"""
+    country_code = models.CharField(max_length=4, blank=True)
+    # multilingual names:
+    names =  models.ManyToManyField(ObjectName, through=ObjectNameLink,
+        through_fields=("object_name", "country"), related_name="countries", blank=True
+    )
+    external_ids = models.ManyToManyField(ExternalID, through=ExternalIDLink,
+                    through_fields=("identifier", "country"),  
+                    related_name="countries", blank=True)
+
+    def __str__(self):
+        return self.country_code
+
 class Place (models.Model):
     """Describes a place in the database."""
-    thuraya_uri = models.CharField(max_length=100, blank=True)
-    name_ar = models.CharField(max_length=100, blank=True)
-    name_lat = models.CharField(max_length=100, blank=True)
-    # store as string for now; use geoDjango later?
+    #thuraya_uri = models.CharField(max_length=100, blank=True)
+    external_ids = models.ManyToManyField(ExternalID, through=ExternalIDLink,
+                    through_fields=("identifier", "place"),  
+                    related_name="places", blank=True)
+    #name_ar = models.CharField(max_length=100, blank=True)
+    #name_lat = models.CharField(max_length=100, blank=True)
+    names =  models.ManyToManyField(ObjectName, through=ObjectNameLink,
+        through_fields=("object_name", "author"), related_name="authors", blank=True
+    )
+    # store as string for now; TODO: use geoDjango later?
     coordinates_str = models.CharField(max_length=50, blank=True)
     # Define relation between places (A is capital of B, place A is in region B, region A is in region B, ...):
     related_places = models.ManyToManyField("self", through="A2BRelation", through_fields=("place_a", "place_b"),
                                              symmetrical=False, related_name="places_related", related_query_name="place_related")
+    
+    
+    
 
     def __str__(self):
         return self.thuraya_uri
@@ -155,35 +919,60 @@ class RelationType(models.Model):
             return self.code
 
 
-class A2BRelation (models.Model):
+class A2BRelation(models.Model):
     """A general model for relations between entities.
 
     For text to text relations (A is a commentary on B): fill in text_a and text_b
     For person to person relations (A is a student of B): fill in person_a and person_b
     For person to place relations (A was born in B): fill in person_a and place_b
-    for text to person relations (A is a biography of B): fill in text_a and person_b
-
+    For text to person relations (A is a biography of B): fill in text_a and person_b
+    For manuscript to text relations (A is a copy of B): fill in manuscript_a and person_b
+    For person to manuscript relations (A is the copyist of B): fill in person_a and manuscript_b
+    
+    
     """
     # define A and B (pick two, depending on the type of relationship):
-    person_a = models.ForeignKey(Author, related_name="related_persons_a", related_query_name="related_person_a",
-                                    on_delete=models.DO_NOTHING, null=True, blank=True)
-    person_b = models.ForeignKey(Author, related_name="related_persons_b", related_query_name="related_person_b",
-                                    on_delete=models.DO_NOTHING, null=True, blank=True)
-    text_a = models.ForeignKey(Text, related_name="related_texts_a", related_query_name="related_text_a",
-                                  on_delete=models.DO_NOTHING, null=True, blank=True)
-    text_b = models.ForeignKey(Text, related_name="related_texts_b", related_query_name="related_text_b",
-                                  on_delete=models.DO_NOTHING, null=True, blank=True)
-    place_a = models.ForeignKey(Place, related_name="related_places_a", related_query_name="related_place_a",
-                                   on_delete=models.DO_NOTHING, null=True, blank=True)
-    place_b = models.ForeignKey(Place, related_name="related_places_b", related_query_name="related_place_b",
-                                   on_delete=models.DO_NOTHING, null=True, blank=True)
+    person_a = models.ForeignKey(Author, 
+        related_name="related_persons_a", related_query_name="related_person_a",
+        on_delete=models.DO_NOTHING, null=True, blank=True)
+    person_b = models.ForeignKey(Author, 
+        related_name="related_persons_b", related_query_name="related_person_b",
+        on_delete=models.DO_NOTHING, null=True, blank=True)
+    text_a = models.ForeignKey(Text, 
+        related_name="related_texts_a", related_query_name="related_text_a",
+        on_delete=models.DO_NOTHING, null=True, blank=True)
+    text_b = models.ForeignKey(Text, 
+        related_name="related_texts_b", related_query_name="related_text_b",
+        on_delete=models.DO_NOTHING, null=True, blank=True)
+    manuscript_a = models.ForeignKey(Manuscript, 
+        related_name="related_manuscripts_a", related_query_name="related_manuscript_a",
+        on_delete=models.DO_NOTHING, null=True, blank=True)
+    manuscript_b = models.ForeignKey(Manuscript, 
+        related_name="related_manuscripts_b", related_query_name="related_manuscript_b",
+        on_delete=models.DO_NOTHING, null=True, blank=True)
+    edition_a = models.ForeignKey(Edition, 
+        related_name="related_editions_a", related_query_name="related_edition_a",
+        on_delete=models.DO_NOTHING, null=True, blank=True)
+    edition_b = models.ForeignKey(Edition, 
+        related_name="related_editions_b", related_query_name="related_edition_b",
+        on_delete=models.DO_NOTHING, null=True, blank=True)
+    place_a = models.ForeignKey(Place, 
+        related_name="related_places_a", related_query_name="related_place_a",
+        on_delete=models.DO_NOTHING, null=True, blank=True)
+    place_b = models.ForeignKey(Place, 
+        related_name="related_places_b", related_query_name="related_place_b",
+        on_delete=models.DO_NOTHING, null=True, blank=True)
 
     # define the type of relationship between entity A and entity B:
     relation_type = models.ForeignKey(RelationType, on_delete=models.DO_NOTHING, null=True, blank=True)
 
     # additional information about the relationship (data types need to change!):
-    start_date_AH = models.CharField(max_length=100, null=False, blank=True)
-    end_date_AH = models.CharField(max_length=100, null=False, blank=True)
+    #start_date_AH = models.CharField(max_length=100, null=False, blank=True)
+    #end_date_AH = models.CharField(max_length=100, null=False, blank=True)
+    start_date = models.ForeignKey("Date", null=True, blank=True, 
+                                   on_delete=models.SET_NULL, related_name="+")
+    end_date = models.ForeignKey("Date", null=True, blank=True, 
+                                 on_delete=models.SET_NULL, related_name="+")
     authority = models.CharField(max_length=100, null=False, blank=True)
     confidence = models.IntegerField(null=True, blank=True)
 
@@ -238,13 +1027,23 @@ class ReleaseVersion(models.Model):
     #release_code = models.CharField(max_length=10, null=False) # e.g., 2021.2.5
     release_info = models.ForeignKey("ReleaseInfo", blank=False, on_delete=models.DO_NOTHING) # e.g., 2021.2.5
     version = models.ForeignKey(Version, on_delete=models.DO_NOTHING, 
-                                related_name='release_versions', 
-                                related_query_name="release_version")
+        related_name='release_versions', 
+        related_query_name="release_version")
     char_length = models.IntegerField(null=True, blank=True)
     tok_length = models.IntegerField(null=True, blank=True)
     url = models.CharField(max_length=255, null=False, blank=True)
-    analysis_priority = models.CharField(max_length=3, null=False, blank=True)  # previous called status option could be pri, sec, tr
-    annotation_status = models.CharField(max_length=50, null=False, blank=True) # mARkdown, completed, ...
+    analysis_priority = models.CharField(max_length=3, null=False, blank=True,
+        help="Primary or secondary text? Use 'pri' or 'sec'")
+    annotation_status = models.CharField(max_length=50, null=False, blank=True,
+        help="Extension of the file, indicating how far it has been annotated: inProgress, completed, mARkdown")
+    line_model = models.CharField(max_length=50, null=False, blank=True,
+        help="line recognition model used for OCR")
+    region_model = models.CharField(max_length=50, null=False, blank=True,
+        help="region recognition model used for OCR")
+    recognition_model = models.CharField(max_length=50, null=False, blank=True,
+        help="character recognition/transcription model used for OCR")
+    contributors = models.ManyToManyField("Contributors", blank=True, 
+        related_name='release_versions', related_query_name="release_version")
     tags = models.CharField(max_length=100, blank=True)
     notes = models.TextField(null=False, blank=True)
 
