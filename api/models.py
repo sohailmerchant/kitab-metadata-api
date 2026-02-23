@@ -85,7 +85,7 @@ class ObjectNameLink(models.Model):
             # Enforce exactly one FK is non-null
             models.CheckConstraint(
                 name="exactly_one_target_object",
-                condition=(
+                check=(   # deprecated: new argument name is `condition`
                     (Q(author__isnull=False) & Q(text__isnull=True) & Q(manuscript__isnull=True) & Q(manuscript_holding__isnull=True) & Q(country__isnull=True) & Q(place__isnull=True))
                     | (Q(author__isnull=True) & Q(text__isnull=False) & Q(manuscript__isnull=True) & Q(manuscript_holding__isnull=True) & Q(country__isnull=True) & Q(place__isnull=True))
                     | (Q(author__isnull=True) & Q(text__isnull=True) & Q(manuscript__isnull=False) & Q(manuscript_holding__isnull=True) & Q(country__isnull=True) & Q(place__isnull=True))
@@ -297,7 +297,7 @@ class DateLink(models.Model):
         constraints = [
             models.CheckConstraint(
                 name="date_exactly_one_target_author_text_edition",
-                condition=(
+                check=(  # deprecated: new argument name is `condition`
                     (Q(author__isnull=False) & Q(text__isnull=True) & Q(edition__isnull=True) & Q(manuscript__isnull=True))
                     | (Q(author__isnull=True) & Q(text__isnull=False) & Q(edition__isnull=True) & Q(manuscript__isnull=True))
                     | (Q(author__isnull=True) & Q(text__isnull=True) & Q(edition__isnull=False) & Q(manuscript__isnull=True))
@@ -396,7 +396,7 @@ class ExternalIDLink(models.Model):
             # Enforce exactly one target object
             models.CheckConstraint(
                 name="externalid_exactly_one_target",
-                condition=(
+                check=(    # deprecated: new argument name is `condition`
                     # author only
                     (Q(author__isnull=False) & Q(text__isnull=True) & Q(manuscript_holding__isnull=True) & Q(place__isnull=True)
                      & Q(edition__isnull=True) & Q(version__isnull=True) & Q(country__isnull=True))
@@ -476,7 +476,7 @@ class TextTypeLink(models.Model):
             # Enforce exactly one target object
             models.CheckConstraint(
                 name="texttype_exactly_one_target",
-                condition=(
+                check=(   # deprecated: new argument name is `condition`
                     (Q(text__isnull=False) & Q(manuscript__isnull=True))
                     | (Q(text__isnull=True) & Q(manuscript__isnull=False))
                 ),
@@ -529,7 +529,7 @@ class AuthorshipRoleLink(models.Model):
             # Enforce exactly one target object
             models.CheckConstraint(
                 name="authorship_exactly_one_target",
-                condition=(
+                check=(  # deprecated: new argument name is `condition`
                     (Q(text__isnull=False) & Q(edition__isnull=True) & Q(manuscript__isnull=True))
                     | (Q(text__isnull=True) & Q(edition__isnull=False) & Q(manuscript__isnull=True))
                     | (Q(text__isnull=True) & Q(edition__isnull=True) & Q(manuscript__isnull=False))
@@ -612,7 +612,7 @@ class PlaceLink(models.Model):
             # Exactly one target object
             models.CheckConstraint(
                 name="placelink_exactly_one_target",
-                condition=(
+                check=(  # deprecated: new argument name is `condition`
                     (Q(author__isnull=False) & Q(text__isnull=True) & Q(edition__isnull=True) & Q(manuscript_holding__isnull=True) & Q(manuscript__isnull=True))
                     | (Q(author__isnull=True) & Q(text__isnull=False) & Q(edition__isnull=True) & Q(manuscript_holding__isnull=True) & Q(manuscript__isnull=True))
                     | (Q(author__isnull=True) & Q(text__isnull=True) & Q(edition__isnull=False) & Q(manuscript_holding__isnull=True) & Q(manuscript__isnull=True))
@@ -1033,15 +1033,15 @@ class ReleaseVersion(models.Model):
     tok_length = models.IntegerField(null=True, blank=True)
     url = models.CharField(max_length=255, null=False, blank=True)
     analysis_priority = models.CharField(max_length=3, null=False, blank=True,
-        help="Primary or secondary text? Use 'pri' or 'sec'")
+        help_text="Primary or secondary text? Use 'pri' or 'sec'")
     annotation_status = models.CharField(max_length=50, null=False, blank=True,
-        help="Extension of the file, indicating how far it has been annotated: inProgress, completed, mARkdown")
+        help_text="Extension of the file, indicating how far it has been annotated: inProgress, completed, mARkdown")
     line_model = models.CharField(max_length=50, null=False, blank=True,
-        help="line recognition model used for OCR")
+        help_text="line recognition model used for OCR")
     region_model = models.CharField(max_length=50, null=False, blank=True,
-        help="region recognition model used for OCR")
+        help_text="region recognition model used for OCR")
     recognition_model = models.CharField(max_length=50, null=False, blank=True,
-        help="character recognition/transcription model used for OCR")
+        help_text="character recognition/transcription model used for OCR")
     contributors = models.ManyToManyField("Contributors", blank=True, 
         related_name='release_versions', related_query_name="release_version")
     tags = models.CharField(max_length=100, blank=True)
