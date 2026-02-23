@@ -3,7 +3,7 @@ from django.contrib import admin
 
 # Register your models here.
 from .models import ObjectName, ObjectNameLink, Calendar, DateType, \
-    DatePrecision, Date, DateLink, IdentifierProvider, \
+    Date, DateLink, IdentifierProvider, \
     ExternalID, ExternalIDLink, TextType, TextTypeLink, \
     AuthorshipRole, AuthorshipRoleLink, PlaceRelationType, PlaceLink, \
     Author, Text, Version, Edition, \
@@ -16,7 +16,6 @@ admin.site.register(ObjectName)
 admin.site.register(ObjectNameLink)
 admin.site.register(Calendar)
 admin.site.register(DateType)
-admin.site.register(DatePrecision)
 admin.site.register(Date)
 admin.site.register(DateLink)
 admin.site.register(IdentifierProvider)
