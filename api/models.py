@@ -791,10 +791,7 @@ class Version(models.Model):
         return self.version_uri
 
 class Edition(models.Model):
-    #editor = models.CharField(max_length=100, blank=True)
-    editors = models.ManyToManyField("Author", through=AuthorshipRoleLink,
-        through_fields=("author", "edition"), related_name="editions", blank=True
-    )
+    editor = models.CharField(max_length=100, blank=True)
     edition_place = models.CharField(max_length=100, blank=True)
     publisher = models.CharField(max_length=100, blank=True)
     #edition_date = models.CharField(max_length=100, blank=True)
