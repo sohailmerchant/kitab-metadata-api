@@ -28,11 +28,11 @@ class CountrySerializer(FlexFieldsModelSerializer):
 TO DO: implement flex fields?
 """
 
-
+import re
 from argparse import Namespace
 from operator import truediv
 from rest_framework import serializers
-from .models import PersonName, Text, Author, Version,\
+from .models import ObjectName, Text, Author, AuthorshipRoleLink, Version,\
                     CorpusInsights, TextReuseStats, ReleaseVersion,\
                     RelationType, A2BRelation, ReleaseInfo,\
                     SourceCollectionDetails, Edition, GitHubIssue, VersionwiseReuseStats
@@ -45,91 +45,105 @@ class VersionReuseStatsSerializer(FlexFieldsModelSerializer):
         fields = ('__all__')
         depth = 0
 
-class ShallowNameElementsSerializer(FlexFieldsModelSerializer):
-    """This serializer is used to serialize the name elements in author queries.
-    It excludes the author field. If you want to serialize the full PersonName model,
-    use the PersonNameSerializer.
+class ShallowNameElementsSerializer(serializers.Serializer):
+    """Serializes a queryset of ObjectName objects into:
+
+    [
+        {
+            "language": "LA",
+            "shuhra": "...",
+            "ism": "...",
+            "nasab": "...",
+            "kunya": "...",
+            "laqab": "...",
+            "nisba": "...",
+        },
+        {
+            "language": "AR",
+            "shuhra": "...",
+            "ism": "...",
+            "nasab": "...",
+            "kunya": "...",
+            "laqab": "...",
+            "nisba": "...",
+        },
+    ]
+    This serializer is used to serialize the name elements in author queries.
+    It excludes the author field. If you want to serialize the ObjectName model,
+    use the ObjectNameSerializer.
     """
 
-    class Meta:
-        model = PersonName
-        fields = ("language", "shuhra", "ism", "nasab", "kunya", "laqab", "nisba")
-        depth = 0
+    # Hardcoded output keys
+    NAME_TYPE_KEYS = ["shuhra", "ism", "nasab", "kunya", "laqab", "nisba"]
+
+    def to_representation(self, instance):
+        """
+        instance is expected to be:
+        - a queryset
+        - or obj.names.all()
+        """
+
+        # Group by language
+        grouped = dict()
+
+        for obj in instance:
+            # Only include recognized name types
+            if obj.name_type in self.NAME_TYPE_KEYS:
+                lang = obj.language or "und"
+                RTL = {"ara", "ar", "per", "fa", "urd", "ur"}
+                if lang.lower() in RTL:
+                    sep = "، "
+                else:
+                    sep = ", "
+                # initialize dictionary if it does not exist yet:
+                if lang not in grouped:
+                    grouped[lang] = {"language": lang}
+                    for key in self.NAME_TYPE_KEYS:
+                        grouped[lang][key] = ""
+                # add the name to the relevant name type:
+                name_type = obj.name_type
+                if grouped[lang][name_type] == "":
+                    grouped[lang][name_type] = obj.name
+                else: 
+                    grouped[lang][name_type] += sep+obj.name
+
+        # Return list of language dictionaries
+        return list(grouped.values())
 
 
 class ShallowEditionSerializer(FlexFieldsModelSerializer):
     """This serializer is used to serialize the metadata from the Edition model
     for use in serialization of the Version model 
     (without the foreign key to the Text model).
+    Keeps legacy keys: 'editor' and 'edition_date'.
     If you want to serialize the full Edition model, use the EditionSerializer"""
+    edition_date = serializers.SerializerMethodField()
+
+    def get_edition_date(self, obj):
+        dates = list(
+            obj.dates.filter(date_type__slug="edition_date")
+                     .values_list("original_text", flat=True)
+        )
+        return ";".join(dates)
+        
+    class Meta:
+        model = Edition
+        fields = (
+            "id",
+            "editor",
+            "edition_place",
+            "publisher",
+            "edition_date",
+            "ed_info",
+            "pdf_url",
+            "worldcat_url",
+        )
 
     class Meta:
         model = Edition
-        fields = ("id", "editor", "edition_place", "publisher", 
+        fields = ("id", "editors", "edition_place", "publisher", 
                   "edition_date", "ed_info", "pdf_url", "worldcat_url")
         depth = 1
-
-class ShallowTextSerializer(FlexFieldsModelSerializer):
-    """This serializer is used to serialize the metadata from the Edition model
-    for use in serialization of the Version model 
-    (without the foreign key to the Text model).
-    If you want to serialize the full Edition model, use the EditionSerializer"""
-
-    class Meta:
-        model = Text
-        fields = ("id", "text_uri", "author", "titles_ar", "titles_lat", "title_ar_prefered", 
-                  "title_lat_prefered", "text_type", "tags", "bibliography", "notes")
-        depth = 1
-
-
-class ShallowVersionSerializer(FlexFieldsModelSerializer):
-    """This serializer is used to serialize the version metadata in text and author queries
-    (it excludes the author and text metadata)"""
-    edition = ShallowEditionSerializer(read_only=True)
-
-    def serialize_relations(self, version_instance):
-        """serialize a version's parts 
-        (for books split into pieces because of their length, like BiharAnwar)"""
-        # select the versions that are part of the current version_instance:
-        parts = Version.objects\
-            .filter(part_of__version_uri=version_instance.version_uri)
-        # get the bookwise text reuse statistics: 
-        version_reuse_stats = VersionwiseReuseStats.objects\
-            .filter(release_version__version__version_uri=version_instance.version_uri)\
-            .first()
-        try:
-            return {"parts": sorted(list(set([d.version_uri for d in parts]))), 
-                    "n_reuse_instances": version_reuse_stats.n_instances,
-                    "n_reuse_versions": version_reuse_stats.n_versions
-                    }
-        except:
-            return {"parts": sorted(list(set([d.version_uri for d in parts]))), 
-                    "n_reuse_instances": 0,
-                    "n_reuse_versions": 0
-                    }
-
-    def to_representation(self, instance):
-        """Customize the default json representation"""
-        # get the default representation:
-        json_rep = super().to_representation(instance)
-        # use only the release code instead of the full release version dictionary:
-        release_codes = [d["release_info"]["release_code"] for d in json_rep.pop("release_versions")]
-        releases = {"releases": release_codes}
-        # add the version URIs of the parts: 
-        reverse_foreign_keys = self.serialize_relations(instance)
-        # use only the version URI for the part_of key:
-        part_of = json_rep.pop("part_of")
-        try:
-            part_of = {"part_of": part_of["version_uri"]}
-        except:
-            part_of = {"part_of": None}
-
-        return {**json_rep, **reverse_foreign_keys, **part_of, **releases}
-
-    class Meta:
-        model = Version
-        fields = ("id", "version_code", "version_uri", "edition", "language", "release_versions", "part_of", "parts")
-        depth = 2  
 
 class ShallowAuthorSerializer(FlexFieldsModelSerializer):
     """This serializer is used to serialize the metadata from the Author model
@@ -232,14 +246,111 @@ class ShallowAuthorSerializer(FlexFieldsModelSerializer):
         depth = 1
 
 
+class AuthorshipRoleLinkSerializer(serializers.ModelSerializer):
+    author = ShallowAuthorSerializer(read_only=True)
+    role = serializers.CharField(source="role.slug", read_only=True)
+
+    class Meta:
+        model = AuthorshipRoleLink
+        fields = ("author", "role", "order", "note")
+
+class ShallowTextSerializer(FlexFieldsModelSerializer):
+    """This serializer is used to serialize the metadata from the Text model
+    for use in serialization of the Version model 
+    (without the foreign key to the Text model).
+    If you want to serialize the full Text model, use the TextSerializer"""
+
+    text_type = serializers.SerializerMethodField()
+    author = AuthorshipRoleLinkSerializer(source="authorship_links", many=True, read_only=True)
+
+    def get_text_type(self, obj):
+        """get a string of comma-separated text types"""
+        slugs = obj.text_types.values_list("slug", flat=True)
+        flat_slugs = []
+        for slug in re.split(" *[,:،] *", slugs):
+            if slug and slug not in flat_slugs:
+                flat_slugs.append(slug)
+        return " :: ".join(sorted(flat_slugs))
+    
+    def get_author(self, obj):
+        """get a list of """
+
+    
+    class Meta:
+        model = Text
+        fields = (
+            "id", 
+            "text_uri", 
+            "author", 
+            "titles_ar", 
+            "titles_lat", 
+            "title_ar_prefered", 
+            "title_lat_prefered",
+            "text_type", 
+            "tags", 
+            "bibliography", 
+            "notes")
+        depth = 1
+
+
+class ShallowVersionSerializer(FlexFieldsModelSerializer):
+    """This serializer is used to serialize the version metadata in text and author queries
+    (it excludes the author and text metadata)"""
+    edition = ShallowEditionSerializer(read_only=True)
+
+    def serialize_relations(self, version_instance):
+        """serialize a version's parts 
+        (for books split into pieces because of their length, like BiharAnwar)"""
+        # select the versions that are part of the current version_instance:
+        parts = Version.objects\
+            .filter(part_of__version_uri=version_instance.version_uri)
+        # get the bookwise text reuse statistics: 
+        version_reuse_stats = VersionwiseReuseStats.objects\
+            .filter(release_version__version__version_uri=version_instance.version_uri)\
+            .first()
+        try:
+            return {"parts": sorted(list(set([d.version_uri for d in parts]))), 
+                    "n_reuse_instances": version_reuse_stats.n_instances,
+                    "n_reuse_versions": version_reuse_stats.n_versions
+                    }
+        except:
+            return {"parts": sorted(list(set([d.version_uri for d in parts]))), 
+                    "n_reuse_instances": 0,
+                    "n_reuse_versions": 0
+                    }
+
+    def to_representation(self, instance):
+        """Customize the default json representation"""
+        # get the default representation:
+        json_rep = super().to_representation(instance)
+        # use only the release code instead of the full release version dictionary:
+        release_codes = [d["release_info"]["release_code"] for d in json_rep.pop("release_versions")]
+        releases = {"releases": release_codes}
+        # add the version URIs of the parts: 
+        reverse_foreign_keys = self.serialize_relations(instance)
+        # use only the version URI for the part_of key:
+        part_of = json_rep.pop("part_of")
+        try:
+            part_of = {"part_of": part_of["version_uri"]}
+        except:
+            part_of = {"part_of": None}
+
+        return {**json_rep, **reverse_foreign_keys, **part_of, **releases}
+
+    class Meta:
+        model = Version
+        fields = ("id", "version_code", "version_uri", "edition", "language", "release_versions", "part_of", "parts")
+        depth = 2  
+
+
+
 class PersonNameSerializer(FlexFieldsModelSerializer):
     """This serializer is used to serialize the full PersonName model.
     If you want to exclude the author: use the ShallowNameElementsSerializer."""
 
     class Meta:
-        model = PersonName
-        fields = ("author", "language", "shuhra", "ism",
-                  "nasab", "kunya", "laqab", "nisba")
+        model = ObjectName
+        fields = ("language", "name", "normalized_name", "name_type")
         depth = 0
 
 
