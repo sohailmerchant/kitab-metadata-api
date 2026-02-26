@@ -1,0 +1,870 @@
+"""THIS SCRIPT IS WORK IN PROGRESS - DO NOT USE YET
+
+This script uploads the metadata of a single release to the database.
+
+Provide the relevant inputs for the script in the Command.handle() function: e.g., 
+    release_code = "2022.1.6"
+    release_date = datetime.date(2022, 7, 8) # YYYY, M, D
+    meta_fp = "meta/OpenITI_metadata_2022-1-6_wNoor.csv"
+    base_url = "https://raw.githubusercontent.com/OpenITI/RELEASE/v2022.1.6/data"
+    zenodo_link = "https://zenodo.org/record/6808108"
+    release_notes_fp = "meta/release_notes_2022-1-6.txt"
+    reuse_data_fp = "reuse_data/stats-v2022-1-6_bi-dir.csv"
+    reuse_data_base_url = "http://dev.kitab-project.org/passim01102022/"
+
+NB: for the metadata file, use the _wNoor version, non-merged.
+
+"""
+
+import csv
+from webbrowser import get
+from django.db import models
+
+#from api.models import Author, Text, Version, CorpusInsights, ReleaseVersion, ReleaseInfo, Edition, TextReuseStats, SourceCollectionDetails
+from api.models import Author, ReleaseInfo, Date, DateType, Calendar, DateLink,\
+    ObjectName, ObjectNameLink
+from django.core.management.base import BaseCommand
+import re
+import datetime
+import convertdate
+import json
+import traceback
+
+from openiti.helper.ara import normalize_ara_light
+from api.util.betacode import betacodeToSearch
+
+from itertools import islice
+
+version_codes = dict()
+VERBOSE = False
+DATE_CONVERTERS  = {
+    "AH": convertdate.islamic,
+    "hijri": convertdate.islamic,
+    "qamari": convertdate.islamic,
+    "shamsi": convertdate.persian,
+    "persian": convertdate.persian,
+    "coptic": convertdate.coptic,
+    "armenian": convertdate.armenian,
+    "hebrew": convertdate.hebrew
+}
+DATE_TYPES = {}
+CALENDARS = {}
+
+class Command(BaseCommand):
+    def handle(self, **options):
+        # if testing, only upload text reuse data for Tabari.Tarikh and MalikIbnAnas.Muwatta
+        test = True
+
+        # if uploading only text reuse stats: set upload to False:
+        meta_upload=True
+
+        Author.objects.all().delete()
+        Date.objects.all().delete()
+        DateLink.objects.all().delete()
+        DateType.objects.all().delete()
+        Calendar.objects.all().delete()
+        ObjectName.objects.all().delete()
+        ObjectNameLink.objects.all().delete()
+        
+
+        #TextReuseStats.objects.all().delete()
+
+        # provide the release details here:
+
+        # release_code = "2023.1.8"
+        # release_date = datetime.date(2023, 10, 17) # YYYY, M, D
+        # meta_fp = "meta/OpenITI_metadata_2023-1-8_wNoor.csv"
+        # base_url = "https://raw.githubusercontent.com/OpenITI/RELEASE/v2023.1.8/data"
+        # zenodo_link = "https://zenodo.org/records/10007820"
+        # release_notes_fp = "meta/release_notes_2023-1-8.txt"
+        # reuse_data_fp = "reuse_data/stats-v8_uni-dir.csv"
+        # #reuse_data_base_url = "http://dev.kitab-project.org/2023.1.8/"
+        # reuse_data_base_url = "http://dev.kitab-project.org/2023.1.8-pairwise/"
+
+
+        # release_code = "2022.2.7"
+        # release_date = datetime.date(2023, 2, 24) # YYYY, M, D
+        # meta_fp = "meta/OpenITI_metadata_2022-2-7_wNoor.csv"
+        # base_url = "https://raw.githubusercontent.com/OpenITI/RELEASE/v2022.2.7/data"
+        # zenodo_link = "https://zenodo.org/record/7687795"
+        # release_notes_fp = "meta/release_notes_2022-2-7.txt"
+        # reuse_data_fp = "reuse_data/stats-v2022-2-7_bi-dir.csv"
+        # #reuse_data_base_url = "http://dev.kitab-project.org/passim01122022-v7/"
+        # reuse_data_base_url = "http://dev.kitab-project.org/2022.2.7-pairwise/"
+
+        # release_code = "2022.1.6"
+        # release_date = datetime.date(2022, 7, 8) # YYYY, M, D
+        # meta_fp = "meta/OpenITI_metadata_2022-1-6_wNoor.csv"
+        # base_url = "https://raw.githubusercontent.com/OpenITI/RELEASE/v2022.1.6/data"
+        # zenodo_link = "https://zenodo.org/record/6808108"
+        # release_notes_fp = "meta/release_notes_2022-1-6.txt"
+        # reuse_data_fp = "reuse_data/stats-v2022-1-6_bi-dir.csv"
+        # #reuse_data_base_url = "http://dev.kitab-project.org/passim01102022/"
+        # reuse_data_base_url = "http://dev.kitab-project.org/2022.1.6-pairwise/"
+
+        release_code = "2021.2.5"
+        release_date = datetime.date(2021, 10, 18) # YYYY, M, D
+        meta_fp = "meta/OpenITI_metadata_2021-2-5_wNoor.csv"
+        base_url = "https://raw.githubusercontent.com/OpenITI/RELEASE/v2021.2.5/data"
+        zenodo_link = "https://zenodo.org/record/5550338"
+        release_notes_fp="meta/release_notes_2021-2-5.txt"
+        reuse_data_fp = "reuse_data/stats-v2021-2-5_bi-dir.csv"
+        #reuse_data_base_url = "http://dev.kitab-project.org/passim01102021/"
+        reuse_data_base_url = "http://dev.kitab-project.org/2021.2.5-pairwise/"
+
+
+        # release_code = "2021.1.4"
+        # release_date = datetime.date(2021, 2, 5) # YYYY, M, D
+        # meta_fp = "meta/OpenITI_metadata_2021-1-4_merged_wNoor.csv"
+        # base_url = "https://raw.githubusercontent.com/OpenITI/RELEASE/v2021.1.4/data"
+        # zenodo_link = "https://zenodo.org/record/4513723"
+        # release_notes_fp="meta/release_notes_2021-1-4.txt"
+        # reuse_data_fp = "reuse_data/stats-v2021-1-4_bi-dir.csv"
+        # reuse_data_base_url = "http://dev.kitab-project.org/passim01022021/"
+
+        with open(release_notes_fp, mode="r", encoding="utf-8") as file:
+            release_notes = file.read()
+
+        release_info = dict(
+            release_code=release_code,
+            release_date=release_date,
+            zenodo_link=zenodo_link,
+            release_notes=release_notes,
+        )
+
+        main(meta_fp, base_url, release_info, reuse_data_fp, reuse_data_base_url, test=test, meta_upload=meta_upload)
+
+
+def main(meta_fp, base_url, release_info, reuse_data_fp, reuse_data_base_url, test=False, meta_upload=True):
+    # load the release metadata:
+    release_obj, version_codes_d = upload_release_meta(meta_fp, base_url, release_info, meta_upload=meta_upload)
+    
+    # BUILDUP: UNCOMMENT:
+    # # check for duplicate version_codes:
+    # print("-"*60)
+    # no_duplicates=True
+    # for version_code, fn_list in version_codes.items():
+    #     if len(fn_list) > 1:
+    #         print("DUPLICATE ID:", version_code)
+    #         print(fn_list)
+    #         no_duplicates = False
+    # if no_duplicates:
+    #     print("No duplicate version IDs found")
+    # print("-"*60)
+
+    
+    # # upload the text reuse stats:
+    # upload_reuse_stats(reuse_data_fp, release_info["release_code"], release_obj, reuse_data_base_url, version_codes_d, test=test)
+    
+    # # create the corpus insights data:
+    # # TO DO
+    
+
+def get_version_lang(version_uri):
+    try:
+        return re.findall("-([a-z]{3})", version_uri)[0]
+    except:
+        return ""
+    
+def get_annotation_status(value):
+    if value == 'mARkdown' or value == 'completed' or value == 'inProgress':
+        return value
+    else:
+        #return 'notYetAnnotated'
+        return "(not yet annotated)"
+
+# def ah2ce(date):
+#     """convert AH date to CE date"""
+#     return 622 + (int(date) * 354 / 365.25)
+
+def get_or_create_name_obj(name, language, name_type):
+    if not name:
+        return
+    """Create name objects for authors and link them to the author object"""
+    #print("Create ObjectName object for", name)
+    # generate a normalized version of the name:
+    if language.upper() in ("ARA", "AR"):
+        normalized_name = normalize_ara_light(name)
+    elif language.upper() in ("LAT", "EN"):
+        normalized_name = betacodeToSearch(name)
+    else:
+        normalized_name = name
+    
+    # create the name object:
+    nm, _created = ObjectName.objects.get_or_create(
+        name=name,
+        normalized_name=normalized_name,
+        language=language,
+        name_type=name_type
+    )
+    #print("Object created:", nm)
+    return nm
+
+def link_author_name(am, nm, is_preferred=False, source=""):
+    if nm is None:
+        return
+    #print("Linking name object", nm, "to author object", am)
+    # create the link between author name and name object:
+    link, link_created = ObjectNameLink.objects.get_or_create(
+        author=am,
+        object_name=nm,
+        source=source,
+        defaults={"is_preferred": is_preferred}
+    )
+    # if the link already existed but was not preferred until now, make it preferred:
+    if is_preferred and not link_created and not link.is_preferred:
+        link.is_preferred = True
+        link.save(update_fields=["is_preferred"])
+
+def add_author_names(am, record):
+    """Add various names to an author object"""
+    for name in record['author_ar'].split(" :: "):
+        nm = get_or_create_name_obj(name, "AR", "full_name")
+        link_author_name(am, nm, is_preferred=False)
+    for name in record['author_lat'].split(" :: "):
+        nm = get_or_create_name_obj(name, "LAT", "full_name")
+        link_author_name(am, nm, is_preferred=False)
+    for name in record['author_ar_prefered'].split(" :: "):
+        nm = get_or_create_name_obj(name, "AR", "full_name")
+        link_author_name(am, nm, is_preferred=True)
+    for name in record['author_lat_prefered'].split(" :: "):
+        nm = get_or_create_name_obj(name, "LAT", "full_name")
+        link_author_name(am, nm, is_preferred=True)
+    
+    name = record['author_lat_shuhra']
+    nm = get_or_create_name_obj(name, "LAT", "shuhra")
+    link_author_name(am, nm, is_preferred=False)
+    
+    name = record['author_from_uri']
+    nm = get_or_create_name_obj(name, "LAT", "full_name")
+    link_author_name(am, nm, is_preferred=False, source="URI")
+
+def get_or_create_date(date_type_slug, calendar_slug, date_str,
+                       year=None, month=None, day=None, precision="year",
+                       source="", confidence=None):
+    """
+    get or create a Date object in the database
+    """
+    ce_start, ce_end = compute_ce_range(calendar_slug, year, precision=precision)
+    try:
+        dt = DATE_TYPES[date_type_slug]
+    except:
+        dt = DateType.objects.create(
+            slug=date_type_slug,
+            label=date_type_slug
+        )
+        DATE_TYPES[date_type_slug] = dt
+    try:
+        cal = CALENDARS[calendar_slug]
+    except:
+        cal = Calendar.objects.create(
+            slug=calendar_slug,
+            name=calendar_slug
+        )
+        CALENDARS[calendar_slug] = cal
+
+    try:
+        #print([ce_start, ce_end, dt, cal])
+        obj, _created = Date.objects.get_or_create(
+        date_type=dt,
+        calendar=cal,
+        date_str=date_str,
+        defaults=dict(
+            year=year,
+            month=month,
+            day=day,
+            precision=precision,
+            ce_start=ce_start,
+            ce_end=ce_end,
+            source=source,
+            confidence=confidence,
+            ),
+        )
+    except Exception as e: 
+        print("CREATING DATE OBJECT FAILED:", e)
+        print(traceback.format_exc())
+        print(dict(
+            date_type=dt,
+            calendar=cal,
+            date_str=date_str,
+            year=year,
+            month=month,
+            day=day,
+            precision=precision,
+            ce_start=ce_start,
+            ce_end=ce_end,
+            source=source,
+            confidence=confidence,
+            ))
+        return None
+    return obj
+
+def to_datetime(gregorian_tuple):
+    """
+    convertdate.<cal>.to_gregorian returns (year, month, day) tuples.
+    Convert to datetime.date.
+    """
+    if not gregorian_tuple:
+        return None
+    y, m, d = gregorian_tuple
+    return datetime.date(int(y), int(m), int(d))
+
+def normalize_precision(precision, month, day):
+    """
+    precision can be: "year", "month", "day" or whatever you store.
+    If missing/invalid, infer from the presence/absence of month/day.
+    """
+    if precision in ("year", "month", "day"):
+        return precision
+    if not month:
+        return "year"
+    if not day:
+        return "month"
+    return "day"
+
+def compute_ce_range(calendar, year, month=None, day=None, precision=None):
+    """
+    Compute (ce_start, ce_end) as datetime.date objects from a calendar date.
+
+    Args:
+        calendar (str): "gregorian", "hijri", "persian", ...
+        year (int): the year value
+        month (int): the month value
+        day (int): the day value
+        precision (str): "year" | "month" | "day"; if None, the precision
+            will be infrerred from the presence/absence of month and day values
+
+    Returns:
+        (datetime, datetime)
+    """
+    if year is None:
+        return (None, None)
+
+    if calendar == "gregorian":
+        return compute_ce_range_from_gregorian(year, 
+            month=month, day=day, precision=precision)
+
+    return compute_ce_range_from_other_calendar(calendar, year, 
+            month=month, day=day, precision=precision)
+
+def compute_ce_range_from_gregorian(year, month=None, day=None, precision=None):
+    """
+    Compute (ce_start, ce_end) as datetime.date objects from a CE calendar date.
+
+    Args:
+        year (int): the year value
+        month (int): the month value
+        day (int): the day value
+        precision (str): "year" | "month" | "day"; if None, the precision
+            will be infrerred from the presence/absence of month and day values
+    
+    Returns:
+        (datetime, datetime)
+    """
+    if year is None:
+        return (None, None)
+
+    precision = normalize_precision(precision, month, day)
+
+    if precision == "year":
+        return (datetime.date(year, 1, 1), datetime.date(year, 12, 31))
+
+    if precision == "month" and month:
+        start = datetime.date(year, month, 1)
+        if month == 12:
+            end = datetime.date(year, 12, 31)
+        else:
+            end = datetime.date(year, month + 1, 1) - datetime.timedelta(days=1)
+        return (start, end)
+
+    if precision == "day" and month and day:
+        d = datetime.date(year, month, day)
+        return (d, d)
+
+    return (None, None)
+
+
+def compute_ce_range_from_other_calendar(calendar, year, month=None, day=None, precision=None):
+    """
+    Compute (ce_start, ce_end) as datetime.date objects from a non-CE calendar date.
+    
+    Uses convertdate.* converters. 
+
+    Args:
+        calendar (str): "gregorian", "hijri", "persian", ...
+        year (int): the year value
+        month (int): the month value
+        day (int): the day value
+        precision (str): "year" | "month" | "day"; if None, the precision
+            will be infrerred from the presence/absence of month and day values
+    
+    Returns:
+        (datetime, datetime)
+    """
+    if year is None:
+        return (None, None)
+
+    converter = DATE_CONVERTERS.get(calendar)
+    if converter is None:
+        print("UNKNOWN CALENDAR:", calendar)
+        return (None, None)
+
+    precision = normalize_precision(precision, month, day)
+
+    # YEAR precision: whole year in that calendar
+    if precision == "year":
+        start = to_datetime(converter.to_gregorian(year, 1, 1))
+
+        # last day of last month of the year, in that calendar
+        # (convertdate modules generally provide month_length)
+        last_month = 12
+        try:
+            last_day = converter.month_length(year, last_month)
+        except Exception:
+            last_day = 30 # approximation
+
+        end = to_datetime(converter.to_gregorian(year, last_month, last_day))
+        return (start, end)
+
+    # MONTH precision: whole month in that calendar
+    if precision == "month" and month:
+        start = to_datetime(converter.to_gregorian(year, month, 1))
+        try:
+            last_day = converter.month_length(year, month)
+        except Exception:
+            last_day = 30 # approximation
+        end = to_datetime(converter.to_gregorian(year, month, last_day))
+        return (start, end)
+
+    # DAY precision: specific day
+    if precision == "day" and month and day:
+        d = to_datetime(converter.to_gregorian(year, month, day))
+        return (d, d)
+
+    return (None, None)
+
+def attach_dates_to_author(author, date_objs):
+    """
+    Bulk-create DateLink rows (safe with through model).
+    """
+    links = [DateLink(date=d, author=author) for d in date_objs]
+    DateLink.objects.bulk_create(links, ignore_conflicts=True)
+
+def split_tag_list(tag_list):
+    version_tags = []
+    text_tags = []
+    author_tags = []
+ 
+    for tag in tag_list:
+        if "MARKDOWN" in tag:
+            version_tags.append("MARKDOWN")
+        elif "COMPLETED" in tag:
+            version_tags.append("COMPLETED")
+        elif "INPROGRESS" in tag:
+            version_tags.append("INPROGRESS")
+        elif "CLEANED_VERSION" in tag:
+            version_tags.append("CLEANED_VERSION")
+        elif "NO_MAJOR_ISSUES" in tag:
+            version_tags.append("NO_MAJOR_ISSUES")
+        elif "born@" in tag or "died@" in tag or "resided@" in tag or "visited@" in tag:
+            author_tags.append(tag)
+        elif "@" in tag or tag.startswith("_"):
+            text_tags.append(tag)
+        else:
+            version_tags.append(tag)
+    return version_tags, text_tags, author_tags
+
+def clean(s):
+    s = re.sub(" *¶ *", " ", s)
+    return s.strip()
+        
+def format_fields(data, base_url):
+    record = dict()
+    
+    record['version_uri'] = data['versionUri']
+    record['version_lang'] = get_version_lang(record['version_uri'])
+    record['date'] = int(data['date'])
+    record['date_AH'] = int(data['date'])
+    record['date_CE'] = None
+    record['date_str'] = int(data['date'])
+    # add normalized versions + prefered version of the arabic-script author name:
+    author_ar = re.split(' *:: *| *, *| *; *', clean(data['author_ar']))
+    #normalized_author_ar = [normalize_ara_light(clean(a)) for a in author_ar if a]
+    #record['author_ar'] = " :: ".join(list(set(author_ar + normalized_author_ar)))
+    record['author_ar'] = " :: ".join(list(set(author_ar)))
+    record['author_ar_prefered'] = author_ar[0]
+    # add normalized versions + prefered version of the latin-script author name:
+    author_lat_shuhra = re.split(' *:: *| *, *| *; *', clean(data['author_lat_shuhra']))
+    author_lat = re.split(' *:: *| *, *| *; *', clean(data['author_lat']))
+    if data['author_lat_shuhra']:
+        record['author_lat_prefered'] = author_lat_shuhra[0]
+    else:
+        record['author_lat_prefered'] = author_lat[0]
+    author_lat += author_lat_shuhra
+    #normalized_author_lat = [betacodeToSearch(a) for a in author_lat if a]
+    #record['author_lat'] = " :: ".join(list(set(author_lat + normalized_author_lat)))
+    record['author_lat'] = " :: ".join(list(set(author_lat)))
+
+    record['text_uri'] = data['book']
+    record['author_uri'] = data['book'].split(".")[0]
+
+    # add normalized version of the Arabic-script titles:
+    titles_ar = re.split(' *:: *| *, *| *; *', clean(data['title_ar']))
+    normalized_titles_ar = [normalize_ara_light(clean(t)) for t in titles_ar if t]
+    record['titles_ar'] = " :: ".join(list(set(titles_ar + normalized_titles_ar)))
+
+    # add normalized version of the Latin-script titles:
+    titles_lat = re.split(' *:: *| *, *| *; *', clean(data['title_lat']))
+    normalized_titles_lat = [betacodeToSearch(t) for t in titles_lat if t]
+    record['titles_lat'] = " :: ".join(list(set(titles_lat + normalized_titles_lat)))
+
+    # define the preferred title: 
+    record['title_ar_prefered'] = titles_ar[0]
+    record['title_lat_prefered'] = titles_lat[0]
+
+    record['ed_info'] = clean(data['ed_info'])
+    record['version_code'] = data['id']
+
+    # check if the version is part of a text file that was split because of its size:
+    if re.findall("[A-Z]$", data['id']):
+        record["part_of"] = data['id'][:-1]
+        print(data['id'], "is part of", data['id'][:-1])
+
+    try:
+        record["collection_code"] = re.findall(r"^([A-Za-z]+?\d*[A-Za-z]+)\d+(?:BK\d+)?(?:Vols)?[A-Z]?$", data['id'])[0]
+    except:
+        record["collection_code"] = None
+        print("Collection code not found in", data['id'])
+    version_tags, text_tags, author_tags = split_tag_list(data['tags'].split(" :: "))
+    record["version_tags"] = " :: ".join(version_tags)
+    record["text_tags"] = " :: ".join(text_tags)
+    record["author_tags"] = " :: ".join(author_tags)
+    
+
+    record['author_from_uri'] = data['author_from_uri']
+    record['author_lat_shuhra'] = data['author_lat_shuhra']
+    record['author_lat_full_name'] = clean(data['author_lat_full_name'])
+
+    ##releasefields
+    record['char_length'] = data['char_length']
+    record['tok_length'] = data['tok_length']
+    # record['url'] = data['url'].replace("../data", base_url)  # this creates problems with v2022.2.7, which has ../data/xxxxAH/data/
+    record['url'] = re.sub( ".{,15}/data", base_url, data['url'])   # greedy quantifier `{,}` deals with both situations: ../data/ and ../data/xxxxAH/data/
+    record['analysis_priority'] = data['status']
+    record['annotation_status'] = get_annotation_status(data['url'].split('.')[-1])
+    if "type" in data:
+        record["type"] = data["type"]
+    else:
+        record["type"] = "book"
+
+    return record
+
+# BUILDUP: UNCOMMENT:
+def upload_release_meta(meta_fp, base_url, release_info, meta_upload=True):
+    print(f"Uploading release {release_info['release_code']} metadata...")
+    failed_dates = set()
+
+    # first, create the new release itself in the database:
+
+    release_obj, created = ReleaseInfo.objects.update_or_create(
+        release_code=release_info["release_code"],
+        defaults=dict(
+            release_date=release_info["release_date"],
+            zenodo_link=release_info["zenodo_link"],
+            release_notes=release_info["release_notes"]
+        )
+    )
+    if created:
+        print("NEW RELEASE ENTRY CREATED:", release_obj)
+
+    version_codes_d = dict()
+    fieldnames = ['versionUri', 'date', 'author_ar', 'author_lat', 'book', 'title_ar', 'title_lat', 'ed_info', 'id', 'status', 'tok_length', 'url', 'tags', 'author_from_uri', 'author_lat_shuhra', 'author_lat_full_name', 'char_length']
+    with open(meta_fp, 'r', encoding='utf-8') as f:
+        reader = csv.DictReader(f, fieldnames=fieldnames, delimiter='\t')
+        header = next(reader)
+
+        for version_data in reader:
+            # add the version_code + extension to the version_codes_d (to create the url to the text reuse data later)
+            version_code = version_data["id"]
+            try:
+                version_codes_d[version_code] = re.findall(version_code+".*", version_data["url"])[0]
+                # for text files that were split into parts, add the whole to the dictionary as well:
+                if re.findall("[A-Z]$", version_code): 
+                    whole_version_code = version_code[:-1]
+                    s = version_codes_d[version_code]
+                    whole_s = re.sub(version_code, whole_version_code, s)
+                    version_codes_d[whole_version_code] = whole_s
+                    print("add whole:", whole_version_code, whole_s)
+            except: 
+                print("version_code", version_code, "not found in url", version_data["url"])
+            
+            if not meta_upload:
+                continue
+
+            # read in the metadata for a version and format it:
+            record = format_fields(version_data, base_url)
+
+            # check if the version uri is already in the database:
+
+            # BUILDUP: UNCOMMENT:
+            if True:  # TO DO replace with the try... except... block when folding in Versions:
+            # try:
+            #     vm = Version.objects.get(
+            #         version_uri=record['version_uri']
+            #     )
+            # except Version.DoesNotExist:
+                print(record['version_uri'], "does not exist in the database")
+
+                # if not, check if the text author_uri is in the database:
+
+                try:
+                    am = Author.objects.get(
+                        author_uri=record['author_uri']
+                    )
+                    print("but author does:", record['author_uri'])
+                except:
+                    print("Author URI not in database either:", record['author_uri'])
+
+                    # the author is not yet in the database! Create a new author object:
+
+                    am, am_created = Author.objects.get_or_create(
+                        author_uri=record['author_uri'],
+                        tags=record['author_tags']
+                        # do not upload bibliography and notes
+                    )
+                    if am_created:
+                        print("-> created", record['author_uri'])
+                
+                # Add names to the author object:
+                add_author_names(am, record)
+                
+                # add dates related to the author:
+                # first, create the date itself: 
+                date_obj = get_or_create_date(
+                    date_type_slug="death_date",
+                    calendar_slug="hijri",
+                    date_str=record['author_uri'][:4],
+                    year=record['date'],
+                    precision="year",
+                    source="URI",
+                )
+                # then, add the link to the author:
+                if date_obj:
+                    DateLink.objects.get_or_create(date=date_obj, author=am)
+                else:
+                    failed_dates.add(record['author_uri'][:4])
+                    input("CONTINUE?")
+
+
+                # the author is now in the database, check if the text exists:
+                # BUILDUP: UNCOMMENT:
+    #             try:
+    #                 tm = Text.objects.get(
+    #                     text_uri=record['text_uri']
+    #                 )
+    #                 print("but text does:", record['text_uri'])
+    #             except: 
+    #                 # the text is not yet in the database! Create a new text object:
+    #                 print("Text URI not in database either:", record['text_uri'])
+    #                 tm, tm_created = Text.objects.update_or_create(
+    #                     text_uri=record["text_uri"],
+    #                     author=am,
+    #                     defaults=dict(
+    #                         titles_ar=record['titles_ar'],
+    #                         titles_lat=record['titles_lat'],
+    #                         title_ar_prefered = record['title_ar_prefered'],
+    #                         title_lat_prefered = record['title_lat_prefered'],
+    #                         text_type="book",
+    #                         tags=record["text_tags"],
+    #                     )
+    #                 )
+    #                 if tm_created:
+    #                     print("-> created", record['text_uri'])
+
+
+    #             # now we are sure the author and text exist in the database, create a new version object:
+
+    #             # (but first, we check if the edition meta object exists or create it)
+
+    #             try:
+    #                 em = Edition.objects.filter(
+    #                     text=tm,
+    #                     ed_info=record['ed_info']
+    #                 )[0]  # more than one edition with the same query criteria may exist!; 
+    #                 # NB: .first() returns None if none exists, so it will not trigger the exception
+    #                 print("Edition does exist")
+    #                 print("em:", em)
+    #                 print()
+    #             except: 
+    #                 print("Neither does the edition exist")
+
+    #                 em, em_created = Edition.objects.update_or_create(
+    #                     text=tm,
+    #                     ed_info=record["ed_info"],
+    #                 )
+    #                 if em_created:
+    #                     print("-> Created Edition object")
+
+    #             # now create the new version object:
+
+    #             # upload the collection code if it doesn't exist yet:
+    #             cm, cm_created = SourceCollectionDetails.objects.get_or_create(
+    #                 code=record["collection_code"]
+    #             )
+
+    #             if "part_of" in record:
+    #                 whole_obj = Version.objects.get(version_uri=record["part_of"])
+    #             else:
+    #                 whole_obj = None
+
+    #             vm, vm_created = Version.objects.update_or_create(
+    #                 version_code=record["version_code"],
+    #                 version_uri=record["version_uri"],
+    #                 text=tm,
+    #                 language=record["version_lang"],
+    #                 defaults=dict(
+    #                     edition=em,
+    #                     source_coll=cm,
+    #                     part_of=whole_obj
+    #                 )
+    #             )     
+    #             if vm_created:
+    #                 print("-> created", record['version_uri'])              
+
+
+    #         # now that we know that the version object is in the database, create or update the ReleaseVersion object:
+    #         rvm, rvm_created = ReleaseVersion.objects.update_or_create(
+    #             release_info=release_obj,
+    #             version=vm,
+    #             defaults=dict(
+    #                 url=record["url"],
+    #                 char_length=record["char_length"],
+    #                 tok_length=record["tok_length"],
+    #                 analysis_priority=record["analysis_priority"],
+    #                 annotation_status=record["annotation_status"],
+    #                 tags=record["version_tags"]
+    #             )
+    #         )
+    #         if rvm_created and VERBOSE:
+    #             print("NEW RELEASE VERSION OBJECT CREATED:", rvm)
+    if failed_dates:
+        print("failed dates:")
+    for date in failed_dates:
+        print(date)
+
+    return release_obj, version_codes_d
+
+# BUILDUP: UNCOMMENT:
+# def upload_reuse_stats(reuse_data_fp, release_code, release_obj, reuse_data_base_url, version_codes_d, test=False):
+#     print("Loading text reuse stats...")
+#     book_cache = dict() # to avoid unnecessary lookups in the database
+#     batch = []
+#     batch_no = 0
+#     batch_size = 100
+#     with open(reuse_data_fp, 'r', encoding='utf-8') as f:
+#         reader = csv.DictReader(f, delimiter='\t')
+        
+#         for data in reader:
+#             if test:
+#                 # for testing: only load stats for 
+#                 #   * 0179MalikIbnAnas.Muwatta 
+#                 #   * 0310Tabari.Tarikhbooks
+#                 #   * all books on the first page of the metadata table for each release:
+#                 if not (("JK007501" in data['_T1'] or "JK007501" in data['_T2']) \
+#                     or ("Shamela0009783" in data['_T1'] or "Shamela0009783" in data['_T2']) \
+#                     or ("Shamela0028107" in data['_T1'] or "Shamela0028107" in data['_T2']) \
+#                     or ("JK007502" in data['_T1'] or "JK007502" in data['_T2'])\
+#                     or ("ShamAY0037936" in data['_T1'] or "ShamAY0037936" in data['_T2'])\
+#                     or ("JK007522" in data['_T1'] or "JK007522" in data['_T2'])\
+#                     or ("JK007524" in data['_T1'] or "JK007524" in data['_T2'])\
+#                     or ("ShamAY0038526" in data['_T1'] or "ShamAY0038526" in data['_T2'])\
+#                     or ("JK007525" in data['_T1'] or "JK007525" in data['_T2'])\
+#                     or ("JK007523" in data['_T1'] or "JK007523" in data['_T2'])\
+#                     or ("JK007526" in data['_T1'] or "JK007526" in data['_T2'])\
+#                     or ("ShamAY0038527" in data['_T1'] or "ShamAY0038527" in data['_T2'])\
+#                     or ("JK007521" in data['_T1'] or "JK007521" in data['_T2'])\
+#                     or ("JK007527" in data['_T1'] or "JK007527" in data['_T2']) \
+#                     or ("ShamAY0037906" in data['_T1'] or "ShamAY0037906" in data['_T2']) \
+#                     or ("JK007529" in data['_T1'] or "JK007529" in data['_T2'])\
+#                     or ("ShamAY0037959" in data['_T1'] or "ShamAY0037959" in data['_T2']) \
+#                     ):  
+#                     continue
+#             version_code1 = data['_T1'].split("-")[0].split(".")[0]
+#             version_code2 = data['_T2'].split("-")[0].split(".")[0]
+
+#             # replace the version code of a part with the version code of the whole (should not be necessary):
+#             if re.findall("[A-Z]$", version_code1):
+#                 print(version_code1, ">", version_code1[:-1])
+#                 version_code1 = version_code1[:-1]
+#             if re.findall("[A-Z]$", version_code2):
+#                 print(version_code2, ">", version_code2[:-1])
+#                 version_code2 = version_code2[:-1]
+
+#             # get the last part of the filename (version_code + lang + number + extension),
+#             # which form part of the csv URL
+#             try:
+#                 ref1 = version_codes_d[version_code1]
+#                 ref2 = version_codes_d[version_code2]
+#             except:
+#                 print("FAILED:", version_code1, version_code2)
+#                 ref1 = version_code1 + "-ara1"
+#                 ref2 = version_code2 + "-ara1"
+            
+#             if version_code1 in book_cache:
+#                 b1 = book_cache[version_code1]
+#             else:
+#                 b1 = ReleaseVersion.objects.get(
+#                     release_info__release_code=release_code,
+#                     version__version_code=version_code1
+#                 )
+#                 book_cache[version_code1] = b1
+#             if version_code2 in book_cache:
+#                 b2 = book_cache[version_code2]
+#             else:
+#                 b2 = ReleaseVersion.objects.get(
+#                     release_info__release_code=release_code,
+#                     version__version_code=version_code2
+#                 )
+#                 book_cache[version_code2] = b2
+            
+#             tsv_url = f"{reuse_data_base_url}{ref1}/{ref1}_{ref2}.csv"
+            
+#             # tr, created = TextReuseStats.objects.update_or_create(
+#             #     book_1 = b1,
+#             #     book_2 = b2,
+#             #     release_info=release_obj,
+#             #     defaults=dict(
+#             #         tsv_url=tsv_url,
+#             #         instances_count=data['instances'],
+#             #         book1_words_matched=data['WM1_Total'],
+#             #         book2_words_matched=data['WM2_Total'],
+#             #         book1_pct_words_matched=data['WM_B1inB2'],
+#             #         book2_pct_words_matched=data['WM_B2inB1'],
+#             #     )
+#             # )
+#             #if created and VERBOSE:
+#             #    print("NEW TEXT REUSE ENTRY CREATED:", tr)
+#             batch.append(TextReuseStats(
+#                 book_1 = b1,
+#                 book_2 = b2,
+#                 release_info=release_obj,
+#                 tsv_url=tsv_url,
+#                 instances_count=data['instances'],
+#                 book1_words_matched=data['WM1_Total'],
+#                 book2_words_matched=data['WM2_Total'],
+#                 book1_pct_words_matched=data['WM_B1inB2'],
+#                 book2_pct_words_matched=data['WM_B2inB1'],
+#                 )
+#             )
+#             if len(batch) == batch_size:
+#                 batch_no += 1
+#                 print("loading batch no.", batch_no)
+#                 TextReuseStats.objects.bulk_create(batch)
+#                 batch = []
+        
+#     # load the remainder of the last batch:
+#     if len(batch) > 0:
+#         batch_no += 1
+#         print("loading batch no.", batch_no)
+#         TextReuseStats.objects.bulk_create(batch)
+            
