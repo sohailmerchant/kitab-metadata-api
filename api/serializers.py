@@ -32,11 +32,11 @@ import re
 from argparse import Namespace
 from operator import truediv
 from rest_framework import serializers
-from .models import Author, RelationType, A2BRelation, ReleaseInfo, Date, ObjectName
-                    # DateLink, Text, Author, AuthorshipRoleLink, Version,\
-                    # CorpusInsights, TextReuseStats, ReleaseVersion,\
-                    # RelationType, A2BRelation, ReleaseInfo,\
-                    # SourceCollectionDetails, Edition, GitHubIssue, VersionwiseReuseStats
+from .models import Author, RelationType, A2BRelation, ReleaseInfo, Date, ObjectName, \
+                    Text, Version, ReleaseVersion, SourceCollectionDetails
+                    # DateLink, AuthorshipRoleLink, \
+                    # CorpusInsights, TextReuseStats, \
+                    # Edition, GitHubIssue, VersionwiseReuseStats
 from rest_flex_fields import FlexFieldsModelSerializer
 from django.db.models import Q
 
@@ -178,106 +178,6 @@ class DateSerializer(FlexFieldsModelSerializer):
 #                   "edition_date", "ed_info", "pdf_url", "worldcat_url")
 #         depth = 1
 
-# BUILDUP: UNCOMMENT:
-# class ShallowAuthorSerializer(FlexFieldsModelSerializer):
-#     """This serializer is used to serialize the metadata from the Author model
-#     for use in serialization of the Text model (without the related fields).
-#     If you want to serialize the full Author model, use the AuthorSerializer.
-#     NB: this serializer wraps the author Metadata in a list, 
-#     in the future we may have multiple authors for a single text"""
-#     name_elements = ShallowNameElementsSerializer(many=True, read_only=True)
-
-#     def serialize_relations(self, person_instance):
-#         """serialize a person's relations"""
-#         # select the relations in which the current person is involved:
-#         relationship_instances = A2BRelation.objects\
-#             .select_related("relation_type", "person_a", "person_b", "text_a", "text_b", "place_a", "place_b")\
-#             .filter(Q(person_a=person_instance) | Q(person_b=person_instance))
-#         # NB: select_related creates a more complex SQL query that joins the relevant tables,
-#         # so that the foreign-key relationships are included in the query set
-#         # and no further database lookups are needed to get attributes from the foreign-key related table 
-#         # (see https://docs.djangoproject.com/en/4.2/ref/models/querysets/#select-related)
-
-#         # divide these relations into the relevant categories:
-
-#         related_persons = []
-#         related_texts = []
-#         related_places = []
-#         for d in relationship_instances:
-#             # create a new dictionary in which we only collect the relevant fields:
-#             new_d = dict(
-#                 relation_type_code=d.relation_type.code,
-#                 relation_subtype_code=d.relation_type.subtype_code,
-#                 start_date_AH=d.start_date_AH,
-#                 end_date_AH=d.end_date_AH,
-#                 authority=d.authority,
-#                 confidence=d.confidence
-#             )
-#             # add relevant fields for each type of relation:
-#             if d.person_a and d.person_b:
-#                 # add only the information about the related person:
-#                 if d.person_a.author_uri == person_instance.author_uri:
-#                     new_d["relation_type_name"] = d.relation_type.name
-#                     new_d["related_person_uri"] = d.person_b.author_uri
-#                 else:
-#                     new_d["relation_type_name"] = d.relation_type.name_inverted
-#                     new_d["related_person_uri"] = d.person_a.author_uri
-#                 related_persons.append(new_d)
-#             elif d.text_a or d.text_b:
-#                 # add the relevant relation_type_name:
-#                 if d.text_a:
-#                     new_d["related_text_uri"] = d.text_a.text_uri
-#                     new_d["relation_type_name"]= d.relation_type.name_inverted
-#                 else: 
-#                     new_d["related_text_uri"] = d.text_b.text_uri
-#                     new_d["relation_type_name"]= d.relation_type.name
-#                 # remove keys irrelevant for text relations:
-#                 del new_d["start_date_AH"]
-#                 del new_d["end_date_AH"]
-#                 related_texts.append(new_d)
-#             elif d.place_a or d.place_b:
-#                 if d.place_a:
-#                     new_d["related_place_uri"] = d.place_a.thuraya_uri
-#                     new_d["relation_type_name"]= d.relation_type.name_inverted
-#                 else: 
-#                     new_d["related_place_uri"] = d.place_b.thuraya_uri
-#                     new_d["relation_type_name"]= d.relation_type.name
-#                 related_places.append(new_d)
-
-#         # combine the categories into a dictionary that will be added to the json representation:
-
-#         d = {
-#             "related_persons": related_persons, 
-#             "related_texts": related_texts,
-#             "related_places": related_places
-#             }
-#         return d
-
-#     def to_representation(self, instance):
-#         json_rep = super().to_representation(instance)
-#         #del json_rep["texts"]
-#         try:  # deal with the situation when user doesn't request the texts field:
-#             for d in json_rep["texts"]:
-#                 # remove the fields below the text level:
-#                 del d["author"]
-#                 del d["related_texts"]
-#                 del d["related_persons"]
-#                 del d["related_places"]
-#         except Exception as e:
-#             print(e)
-#         try:
-#             json_rep = {**json_rep, **self.serialize_relations(instance)}
-#         except Exception as e:
-#             print(e)
-#         # return the dictionary inside a list (we may have multiple authors later)
-#         return [json_rep]
-
-#     class Meta:
-#         model = Author
-#         fields = ("id", "author_uri", "author_ar", "author_ar_prefered", 
-#                   "author_lat", "author_lat_prefered", "name_elements", 
-#                   "texts", "date", "date_AH", "date_CE", "date_str", "tags", "bibliography", "notes")
-#         depth = 1
 
 # BUILDUP: UNCOMMENT:
 # class AuthorshipRoleLinkSerializer(serializers.ModelSerializer):
@@ -328,55 +228,57 @@ class DateSerializer(FlexFieldsModelSerializer):
 #         depth = 1
 
 
-# BUILDUP: UNCOMMENT:
-# class ShallowVersionSerializer(FlexFieldsModelSerializer):
-#     """This serializer is used to serialize the version metadata in text and author queries
-#     (it excludes the author and text metadata)"""
-#     edition = ShallowEditionSerializer(read_only=True)
+class ShallowVersionSerializer(FlexFieldsModelSerializer):
+    """This serializer is used to serialize the version metadata in text and author queries
+    (it excludes the author and text metadata)"""
+    # BUILDUP: UNCOMMENT:
+    # edition = ShallowEditionSerializer(read_only=True)
 
-#     def serialize_relations(self, version_instance):
-#         """serialize a version's parts 
-#         (for books split into pieces because of their length, like BiharAnwar)"""
-#         # select the versions that are part of the current version_instance:
-#         parts = Version.objects\
-#             .filter(part_of__version_uri=version_instance.version_uri)
-#         # get the bookwise text reuse statistics: 
-#         version_reuse_stats = VersionwiseReuseStats.objects\
-#             .filter(release_version__version__version_uri=version_instance.version_uri)\
-#             .first()
-#         try:
-#             return {"parts": sorted(list(set([d.version_uri for d in parts]))), 
-#                     "n_reuse_instances": version_reuse_stats.n_instances,
-#                     "n_reuse_versions": version_reuse_stats.n_versions
-#                     }
-#         except:
-#             return {"parts": sorted(list(set([d.version_uri for d in parts]))), 
-#                     "n_reuse_instances": 0,
-#                     "n_reuse_versions": 0
-#                     }
+    def serialize_relations(self, version_instance):
+        """serialize a version's parts 
+        (for books split into pieces because of their length, like BiharAnwar)"""
+        # select the versions that are part of the current version_instance:
+        parts = Version.objects\
+            .filter(part_of__version_uri=version_instance.version_uri)
+        return {"parts": parts}
+        # # get the bookwise text reuse statistics: 
+        # version_reuse_stats = VersionwiseReuseStats.objects\
+        #     .filter(release_version__version__version_uri=version_instance.version_uri)\
+        #     .first()
+        # try:
+        #     return {"parts": sorted(list(set([d.version_uri for d in parts]))), 
+        #             "n_reuse_instances": version_reuse_stats.n_instances,
+        #             "n_reuse_versions": version_reuse_stats.n_versions
+        #             }
+        # except:
+        #     return {"parts": sorted(list(set([d.version_uri for d in parts]))), 
+        #             "n_reuse_instances": 0,
+        #             "n_reuse_versions": 0
+        #             }
 
-#     def to_representation(self, instance):
-#         """Customize the default json representation"""
-#         # get the default representation:
-#         json_rep = super().to_representation(instance)
-#         # use only the release code instead of the full release version dictionary:
-#         release_codes = [d["release_info"]["release_code"] for d in json_rep.pop("release_versions")]
-#         releases = {"releases": release_codes}
-#         # add the version URIs of the parts: 
-#         reverse_foreign_keys = self.serialize_relations(instance)
-#         # use only the version URI for the part_of key:
-#         part_of = json_rep.pop("part_of")
-#         try:
-#             part_of = {"part_of": part_of["version_uri"]}
-#         except:
-#             part_of = {"part_of": None}
+    def to_representation(self, instance):
+        """Customize the default json representation"""
+        # get the default representation:
+        json_rep = super().to_representation(instance)
+        # use only the release code instead of the full release version dictionary:
+        release_codes = [d["release_info"]["release_code"] for d in json_rep.pop("release_versions")]
+        releases = {"releases": release_codes}
+        # add the version URIs of the parts: 
+        reverse_foreign_keys = self.serialize_relations(instance)
+        # use only the version URI for the part_of key:
+        part_of = json_rep.pop("part_of")
+        try:
+            part_of = {"part_of": part_of["version_uri"]}
+        except:
+            part_of = {"part_of": None}
 
-#         return {**json_rep, **reverse_foreign_keys, **part_of, **releases}
+        return {**json_rep, **reverse_foreign_keys, **part_of, **releases}
 
-#     class Meta:
-#         model = Version
-#         fields = ("id", "version_code", "version_uri", "edition", "language", "release_versions", "part_of", "parts")
-#         depth = 2  
+    class Meta:
+        model = Version
+        #fields = ("id", "version_code", "version_uri", "edition", "language", "release_versions", "part_of", "parts")
+        fields = ("id", "version_code", "version_uri", "language", "release_versions", "part_of", "parts")
+        depth = 2  
 
 
 # BUILDUP: UNCOMMENT:
@@ -426,112 +328,206 @@ class AllRelationTypesSerializer(FlexFieldsModelSerializer):
         fields = ("__all__")
         depth = 2
 
-# BUILDUP: UNCOMMENT:
-# class TextSerializer(FlexFieldsModelSerializer):
-#     versions = ShallowVersionSerializer(many=True, read_only=True)
-#     author = ShallowAuthorSerializer(read_only=True)
+class TextSerializer(FlexFieldsModelSerializer):
+    include_author = True
+    include_related_texts = True
+    include_related_persons = True
+    include_related_places = True
+    versions = ShallowVersionSerializer(many=True, read_only=True)
 
-#     def serialize_relations(self, text_instance):
-#         """serialize a text's relations"""
-#         # get all relationships in which the current text is involved:
-#         relationship_instances = A2BRelation.objects\
-#             .select_related("relation_type", "person_a", "person_b", "text_a", "text_b", "place_a", "place_b")\
-#             .filter(Q(text_a=text_instance) | Q(text_b=text_instance))
-#         # NB: select_related creates a more complex SQL query that joins the relevant tables,
-#         # so that the foreign-key relationships are included in the query set
-#         # and no further database lookups are needed to get attributes from the foreign-key related table 
-#         # (see https://docs.djangoproject.com/en/4.2/ref/models/querysets/#select-related)
+    def serialize_titles(self, text_instance):
+        """
+        Create key-value pairs for the book's titles;
+        (including old keys: titles_ar, titles_lat, 
+        title_ar_prefered, title_lat_prefered)
+        """
+        data = {
+            "titles_ar": "",
+            "titles_lat": "",
+            "title_ar_prefered": "",
+            "title_lat_prefered": "",
+            "titles": []
+        }
 
-#         # divide these relations into the relevant categories:
+        links = (
+            text_instance.object_name_links
+            .select_related("object_name")
+            .all()
+        )
 
-#         related_persons = []
-#         related_texts = []
-#         related_places = []
-#         for d in relationship_instances:
+        if not links:
+            return data
+        
+        for link in links:
+            n = link.object_name
+            if not n.name:
+                continue
 
-#             # create a new dictionary in which we only collect the relevant fields:
+            # Add the title data:
+            data["titles"].append({
+                "title": n.name,
+                "normalized_title": n.normalized_name,
+                "title_type": n.name_type,
+                "language": n.language,
+                "is_preferred": link.is_preferred,
+                "source": link.source
+            })
             
-#             new_d = dict(
-#                 relation_type_code=d.relation_type.code,
-#                 relation_subtype_code=d.relation_type.subtype_code,
-#                 start_date_AH=d.start_date_AH,
-#                 end_date_AH=d.end_date_AH,
-#                 authority=d.authority,
-#                 confidence=d.confidence
-#             )
+            # define which legacy script key the name should be stored under:
+            lang = (n.language or "und").upper()
+            if lang and lang[:2] in ("AR", "UR", "PE", "FA"):
+                script_key = "titles_ar"
+                preferred_key = "title_ar_prefered"
+                sep = " :: " # "، "
+            else:
+                script_key = "titles_lat"
+                preferred_key = "title_lat_prefered"
+                sep = " :: " # ", "
 
-#             # add relevant fields for each type of relation:
+            # store the name to the relevant script key:
+            if not data[script_key]:
+                data[script_key] = n.name
+            elif n.name not in data[script_key].split(", "):
+                data[script_key] += sep + n.name
+    
+            # if the name is the preferred name, store it there, too:
+            if link.is_preferred:
+                if not data[preferred_key]:
+                    data[preferred_key] = n.name
+                elif n.name not in data[preferred_key].split(", "):
+                    data[preferred_key] += sep + n.name
 
-#             if d.text_a and d.text_b:
-#                 # add only the information about the related book:
-#                 if d.text_a.text_uri == text_instance.text_uri:
-#                     new_d["relation_type_name"] = d.relation_type.name
-#                     new_d["related_text_uri"] = d.text_b.text_uri
-#                 else:
-#                     new_d["relation_type_name"] = d.relation_type.name_inverted
-#                     new_d["related_text_uri"] = d.text_a.text_uri
-#                 # delete irrelevant keys:
-#                 del new_d["start_date_AH"]
-#                 del new_d["end_date_AH"]
-#                 related_texts.append(new_d)
-#             elif d.person_a or d.person_b:
-#                 # add the relevant relation_type_name:
-#                 if d.person_a:
-#                     new_d["related_person_uri"] = d.person_a.author_uri
-#                     new_d["relation_type_name"]= d.relation_type.name_inverted
-#                 else: 
-#                     new_d["related_person_uri"] = d.person_b.author_uri
-#                     new_d["relation_type_name"]= d.relation_type.name
-#                 # remove irrelevant keys:
-#                 del new_d["start_date_AH"]
-#                 del new_d["end_date_AH"]
-#                 related_persons.append(new_d)
-#             elif d.place_a or d.place_b:
-#                 if d.place_a:
-#                     new_d["related_place_uri"] = d.place_a.thuraya_uri
-#                     new_d["relation_type_name"]= d.relation_type.name_inverted
-#                 else: 
-#                     new_d["related_place_uri"] = d.place_b.thuraya_uri
-#                     new_d["relation_type_name"]= d.relation_type.name
-#                 related_places.append(new_d)
+        return data
 
-#         # combine the categories into a dictionary that will be added to the json representation:
-#         d =  {
-#             "related_persons": related_persons, 
-#             "related_texts": related_texts,
-#             "related_places": related_places
-#             }
-#         return d
+    def serialize_relations(self, text_instance):
+        """serialize a text's relations"""
+        # get all relationships in which the current text is involved:
+        # BUILDUP: UNCOMMENT:
+        # relationship_instances = A2BRelation.objects\
+        #     .select_related("relation_type", "person_a", "person_b", "text_a", "text_b", "place_a", "place_b")\
+        #     .filter(Q(text_a=text_instance) | Q(text_b=text_instance))
+        relationship_instances = A2BRelation.objects\
+            .select_related("relation_type", "person_a", "person_b", "text_a", "text_b")\
+            .filter(Q(text_a=text_instance) | Q(text_b=text_instance))
+        # NB: select_related creates a more complex SQL query that joins the relevant tables,
+        # so that the foreign-key relationships are included in the query set
+        # and no further database lookups are needed to get attributes from the foreign-key related table 
+        # (see https://docs.djangoproject.com/en/4.2/ref/models/querysets/#select-related)
 
-#     def to_representation(self, instance):
-#         """Override the default json representation"""
+        # divide these relations into the relevant categories:
 
-#         # make the default serialization:
-#         json_rep = super().to_representation(instance)
+        related_persons = []
+        related_texts = []
+        authors = []
+        related_places = []
+        for d in relationship_instances:
 
-#         # remove the "texts" list nested within author:
-#         try: # deal with the situation in which the user doesn't request the "author" field:
-#             for i in range(len(json_rep["author"])):
-#                 del json_rep["author"][i]["texts"]
-#         except Exception as e:
-#             print(e)
+            # create a new dictionary in which we only collect the relevant fields:
+            
+            new_d = dict(
+                relation_type_code=d.relation_type.code,
+                relation_subtype_code=d.relation_type.subtype_code,
+                # BUILDUP: UNCOMMENT:
+                #start_date_AH=d.start_date_AH,
+                #end_date_AH=d.end_date_AH,
+                authority=d.authority,
+                confidence=d.confidence
+            )
 
-#         # add the relationships to the default representation (__all__ fields):
-#         try:
-#             json_rep = {**json_rep, **self.serialize_relations(instance)}
-#         except Exception as e:
-#             print(e)
+            # add relevant fields for each type of relation:
+            if d.text_a and d.text_b:
+                # BUILDUP: UNCOMMENT:
+                # # delete keys irrelevant to book-to-book relations:
+                # del new_d["start_date_AH"]
+                # del new_d["end_date_AH"]
+                # add only the information about the related book:
+                if d.text_a.text_uri == text_instance.text_uri:
+                    new_d["relation_type_name"] = d.relation_type.name
+                    new_d["related_text_uri"] = d.text_b.text_uri
+                else:
+                    new_d["relation_type_name"] = d.relation_type.name_inverted
+                    new_d["related_text_uri"] = d.text_a.text_uri
+                related_texts.append(new_d)
+            elif d.person_a or d.person_b:
+                # BUILDUP: UNCOMMENT:
+                # # remove keys irrelevant to book-person relation:
+                # del new_d["start_date_AH"]
+                # del new_d["end_date_AH"]
+                # add the relevant relation_type_name:
+                if d.person_a:
+                    new_d["related_person_uri"] = d.person_a.author_uri
+                    new_d["relation_type_name"]= d.relation_type.name_inverted
+                    person_obj = d.person_a
+                else: 
+                    new_d["related_person_uri"] = d.person_b.author_uri
+                    new_d["relation_type_name"]= d.relation_type.name
+                    person_obj = d.person_b
+                if d.relation_type.code == "AUTH":
+                    if self.include_author:
+                        auth_d = ShallowAuthorSerializer(person_obj, context=self.context).data
+                        authors.append(auth_d)
+                        #authors.append(d.person_b.author_uri)
+                    continue
+                related_persons.append(new_d)
+            # BUILDUP: UNCOMMENT:
+            # elif d.place_a or d.place_b:
+            #     if d.place_a:
+            #         new_d["related_place_uri"] = d.place_a.thuraya_uri
+            #         new_d["relation_type_name"]= d.relation_type.name_inverted
+            #     else: 
+            #         new_d["related_place_uri"] = d.place_b.thuraya_uri
+            #         new_d["relation_type_name"]= d.relation_type.name
+            #     related_places.append(new_d)
 
-#         return json_rep
+        # combine the categories into a dictionary that will be added to the json representation:
+        d =  dict()
+        if self.include_related_texts:
+            d["related_texts"] = related_texts
+        if  self.include_related_persons:
+            d["related_persons"] = related_persons
+        if  self.include_related_places:
+            d["related_places"] = related_places
+        if self.include_author:
+            d["author"] = authors
+        return d
 
-#     class Meta:
-#         model = Text
-#         fields = ("text_uri", "title_ar_prefered", "title_lat_prefered", "titles_ar", "titles_lat", "tags", 
-#                   "versions", "author", "bibliography")
-#                   #"versions", "related_texts", "related_persons")
-#         depth = 1
+    def to_representation(self, instance):
+        """Override the default json representation"""
 
+        # make the default serialization:
+        json_rep = super().to_representation(instance)
 
+        # # remove the "texts" list nested within author:
+        # try: # deal with the situation in which the user doesn't request the "author" field:
+        #     for i in range(len(json_rep["author"])):
+        #         del json_rep["author"][i]["texts"]
+        # except Exception as e:
+        #     print(e)
+
+        # add the titles to the default representation:
+        try:
+            json_rep = {**json_rep, **self.serialize_titles(instance)}
+        except Exception as e:
+            print("Error adding titles:", e)
+
+        # add the relationships to the default representation (__all__ fields):
+        try:
+            json_rep = {**json_rep, **self.serialize_relations(instance)}
+        except Exception as e:
+            print("Error adding book relations:", e)
+
+        return json_rep
+
+    class Meta:
+        model = Text
+        fields = ("text_uri", "tags", "bibliography", "versions")
+        depth = 1
+
+class ShallowTextSerializer(TextSerializer):
+    include_author = False
+    include_related_texts = True
+    include_related_persons = True
+    include_related_places = True
 
 # class VersionReleaseListSerializer(FlexFieldsModelSerializer):
 #     """This serializer is used to get a list of all releases a version is present in"""
@@ -555,114 +551,127 @@ class AllRelationTypesSerializer(FlexFieldsModelSerializer):
 #     class Meta:
 #         model = ReleaseVersion
 
-# class VersionReleaseListSerializer(FlexFieldsModelSerializer):
-#     """This serializer is used to get a list of all releases a version is present in"""
+class VersionReleaseListSerializer(FlexFieldsModelSerializer):
+    """This serializer is used to get a list of all releases a version is present in
+    
+    NOT USED???"""
 
-#     def serialize_release_list(self, release_instance):
-#         release_code = ReleaseInfo.objects.get(release_code=release_instance.release_info.release_code).release_code
-#         return release_code
+    def serialize_release_list(self, release_instance):
+        release_code = ReleaseInfo.objects.get(release_code=release_instance.release_info.release_code).release_code
+        return release_code
         
-#     def to_representation(self, instance):
-#         return self.serialize_release_list(instance)
+    def to_representation(self, instance):
+        return self.serialize_release_list(instance)
 
-#     class Meta:
-#         model = ReleaseVersion
-
-# BUILDUP: UNCOMMENT:
-# class ShallowReleaseVersionSerializer(FlexFieldsModelSerializer):
-
-#     def to_representation(self, instance):
-#         json_rep = super().to_representation(instance)
-#         try:
-#             release_meta = json_rep["release_info"]
-
-#             del release_meta["id"]
-#             del release_meta["release_notes"]
-#             del json_rep["release_info"]
-#             del json_rep["id"]
-#             del json_rep["version"]
-#             return {**release_meta, **json_rep}
-#         except Exception as e:
-#             return json_rep
-
-#     class Meta:
-#         model = ReleaseVersion
-#         #fields = ('__all__')
-#         fields = ("id", "char_length", "tok_length", "url", "analysis_priority", 
-#                   "annotation_status", "tags", "notes")
-#         depth=1
+    class Meta:
+        model = ReleaseVersion
 
 
-# BUILDUP: UNCOMMENT:
-# class VersionSerializer(FlexFieldsModelSerializer):
-#     """This serializer is used to serialize the version metadata in version queries,
-#     and includes the text and author metadata"""
-#     text = TextSerializer(read_only=True)
-#     edition = ShallowEditionSerializer(read_only=True)
-#     release_versions = ShallowReleaseVersionSerializer(read_only=True, many=True)
+class ShallowReleaseVersionSerializer(FlexFieldsModelSerializer):
 
-#     def serialize_relations(self, version_instance):
-#         """serialize a version's parts 
-#         (for books split into pieces because of their length, like BiharAnwar)"""
-#         # select the versions that are part of the current version_instance:
-#         parts = Version.objects\
-#             .filter(part_of__version_uri=version_instance.version_uri)
-#         # get the bookwise text reuse statistics: 
-#         version_reuse_stats = VersionwiseReuseStats.objects\
-#             .filter(release_version__version__version_uri=version_instance.version_uri)\
-#             .first()
-#         return {"parts": [d.version.version_uri for d in parts]}
-#         try:
-#             return {"parts": [d.version.version_uri for d in parts], 
-#                     "n_reuse_instances": version_reuse_stats.n_instances,
-#                     "n_reuse_versions": version_reuse_stats.n_versions}
-#         except:
-#             return {"parts": [d.version.version_uri for d in parts], 
-#                     "n_reuse_instances": 0,
-#                     "n_reuse_versions": 0
-#                     }
+    def to_representation(self, instance):
+        json_rep = super().to_representation(instance)
+        try:
+            release_meta = json_rep["release_info"]
 
-#     def to_representation(self, instance):
-#         """Customize the default json representation"""
-#         # get the default representation:
-#         json_rep = super().to_representation(instance)
+            del release_meta["id"]
+            del release_meta["release_notes"]
+            del json_rep["release_info"]
+            del json_rep["id"]
+            del json_rep["version"]
+            return {**release_meta, **json_rep}
+        except Exception as e:
+            print("ShallowReleaseVersionSerializer error:", e)
+            print(json_rep)
+            return json_rep
 
-#         try:
-#             # remove the nested list of all versions of the text:
-#             del json_rep["text"]["versions"]
-#             # remove the release_versions dictionary if a specific release was requested:
-#             release_code = self.context.get('release_code')
-#             if release_code:
-#                 requested_release = [d for d in json_rep["release_versions"] if d["release_code"] == release_code]
-#                 del json_rep["release_versions"]
-#                 json_rep["release_version"] = requested_release
-#             # add the version URIs of the parts: 
-#             parts = self.serialize_relations(instance)
-#             # use only the version URI for the part_of key:
-#             part_of = json_rep.pop("part_of")
-#             try:
-#                 part_of = {"part_of": part_of["version_uri"]}
-#             except:
-#                 part_of = {"part_of": None}
+    class Meta:
+        model = ReleaseVersion
+        #fields = ('__all__')
+        fields = ("id", "char_length", "tok_length", "url", "analysis_priority", 
+                  "annotation_status", "tags", "notes", "release_info", "version")
+        depth=1
+
+
+
+class VersionSerializer(FlexFieldsModelSerializer):
+    """This serializer is used to serialize the version metadata in version queries,
+    and includes the text and author metadata"""
+    text = TextSerializer(read_only=True)
+    # BUILDUP: UNCOMMENT:
+    # edition = ShallowEditionSerializer(read_only=True)
+    release_versions = ShallowReleaseVersionSerializer(read_only=True, many=True)
+
+    def serialize_relations(self, version_instance):
+        """serialize a version's parts 
+        (for books split into pieces because of their length, like BiharAnwar)"""
+        # select the versions that are part of the current version_instance:
+        parts = Version.objects\
+            .filter(part_of__version_uri=version_instance.version_uri)
+        return {"parts": [d.version.version_uri for d in parts]}
+        # # get the bookwise text reuse statistics: 
+        # version_reuse_stats = VersionwiseReuseStats.objects\
+        #     .filter(release_version__version__version_uri=version_instance.version_uri)\
+        #     .first()
+        # try:
+        #     return {"parts": [d.version.version_uri for d in parts], 
+        #             "n_reuse_instances": version_reuse_stats.n_instances,
+        #             "n_reuse_versions": version_reuse_stats.n_versions}
+        # except:
+        #     return {"parts": [d.version.version_uri for d in parts], 
+        #             "n_reuse_instances": 0,
+        #             "n_reuse_versions": 0
+        #             }
+
+    def to_representation(self, instance):
+        """Customize the default json representation"""
+        # get the default representation:
+        json_rep = super().to_representation(instance)
+
+        try:
+            # remove the nested list of all versions of the text:
+            del json_rep["text"]["versions"]
+            # remove the release_versions dictionary if a specific release was requested:
+            release_code = self.context.get('release_code')
+            if release_code:
+                requested_release = [d for d in json_rep["release_versions"] if d["release_code"] == release_code]
+                del json_rep["release_versions"]
+                json_rep["release_version"] = requested_release
+            # add the version URIs of the parts: 
+            parts = self.serialize_relations(instance)
+            # use only the version URI for the part_of key:
+            part_of = json_rep.pop("part_of")
+            try:
+                part_of = {"part_of": part_of["version_uri"]}
+            except:
+                part_of = {"part_of": None}
             
-#             return {**json_rep, **parts, **part_of}
-#         except Exception as e:
-#             print(e)
-#             return json_rep
+            return {**json_rep, **parts, **part_of}
+        except Exception as e:
+            print("Error in VersionSerializer: ", e)
+            return json_rep
 
-#     class Meta:
-#         model = Version
-#         #fields = ("__all__")
-#         fields = ("id", "version_code", "version_uri", "language", "text", "edition", 
-#                   "release_versions", "part_of", "github_issues")
-#         depth = 3  # expand text and author metadata
+    class Meta:
+        model = Version
+        #fields = ("__all__")
+        #fields = ("id", "version_code", "version_uri", "language", "text", "edition", 
+        #          "release_versions", "part_of", "github_issues")
+        fields = ("id", "version_code", "version_uri", "language", "text",
+                  "release_versions", "part_of",)
+        depth = 3  # expand text and author metadata
 
 
 class AuthorSerializer(FlexFieldsModelSerializer):
-    # BUILDUP: UNCOMMENT:
-    # texts = TextSerializer(many=True, read_only=True)
-    # name_elements = ShallowNameElementsSerializer(many=True, read_only=True)
-
+    """This serializer is used to serialize the metadata from the Author model
+    (including the related fields).
+    If you want to serialize the Author model without the related fields,
+    use the ShallowAuthorSerializer.
+    """
+    include_authored_texts = True
+    include_related_texts = True
+    include_related_persons = True
+    include_related_places = True
+    
     def serialize_names(self, person_instance):
         """
         Create key-value pairs for the author's name and name elements;
@@ -672,8 +681,8 @@ class AuthorSerializer(FlexFieldsModelSerializer):
         data = {
             "author_ar": "",
             "author_lat": "",
-            "author_ar_preferred": "",
-            "author_lat_preferred": "",
+            "author_ar_prefered": "",
+            "author_lat_prefered": "",
             "name_elements": [],
             "full_names": []
         }
@@ -711,10 +720,10 @@ class AuthorSerializer(FlexFieldsModelSerializer):
                 # define which legacy script key the name should be stored under:
                 if lang and lang[:2] in ("AR", "UR", "PE", "FA"):
                     script_key = "author_ar"
-                    preferred_key = "author_ar_preferred"
+                    preferred_key = "author_ar_prefered"
                 else:
                     script_key = "author_lat"
-                    preferred_key = "author_lat_preferred"
+                    preferred_key = "author_lat_prefered"
                 
                 # store the name to the relevant script key:
                 if not data[script_key]:
@@ -735,7 +744,7 @@ class AuthorSerializer(FlexFieldsModelSerializer):
                 if n.name not in name_elements_by_lang[lang][n.name_type]:
                     for el in re.split(" *, *", n.name):
                         if el not in name_elements_by_lang[lang][n.name_type]:
-                            name_elements_by_lang[lang][n.name_type] += el
+                            name_elements_by_lang[lang][n.name_type].append(el)
             
         for lang, d in name_elements_by_lang.items():
             # convert the list values into comma-separated strings
@@ -807,6 +816,11 @@ class AuthorSerializer(FlexFieldsModelSerializer):
 
     def serialize_relations(self, person_instance):
         """serialize a person's relations"""
+        if self.include_related_persons == False \
+            and self.include_authored_texts == False \
+            and self.include_related_texts == False \
+            and self.include_related_places == False:
+            return {}
         # select the relations in which the current person is involved:
         # BUILDUP: UNCOMMENT:
         # relationship_instances = A2BRelation.objects\
@@ -822,11 +836,11 @@ class AuthorSerializer(FlexFieldsModelSerializer):
         # (see https://docs.djangoproject.com/en/4.2/ref/models/querysets/#select-related)
 
         # divide these relations into the relevant categories:
-
+        
         related_persons = []
-        # BUILDUP: UNCOMMENT:
-        # related_texts = []
-        # related_places = []
+        authored_texts = []
+        related_texts = []
+        related_places = []
         for d in relationship_instances:
             # create a new dictionary in which we only collect the relevant fields:
             new_d = dict(
@@ -839,7 +853,7 @@ class AuthorSerializer(FlexFieldsModelSerializer):
                 confidence=d.confidence
             )
             # add relevant fields for each type of relation:
-            if d.person_a and d.person_b:
+            if d.person_a and d.person_b and self.include_related_persons:
                 # add only the information about the related person:
                 if d.person_a.author_uri == person_instance.author_uri:
                     new_d["relation_type_name"] = d.relation_type.name
@@ -848,19 +862,27 @@ class AuthorSerializer(FlexFieldsModelSerializer):
                     new_d["relation_type_name"] = d.relation_type.name_inverted
                     new_d["related_person_uri"] = d.person_a.author_uri
                 related_persons.append(new_d)
-            # BUILDUP: UNCOMMENT:
-            # elif d.text_a or d.text_b:
-            #     # add the relevant relation_type_name:
-            #     if d.text_a:
-            #         new_d["related_text_uri"] = d.text_a.text_uri
-            #         new_d["relation_type_name"]= d.relation_type.name_inverted
-            #     else: 
-            #         new_d["related_text_uri"] = d.text_b.text_uri
-            #         new_d["relation_type_name"]= d.relation_type.name
-            #     # remove keys irrelevant for text relations:
-            #     del new_d["start_date_AH"]
-            #     del new_d["end_date_AH"]
-            #     related_texts.append(new_d)
+            elif d.text_a or d.text_b and self.include_related_texts:
+
+                # remove keys irrelevant for text relations:
+                #del new_d["start_date_AH"]
+                #del new_d["end_date_AH"]
+                # add the relevant relation_type_name:
+                if d.text_a:
+                    new_d["related_text_uri"] = d.text_a.text_uri
+                    new_d["relation_type_name"]= d.relation_type.name_inverted
+                    text_obj = d.text_a
+                else: 
+                    new_d["related_text_uri"] = d.text_b.text_uri
+                    new_d["relation_type_name"]= d.relation_type.name
+                    text_obj = d.text_b
+                
+                if d.relation_type.code == "AUTH":
+                    if self.include_authored_texts:
+                        text_d = ShallowTextSerializer(text_obj, context=self.context).data
+                        authored_texts.append(text_d)
+                    continue
+                related_texts.append(new_d)
             # elif d.place_a or d.place_b:
             #     if d.place_a:
             #         new_d["related_place_uri"] = d.place_a.thuraya_uri
@@ -872,12 +894,16 @@ class AuthorSerializer(FlexFieldsModelSerializer):
 
         # combine the categories into a dictionary that will be added to the json representation:
 
-        d = {
-            "related_persons": related_persons, 
-            # BUILDUP: UNCOMMENT:
-            # "related_texts": related_texts,
-            # "related_places": related_places
-            }
+        d = dict()
+        if self.include_related_texts:
+            d["related_texts"] = related_texts
+        if self.include_authored_texts:
+            d["texts"] = authored_texts
+        if self.include_related_persons:
+            d["related_persons"] = related_persons
+        if self.include_related_places:
+            d["related_places"] = related_places
+        
         return d
 
     def to_representation(self, instance):
@@ -902,12 +928,12 @@ class AuthorSerializer(FlexFieldsModelSerializer):
         except Exception as e:
             print("ERROR serializing relations in Author model:", e)
 
-        # remove the author dictionary nested inside the texts dictionaries:
-        try:  
-            for d in json_rep["texts"]:
-                del d["author"]
-        except Exception as e: # deal with the situation when the user doesn't request the texts
-            print("No text in the json representation of the Author", e)
+        # # remove the author dictionary nested inside the texts dictionaries:
+        # try:  
+        #     for d in json_rep["texts"]:
+        #         del d["author"]
+        # except Exception as e: # deal with the situation when the user doesn't request the texts
+        #     print("No text in the json representation of the Author", e)
 
         return json_rep
  
@@ -921,6 +947,22 @@ class AuthorSerializer(FlexFieldsModelSerializer):
         fields = ("id", "author_uri", "tags", "bibliography", "notes")
         # BUILDUP: UNCOMMENT:
         # depth = 3
+
+
+class ShallowAuthorSerializer(AuthorSerializer):
+    """This serializer is used to serialize the metadata from the Author model
+    for use in serialization of the Text model (without the related fields).
+    If you want to serialize the full Author model, use the AuthorSerializer.
+    """
+    include_authored_texts = False
+    include_related_texts = True
+    include_related_persons = True
+    include_related_places = True
+
+    class Meta(AuthorSerializer.Meta):
+        fields = ("id", "author_uri", "tags", "bibliography", "notes")
+
+
 
 # BUILDUP: UNCOMMENT:
 # class CorpusInsightsSerializer(serializers.ModelSerializer):
@@ -1078,85 +1120,86 @@ class AuthorSerializer(FlexFieldsModelSerializer):
 #                   "book1_pct_words_matched", "book2_pct_words_matched", "tsv_url"]
 
 
-# BUILDUP: UNCOMMENT:
-# class ReleaseVersionSerializer(serializers.ModelSerializer):
-#     """Serializes the ReleaseVersion table in the same way as the
-#     VersionSerializer does. This is necessary because release-version-
-#     specific metadata cannot be reliably filtered starting from the
-#     Version model for a specific release. 
-#     E.g., if one filters the versions based on "pri",
-#     all versions that have "pri" priority in at least one release
-#     will be returned, even if it has "sec" priority in the 
-#     requested release. 
-#     """
-#     version = VersionSerializer(read_only=True)
 
-#     def serialize_relations(self, instance):
-#         """serialize a version's parts 
-#         (for books split into pieces because of their length, like BiharAnwar)"""
-#         # select the versions that are part of the current version_instance:
-#         parts = ReleaseVersion.objects\
-#             .filter(version__part_of__version_uri=instance.version.version_uri)
-#         # get the bookwise text reuse statistics: 
-#         version_reuse_stats = VersionwiseReuseStats.objects\
-#             .filter(release_version=instance).first()
-#         try:
-#             return {"parts": sorted(list(set([d.version.version_uri for d in parts]))), 
-#                     "n_reuse_instances": version_reuse_stats.n_instances,
-#                     "n_reuse_versions": version_reuse_stats.n_versions
-#                     }
-#         except:
-#             return {"parts": sorted(list(set([d.version.version_uri for d in parts]))), 
-#                     "n_reuse_instances": 0,
-#                     "n_reuse_versions": 0}
+class ReleaseVersionSerializer(serializers.ModelSerializer):
+    """Serializes the ReleaseVersion table in the same way as the
+    VersionSerializer does. This is necessary because release-version-
+    specific metadata cannot be reliably filtered starting from the
+    Version model for a specific release. 
+    E.g., if one filters the versions based on "pri",
+    all versions that have "pri" priority in at least one release
+    will be returned, even if it has "sec" priority in the 
+    requested release. 
+    """
+    version = VersionSerializer(read_only=True)
 
-#     def to_representation(self, instance):
-#         """Format the result in the same way as the VersionSerializer"""
-#         json_rep = super().to_representation(instance)
-#         inverse_foreign_keys = self.serialize_relations(instance)
+    def serialize_relations(self, instance):
+        """serialize a version's parts 
+        (for books split into pieces because of their length, like BiharAnwar)"""
+        # select the versions that are part of the current version_instance:
+        parts = ReleaseVersion.objects\
+            .filter(version__part_of__version_uri=instance.version.version_uri)
+        return {"parts": parts}
+        # # get the bookwise text reuse statistics: 
+        # version_reuse_stats = VersionwiseReuseStats.objects\
+        #     .filter(release_version=instance).first()
+        # try:
+        #     return {"parts": sorted(list(set([d.version.version_uri for d in parts]))), 
+        #             "n_reuse_instances": version_reuse_stats.n_instances,
+        #             "n_reuse_versions": version_reuse_stats.n_versions
+        #             }
+        # except:
+        #     return {"parts": sorted(list(set([d.version.version_uri for d in parts]))), 
+        #             "n_reuse_instances": 0,
+        #             "n_reuse_versions": 0}
 
-#         # replace the full release_info dictionary with only the release_code:
-#         try:
-#             json_rep["release_code"] = json_rep["release_info"]["release_code"]
-#             json_rep["release_date"] = json_rep["release_info"]["release_date"]
-#             json_rep["zenodo_link"] = json_rep["release_info"]["zenodo_link"]
-#         except Exception as e:
-#             print(e)
-#         # import json
-#         # print(json.dumps(json_rep, indent=2))
-#         # extract the relation_version metadata from the result:
-#         rel_version = {
-#             "release_code": json_rep["release_code"],
-#             "release_date": json_rep["release_date"],
-#             "zenodo_link": json_rep["zenodo_link"],
-#             "char_length": json_rep["char_length"],
-#             "tok_length": json_rep["tok_length"],
-#             "url": json_rep["url"],
-#             "analysis_priority": json_rep["analysis_priority"],
-#             "annotation_status": json_rep["annotation_status"],
-#             "tags": json_rep["tags"],
-#             "notes": json_rep["notes"],
-#             **inverse_foreign_keys
-#         }
-#         # make the version dictionary the main part of the returned dictionary:
-#         json_rep = json_rep["version"]
+    def to_representation(self, instance):
+        """Format the result in the same way as the VersionSerializer"""
+        json_rep = super().to_representation(instance)
+        inverse_foreign_keys = self.serialize_relations(instance)
 
-#         # insert the release_version metadata into it:
-#         json_rep["release_version"] = rel_version
+        # replace the full release_info dictionary with only the release_code:
+        try:
+            json_rep["release_code"] = json_rep["release_info"]["release_code"]
+            json_rep["release_date"] = json_rep["release_info"]["release_date"]
+            json_rep["zenodo_link"] = json_rep["release_info"]["zenodo_link"]
+        except Exception as e:
+            print("Error in ReleaseVersionSerializer:", e)
+        # import json
+        # print(json.dumps(json_rep, indent=2))
+        # extract the relation_version metadata from the result:
+        rel_version = {
+            "release_code": json_rep["release_code"],
+            "release_date": json_rep["release_date"],
+            "zenodo_link": json_rep["zenodo_link"],
+            "char_length": json_rep["char_length"],
+            "tok_length": json_rep["tok_length"],
+            "url": json_rep["url"],
+            "analysis_priority": json_rep["analysis_priority"],
+            "annotation_status": json_rep["annotation_status"],
+            "tags": json_rep["tags"],
+            "notes": json_rep["notes"],
+            **inverse_foreign_keys
+        }
+        # make the version dictionary the main part of the returned dictionary:
+        json_rep = json_rep["version"]
 
-#         # remove the list with all release versions of this version:
-#         try:
-#             del json_rep["release_versions"]
-#         except Exception as e:
-#             print(e)
+        # insert the release_version metadata into it:
+        json_rep["release_version"] = rel_version
 
-#         return json_rep
+        # remove the list with all release versions of this version:
+        try:
+            del json_rep["release_versions"]
+        except Exception as e:
+            print("Attempting to remove this key in ReleaseVersionSerializer failed: ", e)
 
-#     class Meta:
-#         model = ReleaseVersion
-#         depth = 6
-#         fields = ("id", "char_length", "tok_length", "url", "analysis_priority", 
-#                   "annotation_status", "tags", "notes", "release_info", "version")
+        return json_rep
+
+    class Meta:
+        model = ReleaseVersion
+        depth = 6
+        fields = ("id", "char_length", "tok_length", "url", "analysis_priority", 
+                  "annotation_status", "tags", "notes", "release_info", "version")
 
 
 class ReleaseInfoSerializer(serializers.ModelSerializer):
@@ -1165,12 +1208,11 @@ class ReleaseInfoSerializer(serializers.ModelSerializer):
         depth = 1
         fields = ('__all__')
        
-# BUILDUP: UNCOMMENT:
-# class SourceCollectionDetailsSerializer(serializers.ModelSerializer):
-#     class Meta:
-#         model = SourceCollectionDetails
-#         depth = 1
-#         fields = ("__all__")
+class SourceCollectionDetailsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SourceCollectionDetails
+        depth = 1
+        fields = ("__all__")
 
 # BUILDUP: UNCOMMENT:
 # class EditionSerializer(serializers.ModelSerializer):

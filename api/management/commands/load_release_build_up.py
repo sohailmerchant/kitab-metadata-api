@@ -20,9 +20,12 @@ import csv
 from webbrowser import get
 from django.db import models
 
-#from api.models import Author, Text, Version, CorpusInsights, ReleaseVersion, ReleaseInfo, Edition, TextReuseStats, SourceCollectionDetails
-from api.models import Author, ReleaseInfo, Date, DateType, Calendar, DateLink,\
-    ObjectName, ObjectNameLink
+#from api.models import CorpusInsights, Edition, TextReuseStats, 
+from api.models import Author, Text, Version, \
+    ReleaseVersion, SourceCollectionDetails, \
+    Date, DateType, Calendar, DateLink,\
+    ObjectName, ObjectNameLink, A2BRelation, RelationType, \
+    TextType, TextTypeLink, ReleaseInfo
 from django.core.management.base import BaseCommand
 import re
 import datetime
@@ -58,13 +61,19 @@ class Command(BaseCommand):
         # if uploading only text reuse stats: set upload to False:
         meta_upload=True
 
-        Author.objects.all().delete()
-        Date.objects.all().delete()
-        DateLink.objects.all().delete()
-        DateType.objects.all().delete()
-        Calendar.objects.all().delete()
-        ObjectName.objects.all().delete()
-        ObjectNameLink.objects.all().delete()
+        imported_models = [ObjectNameLink, A2BRelation, DateLink, TextTypeLink,\
+                           ReleaseInfo, Calendar, DateType, RelationType, TextType, \
+                           Version, ReleaseVersion, SourceCollectionDetails,\
+                           ObjectName, Date, Author, Text
+                          ]
+        for m in imported_models:
+            print(m)
+            try:
+                m.objects.all().delete()
+            except Exception as e:
+                print("Failed to delete data:", e)
+        input("CONTINUE?")
+        
         
 
         #TextReuseStats.objects.all().delete()
@@ -137,7 +146,7 @@ class Command(BaseCommand):
 
 def main(meta_fp, base_url, release_info, reuse_data_fp, reuse_data_base_url, test=False, meta_upload=True):
     # load the release metadata:
-    release_obj, version_codes_d = upload_release_meta(meta_fp, base_url, release_info, meta_upload=meta_upload)
+    release_obj, version_codes_d = upload_release_meta(meta_fp, base_url, release_info, meta_upload=meta_upload, test=test)
     
     # BUILDUP: UNCOMMENT:
     # # check for duplicate version_codes:
@@ -200,16 +209,73 @@ def get_or_create_name_obj(name, language, name_type):
     #print("Object created:", nm)
     return nm
 
-def link_author_name(am, nm, is_preferred=False, source=""):
-    if nm is None:
+# def link_author_name(am, nm, is_preferred=False, source=""):
+#     if nm is None:
+#         return
+#     #print("Linking name object", nm, "to author object", am)
+#     # create the link between author name and name object:
+#     link, link_created = ObjectNameLink.objects.get_or_create(
+#         author=am,
+#         object_name=nm,
+#         source=source,
+#         defaults={"is_preferred": is_preferred}
+#     )
+#     # if the link already existed but was not preferred until now, make it preferred:
+#     if is_preferred and not link_created and not link.is_preferred:
+#         link.is_preferred = True
+#         link.save(update_fields=["is_preferred"])
+
+def link_name_to_obj(name_obj, author_obj=None, text_obj=None, 
+                     is_preferred=False, source=""):
+    if name_obj is None:
         return
-    #print("Linking name object", nm, "to author object", am)
-    # create the link between author name and name object:
+    #print("Linking name object", nm, "to other object", (author_obj or text_obj))
+    # create the link between name object and other object:
     link, link_created = ObjectNameLink.objects.get_or_create(
-        author=am,
-        object_name=nm,
+        author=author_obj,
+        text=text_obj,
+        object_name=name_obj,
         source=source,
         defaults={"is_preferred": is_preferred}
+    )
+    # if the link already existed but was not preferred until now, make it preferred:
+    if is_preferred and not link_created and not link.is_preferred:
+        link.is_preferred = True
+        link.save(update_fields=["is_preferred"])
+
+def link_book_to_author(text_obj, author_obj, rel_type_obj, authority=""):
+    rel, created = A2BRelation.objects.get_or_create(
+        person_a=author_obj,
+        text_b=text_obj,
+        relation_type=rel_type_obj,
+        authority=authority
+    )
+
+def link_book_to_titles(tm, record):
+    """Add various titles to a book/text object"""
+    for name in record['titles_ar'].split(" :: "):
+        nm = get_or_create_name_obj(name, "AR", "title")
+        link_name_to_obj(nm, text_obj=tm, is_preferred=False)
+    for name in record['titles_lat'].split(" :: "):
+        nm = get_or_create_name_obj(name, "LAT", "title")
+        link_name_to_obj(nm, text_obj=tm, is_preferred=False)
+    name = record['title_ar_prefered']
+    nm = get_or_create_name_obj(name, "AR", "title")
+    link_name_to_obj(nm, text_obj=tm, is_preferred=True)
+    name = record['title_lat_prefered']
+    nm = get_or_create_name_obj(name, "LAT", "title")
+    link_name_to_obj(nm, text_obj=tm, is_preferred=True)
+    
+def add_book_type(text_obj, text_type_obj, is_preferred=False,
+                  note="", source=""):
+    link, link_created = TextTypeLink.objects.get_or_create(
+        text_type=text_type_obj,
+        text=text_obj,
+        source=source,
+        defaults={
+            "is_preferred": is_preferred, 
+            "note": note
+        }
     )
     # if the link already existed but was not preferred until now, make it preferred:
     if is_preferred and not link_created and not link.is_preferred:
@@ -220,24 +286,30 @@ def add_author_names(am, record):
     """Add various names to an author object"""
     for name in record['author_ar'].split(" :: "):
         nm = get_or_create_name_obj(name, "AR", "full_name")
-        link_author_name(am, nm, is_preferred=False)
+        #link_author_name(am, nm, is_preferred=False)
+        link_name_to_obj(nm, author_obj=am, is_preferred=False)
     for name in record['author_lat'].split(" :: "):
         nm = get_or_create_name_obj(name, "LAT", "full_name")
-        link_author_name(am, nm, is_preferred=False)
+        #link_author_name(am, nm, is_preferred=False)
+        link_name_to_obj(nm, author_obj=am, is_preferred=False)
     for name in record['author_ar_prefered'].split(" :: "):
         nm = get_or_create_name_obj(name, "AR", "full_name")
-        link_author_name(am, nm, is_preferred=True)
+        #link_author_name(am, nm, is_preferred=True)
+        link_name_to_obj(nm, author_obj=am, is_preferred=True)
     for name in record['author_lat_prefered'].split(" :: "):
         nm = get_or_create_name_obj(name, "LAT", "full_name")
-        link_author_name(am, nm, is_preferred=True)
+        #link_author_name(am, nm, is_preferred=True)
+        link_name_to_obj(nm, author_obj=am, is_preferred=True)
     
     name = record['author_lat_shuhra']
     nm = get_or_create_name_obj(name, "LAT", "shuhra")
-    link_author_name(am, nm, is_preferred=False)
+    #link_author_name(am, nm, is_preferred=False)
+    link_name_to_obj(nm, author_obj=am, is_preferred=False)
     
     name = record['author_from_uri']
     nm = get_or_create_name_obj(name, "LAT", "full_name")
-    link_author_name(am, nm, is_preferred=False, source="URI")
+    #link_author_name(am, nm, is_preferred=False, source="URI")
+    link_name_to_obj(nm, author_obj=am, is_preferred=True, source="URI")
 
 def get_or_create_date(date_type_slug, calendar_slug, date_str,
                        year=None, month=None, day=None, precision="year",
@@ -510,13 +582,14 @@ def format_fields(data, base_url):
 
     # add normalized version of the Arabic-script titles:
     titles_ar = re.split(' *:: *| *, *| *; *', clean(data['title_ar']))
-    normalized_titles_ar = [normalize_ara_light(clean(t)) for t in titles_ar if t]
-    record['titles_ar'] = " :: ".join(list(set(titles_ar + normalized_titles_ar)))
-
+    #normalized_titles_ar = [normalize_ara_light(clean(t)) for t in titles_ar if t]
+    #record['titles_ar'] = " :: ".join(list(set(titles_ar + normalized_titles_ar)))
+    record['titles_ar'] = " :: ".join(list(set(titles_ar)))
     # add normalized version of the Latin-script titles:
     titles_lat = re.split(' *:: *| *, *| *; *', clean(data['title_lat']))
-    normalized_titles_lat = [betacodeToSearch(t) for t in titles_lat if t]
-    record['titles_lat'] = " :: ".join(list(set(titles_lat + normalized_titles_lat)))
+    #normalized_titles_lat = [betacodeToSearch(t) for t in titles_lat if t]
+    #record['titles_lat'] = " :: ".join(list(set(titles_lat + normalized_titles_lat)))
+    record['titles_lat'] = " :: ".join(list(set(titles_lat)))
 
     # define the preferred title: 
     record['title_ar_prefered'] = titles_ar[0]
@@ -536,9 +609,9 @@ def format_fields(data, base_url):
         record["collection_code"] = None
         print("Collection code not found in", data['id'])
     version_tags, text_tags, author_tags = split_tag_list(data['tags'].split(" :: "))
-    record["version_tags"] = " :: ".join(version_tags)
-    record["text_tags"] = " :: ".join(text_tags)
-    record["author_tags"] = " :: ".join(author_tags)
+    record["version_tags"] = " :: ".join([t for t in version_tags if t])
+    record["text_tags"] = " :: ".join([t for t in text_tags if t])
+    record["author_tags"] = " :: ".join([t for t in author_tags if t])
     
 
     record['author_from_uri'] = data['author_from_uri']
@@ -560,7 +633,7 @@ def format_fields(data, base_url):
     return record
 
 # BUILDUP: UNCOMMENT:
-def upload_release_meta(meta_fp, base_url, release_info, meta_upload=True):
+def upload_release_meta(meta_fp, base_url, release_info, meta_upload=True, test=False):
     print(f"Uploading release {release_info['release_code']} metadata...")
     failed_dates = set()
 
@@ -576,6 +649,28 @@ def upload_release_meta(meta_fp, base_url, release_info, meta_upload=True):
     )
     if created:
         print("NEW RELEASE ENTRY CREATED:", release_obj)
+
+    # Create / get the ID of the generic authorship relation,
+    # used to connect books to their authors:
+    
+    authorship_obj, created = RelationType.objects.get_or_create(
+        code="AUTH",
+        name="is author of",
+        name_inverted="is written by",
+        descr="Generic authorship relation between a person and a book",
+        entities="person_book"
+    )
+    if created:
+        print("AUTHORSHIP OBJECT CREATED:", authorship_obj)
+
+    # Create / get the ID of the text_type for a generic book:
+    book_type_obj, created = TextType.objects.get_or_create(
+        slug="book",
+        label="book",
+        description="a generic text_type for books in the OpenITI corpus",
+    )
+    if created:
+        print("BOOK TYPE OBJECT CREATED:", book_type_obj)
 
     version_codes_d = dict()
     fieldnames = ['versionUri', 'date', 'author_ar', 'author_lat', 'book', 'title_ar', 'title_lat', 'ed_info', 'id', 'status', 'tok_length', 'url', 'tags', 'author_from_uri', 'author_lat_shuhra', 'author_lat_full_name', 'char_length']
@@ -604,15 +699,20 @@ def upload_release_meta(meta_fp, base_url, release_info, meta_upload=True):
             # read in the metadata for a version and format it:
             record = format_fields(version_data, base_url)
 
+            # for tests, only upload the metadata for authors 
+            # between 300 and 325
+            if test:
+                if record["date"] < 300 or record["date"] > 325:
+                    continue
+
             # check if the version uri is already in the database:
 
-            # BUILDUP: UNCOMMENT:
-            if True:  # TO DO replace with the try... except... block when folding in Versions:
-            # try:
-            #     vm = Version.objects.get(
-            #         version_uri=record['version_uri']
-            #     )
-            # except Version.DoesNotExist:
+            #if True:  # TO DO replace with the try... except... block when folding in Versions:
+            try:
+                vm = Version.objects.get(
+                    version_uri=record['version_uri']
+                )
+            except Version.DoesNotExist:
                 print(record['version_uri'], "does not exist in the database")
 
                 # if not, check if the text author_uri is in the database:
@@ -657,29 +757,28 @@ def upload_release_meta(meta_fp, base_url, release_info, meta_upload=True):
 
 
                 # the author is now in the database, check if the text exists:
-                # BUILDUP: UNCOMMENT:
-    #             try:
-    #                 tm = Text.objects.get(
-    #                     text_uri=record['text_uri']
-    #                 )
-    #                 print("but text does:", record['text_uri'])
-    #             except: 
-    #                 # the text is not yet in the database! Create a new text object:
-    #                 print("Text URI not in database either:", record['text_uri'])
-    #                 tm, tm_created = Text.objects.update_or_create(
-    #                     text_uri=record["text_uri"],
-    #                     author=am,
-    #                     defaults=dict(
-    #                         titles_ar=record['titles_ar'],
-    #                         titles_lat=record['titles_lat'],
-    #                         title_ar_prefered = record['title_ar_prefered'],
-    #                         title_lat_prefered = record['title_lat_prefered'],
-    #                         text_type="book",
-    #                         tags=record["text_tags"],
-    #                     )
-    #                 )
-    #                 if tm_created:
-    #                     print("-> created", record['text_uri'])
+                
+                try:
+                    tm = Text.objects.get(
+                        text_uri=record['text_uri']
+                    )
+                    print("but text does:", record['text_uri'])
+                except: 
+                    # the text is not yet in the database! Create a new text object:
+                    print("Text URI not in database either:", record['text_uri'])
+                    tm, tm_created = Text.objects.update_or_create(
+                        text_uri=record["text_uri"],
+                        #author=am,  # we add the author(s) with link_book_to_author
+                        defaults=dict(
+                            tags=record["text_tags"]
+                        )
+                    )
+                    if tm_created:
+                        print("-> created", record['text_uri'])
+                
+                link_book_to_author(tm, am, authorship_obj, authority="URI")
+                link_book_to_titles(tm, record)
+                add_book_type(tm, book_type_obj, source="URI")
 
 
     #             # now we are sure the author and text exist in the database, create a new version object:
@@ -705,48 +804,50 @@ def upload_release_meta(meta_fp, base_url, release_info, meta_upload=True):
     #                 if em_created:
     #                     print("-> Created Edition object")
 
-    #             # now create the new version object:
+                # now create the new version object:
 
-    #             # upload the collection code if it doesn't exist yet:
-    #             cm, cm_created = SourceCollectionDetails.objects.get_or_create(
-    #                 code=record["collection_code"]
-    #             )
+                # upload the collection code if it doesn't exist yet:
+                cm, cm_created = SourceCollectionDetails.objects.get_or_create(
+                    code=record["collection_code"]
+                )
 
-    #             if "part_of" in record:
-    #                 whole_obj = Version.objects.get(version_uri=record["part_of"])
-    #             else:
-    #                 whole_obj = None
+                if "part_of" in record:
+                    whole_obj = Version.objects.get(version_uri=record["part_of"])
+                else:
+                    whole_obj = None
 
-    #             vm, vm_created = Version.objects.update_or_create(
-    #                 version_code=record["version_code"],
-    #                 version_uri=record["version_uri"],
-    #                 text=tm,
-    #                 language=record["version_lang"],
-    #                 defaults=dict(
-    #                     edition=em,
-    #                     source_coll=cm,
-    #                     part_of=whole_obj
-    #                 )
-    #             )     
-    #             if vm_created:
-    #                 print("-> created", record['version_uri'])              
+                vm, vm_created = Version.objects.update_or_create(
+                    version_code=record["version_code"],
+                    version_uri=record["version_uri"],
+                    text=tm,
+                    language=record["version_lang"],
+                    defaults=dict(
+                        # BUILDUP: UNCOMMENT:
+                        # edition=em,
+                        source_coll=cm,
+                        part_of=whole_obj
+                    )
+                )     
+                if vm_created:
+                    print("-> created", record['version_uri'])              
 
 
-    #         # now that we know that the version object is in the database, create or update the ReleaseVersion object:
-    #         rvm, rvm_created = ReleaseVersion.objects.update_or_create(
-    #             release_info=release_obj,
-    #             version=vm,
-    #             defaults=dict(
-    #                 url=record["url"],
-    #                 char_length=record["char_length"],
-    #                 tok_length=record["tok_length"],
-    #                 analysis_priority=record["analysis_priority"],
-    #                 annotation_status=record["annotation_status"],
-    #                 tags=record["version_tags"]
-    #             )
-    #         )
-    #         if rvm_created and VERBOSE:
-    #             print("NEW RELEASE VERSION OBJECT CREATED:", rvm)
+            # now that we know that the version object is in the database, 
+            # create or update the ReleaseVersion object:
+            rvm, rvm_created = ReleaseVersion.objects.update_or_create(
+                release_info=release_obj,
+                version=vm,
+                defaults=dict(
+                    url=record["url"],
+                    char_length=record["char_length"],
+                    tok_length=record["tok_length"],
+                    analysis_priority=record["analysis_priority"],
+                    annotation_status=record["annotation_status"],
+                    tags=record["version_tags"]
+                )
+            )
+            if rvm_created and VERBOSE:
+                print("NEW RELEASE VERSION OBJECT CREATED:", rvm)
     if failed_dates:
         print("failed dates:")
     for date in failed_dates:

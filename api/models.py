@@ -709,36 +709,40 @@ class Text(models.Model):
     """Describes a text in the database."""
     text_uri = models.CharField(max_length=100, unique=True, null=False)
     
-    # # BUILDUP: UNCOMMENT:
-    # # multiple authors (with different roles):
-    # authors = models.ManyToManyField("Author", through=AuthorshipRoleLink,
-    #     through_fields=("author", "text"), related_name="texts", blank=True
-    # )
+    # multiple authors (with different roles):
+    authors = models.ManyToManyField("Author", 
+        through="A2BRelation",
+        through_fields=("text_b", "person_a"), 
+        related_name="texts", blank=True
+    )
     # old key:
     #author = models.ForeignKey(Author, on_delete=models.DO_NOTHING,
     #                               related_name='texts', related_query_name="text")
 
-    # # BUILDUP: UNCOMMENT:
-    # # multiple titles for the text, in multiple languages:
-    # titles = models.ManyToManyField(ObjectName, through=ObjectNameLink,
-    #     through_fields=("object_name", "text"), related_name="texts", blank=True
-    # )
+    # multiple titles for the text, in multiple languages:
+    titles = models.ManyToManyField(ObjectName, blank=True, 
+        through=ObjectNameLink,
+        through_fields=("text", "object_name"), 
+        related_name="texts"
+    )
     # old keys:
     #titles_ar = models.CharField(max_length=255, blank=True)
     #titles_lat = models.CharField(max_length=255, blank=True)
     #title_ar_prefered = models.CharField(max_length=255, blank=True)
     #title_lat_prefered = models.CharField(max_length=255, blank=True)
 
-
     # multiple types of dates (written, ...) for the text, in different calendars:
-    
-    dates = models.ManyToManyField(Date, through=DateLink,
-        through_fields=("date", "text"), related_name="texts", blank=True
+    dates = models.ManyToManyField(Date, blank=True, 
+        through=DateLink,
+        through_fields=("text", "date"), 
+        related_name="texts"
     )
     
     #text_type = models.CharField(max_length=15, blank=True)  # document, inscription, ...
-    text_types = models.ManyToManyField(TextType, through=TextTypeLink,
-        through_fields=("text_type", "text"), related_name="texts", blank=True
+    text_types = models.ManyToManyField(TextType, blank=True, 
+        through=TextTypeLink,
+        through_fields=("text", "text_type"), 
+        related_name="texts"
     )
     tags =  models.CharField(max_length=255, blank=True)
     bibliography = models.TextField(null=False, blank=True)
@@ -749,15 +753,22 @@ class Text(models.Model):
     #     related_name="texts", blank=True
     # )
 
+    # Create a relationship between two texts (e.g., text A is a commentary on text B)
+    # using a many-to-many field:
+    related_texts = models.ManyToManyField("self", 
+        through="A2BRelation", 
+        through_fields=("text_a", "text_b"),
+        symmetrical=False, 
+        related_name="texts_related", 
+        related_query_name="text_related")
+    # Create a relationship between a text and a person (e.g., text A is a biography of person B)
+    # using a many-to-many field:
+    related_persons = models.ManyToManyField("Author", 
+        through="A2BRelation", 
+        through_fields=("text_a", "person_b"),
+        related_name="related_texts", 
+        related_query_name="related_text")
     # # BUILDUP: UNCOMMENT:
-    # # Create a relationship between two texts (e.g., text A is a commentary on text B)
-    # # using a many-to-many field:
-    # related_texts = models.ManyToManyField("self", through="A2BRelation", through_fields=("text_a", "text_b"),
-    #                                        symmetrical=False, related_name="texts_related", related_query_name="text_related")
-    # # Create a relationship between a text and a person (e.g., text A is a biography of person B)
-    # # using a many-to-many field:
-    # related_persons = models.ManyToManyField("Author", through="A2BRelation", through_fields=("text_a", "person_b"),
-    #                                          related_name="related_texts", related_query_name="related_text")
     # # Create a relationship between a text and a place (e.g., text A is a history of place B; text A was written in place B)
     # # using a many-to-many field:
     # related_places = models.ManyToManyField("Place", through="A2BRelation", through_fields=("text_a", "place_b"),
@@ -783,40 +794,42 @@ class Text(models.Model):
 ##     def __str__(self):
 ##         return self.language
 
-# BUILDUP: UNCOMMENT:
-# class Version(models.Model):
-#     """Describes a digital version of a text in the database.
+class Version(models.Model):
+    """Describes a digital version of a text in the database.
     
-#     Only metadata of the version that cannot change
-#     (or, if it is changed, should be overwritten: e.g., typos)
-#     are stored in this model; store metadata that can change
-#     across versions (e.g., notes, char_lenght, tok length, url, 
-#     status and annotation status) in ReleaseVersion.
-#     """
-#     version_code = models.CharField(max_length=50, null=False)
-#     version_uri = models.CharField(max_length=100, unique=True, blank=True)
-#     text = models.ForeignKey(Text, blank=True, null=True,
-#         related_name='versions', related_query_name="version", 
-#         on_delete=models.DO_NOTHING)
-#     manuscript = models.ForeignKey("Manuscript", blank=True, null=True,
-#         related_name='transcriptions', related_query_name="transcription", 
-#         on_delete=models.DO_NOTHING)
-#     page_range = models.CharField(max_length=50, blank=True, null=False)
-#     language = models.CharField(max_length=9, blank=True)
-#     edition = models.ForeignKey("Edition", 
-#         related_name='versions', related_query_name="version", 
-#         on_delete=models.DO_NOTHING)
-#     source_coll = models.ForeignKey("SourceCollectionDetails", 
-#         related_name='versions', related_query_name="version", 
-#         on_delete=models.DO_NOTHING, blank=True, null=True)
-#     part_of = models.ForeignKey("self", related_name='parts', related_query_name="part", 
-#                                 on_delete=models.DO_NOTHING, blank=True, null=True)
-#     external_ids = models.ManyToManyField(ExternalID, through=ExternalIDLink,
-#                     through_fields=("identifier", "version"),  
-#                     related_name="versions", blank=True)
+    Only metadata of the version that cannot change
+    (or, if it is changed, should be overwritten: e.g., typos)
+    are stored in this model; store metadata that can change
+    across versions (e.g., notes, char_lenght, tok length, url, 
+    status and annotation status) in ReleaseVersion.
+    """
+    version_code = models.CharField(max_length=50, null=False)
+    version_uri = models.CharField(max_length=100, unique=True, blank=True)
+    text = models.ForeignKey(Text, blank=True, null=True,
+        related_name='versions', related_query_name="version", 
+        on_delete=models.DO_NOTHING)
+    # BUILDUP: UNCOMMENT:
+    # manuscript = models.ForeignKey("Manuscript", blank=True, null=True,
+    #     related_name='transcriptions', related_query_name="transcription", 
+    #     on_delete=models.DO_NOTHING)
+    page_range = models.CharField(max_length=50, blank=True, null=False)
+    language = models.CharField(max_length=9, blank=True)
+    # BUILDUP: UNCOMMENT:
+    # edition = models.ForeignKey("Edition", 
+    #     related_name='versions', related_query_name="version", 
+    #     on_delete=models.DO_NOTHING)
+    source_coll = models.ForeignKey("SourceCollectionDetails", 
+        related_name='versions', related_query_name="version", 
+        on_delete=models.DO_NOTHING, blank=True, null=True)
+    part_of = models.ForeignKey("self", related_name='parts', related_query_name="part", 
+                                on_delete=models.DO_NOTHING, blank=True, null=True)
+    # BUILDUP: UNCOMMENT:
+    # external_ids = models.ManyToManyField(ExternalID, through=ExternalIDLink,
+    #                 through_fields=("identifier", "version"),  
+    #                 related_name="versions", blank=True)
 
-#     def __str__(self):
-#         return self.version_uri
+    def __str__(self):
+        return self.version_uri
 
 # BUILDUP: UNCOMMENT:
 # class Edition(models.Model):
@@ -961,13 +974,13 @@ class A2BRelation(models.Model):
     person_b = models.ForeignKey(Author, 
         related_name="related_persons_b", related_query_name="related_person_b",
         on_delete=models.DO_NOTHING, null=True, blank=True)
+    text_a = models.ForeignKey(Text, 
+        related_name="related_texts_a", related_query_name="related_text_a",
+        on_delete=models.DO_NOTHING, null=True, blank=True)
+    text_b = models.ForeignKey(Text, 
+        related_name="related_texts_b", related_query_name="related_text_b",
+        on_delete=models.DO_NOTHING, null=True, blank=True)
     # # BUILDUP: UNCOMMENT:
-    # text_a = models.ForeignKey(Text, 
-    #     related_name="related_texts_a", related_query_name="related_text_a",
-    #     on_delete=models.DO_NOTHING, null=True, blank=True)
-    # text_b = models.ForeignKey(Text, 
-    #     related_name="related_texts_b", related_query_name="related_text_b",
-    #     on_delete=models.DO_NOTHING, null=True, blank=True)
     # manuscript_a = models.ForeignKey(Manuscript, 
     #     related_name="related_manuscripts_a", related_query_name="related_manuscript_a",
     #     on_delete=models.DO_NOTHING, null=True, blank=True)
@@ -1052,35 +1065,45 @@ class A2BRelation(models.Model):
 #     def __str__(self):
 #         return f"{self.release_info} corpus insights"
 
-# BUILDUP: UNCOMMENT:
-# class ReleaseVersion(models.Model):
-#     """Describes metadata of a digital text version in a specific OpenITI release"""
-#     id = models.AutoField(primary_key=True)
-#     #release_code = models.CharField(max_length=10, null=False) # e.g., 2021.2.5
-#     release_info = models.ForeignKey("ReleaseInfo", blank=False, on_delete=models.DO_NOTHING) # e.g., 2021.2.5
-#     version = models.ForeignKey(Version, on_delete=models.DO_NOTHING, 
-#         related_name='release_versions', 
-#         related_query_name="release_version")
-#     char_length = models.IntegerField(null=True, blank=True)
-#     tok_length = models.IntegerField(null=True, blank=True)
-#     url = models.CharField(max_length=255, null=False, blank=True)
-#     analysis_priority = models.CharField(max_length=3, null=False, blank=True,
-#         help_text="Primary or secondary text? Use 'pri' or 'sec'")
-#     annotation_status = models.CharField(max_length=50, null=False, blank=True,
-#         help_text="Extension of the file, indicating how far it has been annotated: inProgress, completed, mARkdown")
-#     line_model = models.CharField(max_length=50, null=False, blank=True,
-#         help_text="line recognition model used for OCR")
-#     region_model = models.CharField(max_length=50, null=False, blank=True,
-#         help_text="region recognition model used for OCR")
-#     recognition_model = models.CharField(max_length=50, null=False, blank=True,
-#         help_text="character recognition/transcription model used for OCR")
-#     contributors = models.ManyToManyField("Contributors", blank=True, 
-#         related_name='release_versions', related_query_name="release_version")
-#     tags = models.CharField(max_length=100, blank=True)
-#     notes = models.TextField(null=False, blank=True)
+class ReleaseVersion(models.Model):
+    """Describes metadata of a digital text version in a specific OpenITI release"""
+    id = models.AutoField(primary_key=True)
+    #release_code = models.CharField(max_length=10, null=False) # e.g., 2021.2.5
+    release_info = models.ForeignKey("ReleaseInfo", blank=False, on_delete=models.DO_NOTHING) # e.g., 2021.2.5
+    version = models.ForeignKey(Version, on_delete=models.DO_NOTHING, 
+        related_name='release_versions', 
+        related_query_name="release_version")
+    char_length = models.IntegerField(null=True, blank=True)
+    tok_length = models.IntegerField(null=True, blank=True)
+    url = models.CharField(max_length=255, null=False, blank=True)
+    analysis_priority = models.CharField(max_length=3, null=False, blank=True,
+        help_text="Primary or secondary text? Use 'pri' or 'sec'")
+    annotation_status = models.CharField(max_length=50, null=False, blank=True,
+        help_text="Extension of the file, indicating how far it has been annotated: inProgress, completed, mARkdown")
+    line_model = models.CharField(max_length=50, null=False, blank=True,
+        help_text="line recognition model used for OCR")
+    region_model = models.CharField(max_length=50, null=False, blank=True,
+        help_text="region recognition model used for OCR")
+    recognition_model = models.CharField(max_length=50, null=False, blank=True,
+        help_text="character recognition/transcription model used for OCR")
+    contributors = models.ManyToManyField("Contributor", blank=True, 
+        related_name='release_versions', related_query_name="release_version")
+    tags = models.CharField(max_length=100, blank=True)
+    notes = models.TextField(null=False, blank=True)
 
-#     def __str__(self):
-#         return f"{self.version} ({self.release_info})"
+    def __str__(self):
+        return f"{self.version} ({self.release_info})"
+    
+class Contributor(models.Model):
+    code = models.CharField(max_length=50, blank=True)
+    name = models.CharField(max_length=255, blank=True)
+    url = models.CharField(max_length=255, blank=True)
+    affiliation = models.CharField(max_length=255, blank=True)
+    description = models.TextField(blank=True)
+
+    def __str__(self):
+        return f"{self.code} ({self.name})"
+
     
 # BUILDUP: UNCOMMENT:
 # class VersionwiseReuseStats(models.Model):
@@ -1113,18 +1136,17 @@ class ReleaseInfo(models.Model):
     def __str__(self):
         return self.release_code
 
-# BUILDUP: UNCOMMENT:
-# class SourceCollectionDetails(models.Model):
-#     """Describes the source collection from where texts entered into the OpenITI corpus"""
-#     id = models.AutoField(primary_key=True)
-#     code = models.CharField(max_length=10, unique=True)  #Shamela, Shia,  JK, ...
-#     url = models.CharField(max_length=200, null=False, blank=True)
-#     name = models.CharField(max_length=200, null=False)
-#     affiliation = models.CharField(max_length=200, null=False)
-#     description = models.TextField(null=False, blank=True)
+class SourceCollectionDetails(models.Model):
+    """Describes the source collection from where texts entered into the OpenITI corpus"""
+    id = models.AutoField(primary_key=True)
+    code = models.CharField(max_length=10, unique=True)  #Shamela, Shia,  JK, ...
+    url = models.CharField(max_length=200, null=False, blank=True)
+    name = models.CharField(max_length=200, null=False)
+    affiliation = models.CharField(max_length=200, null=False)
+    description = models.TextField(null=False, blank=True)
 
-#     def __str__(self):
-#         return self.code
+    def __str__(self):
+        return self.code
     
 # BUILDUP: UNCOMMENT:
 # TO DO: 

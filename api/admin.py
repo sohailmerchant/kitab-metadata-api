@@ -4,14 +4,15 @@ from django.contrib import admin
 # Register your models here.
 from .models import Author, RelationType, A2BRelation, ReleaseInfo,\
     Date, DateLink, Calendar, DateType, ObjectName, ObjectNameLink,\
-    TextType, TextTypeLink, Text #, AuthorshipRole, AuthorshipRoleLink , IdentifierProvider, \
+    TextType, TextTypeLink, Text, \
+    Version, SourceCollectionDetails, ReleaseVersion, Contributor #, AuthorshipRole, AuthorshipRoleLink , IdentifierProvider, \
     #ExternalID, ExternalIDLink, \
     #AuthorshipRole, AuthorshipRoleLink, PlaceRelationType, PlaceLink, \
-    #Version, Edition, \
+    #Edition, \
     #ManuscriptHolding, Manuscript, Country, Place, \
     #TextReuseStats, CorpusInsights, \
-    #ReleaseVersion, VersionwiseReuseStats, \
-    #SourceCollectionDetails, GitHubIssue, GitHubIssueLabel
+    #VersionwiseReuseStats, \
+    #GitHubIssue, GitHubIssueLabel
 
 admin.site.register(ObjectName)
 admin.site.register(ObjectNameLink)
@@ -30,7 +31,7 @@ admin.site.register(TextTypeLink)
 ##admin.site.register(PlaceLink)
 admin.site.register(Author)
 admin.site.register(Text)
-##admin.site.register(Version)
+admin.site.register(Version)
 ##admin.site.register(Edition)
 ##admin.site.register(ManuscriptHolding)
 ##admin.site.register(Manuscript)
@@ -40,10 +41,11 @@ admin.site.register(RelationType)
 admin.site.register(A2BRelation)
 ##admin.site.register(TextReuseStats)
 ##admin.site.register(CorpusInsights)
-##admin.site.register(ReleaseVersion)
+admin.site.register(ReleaseVersion)
 ##admin.site.register(VersionwiseReuseStats)
 admin.site.register(ReleaseInfo)
-##admin.site.register(SourceCollectionDetails)
+admin.site.register(SourceCollectionDetails)
 ##admin.site.register(GitHubIssue)
 ##admin.site.register(GitHubIssueLabel)
+admin.site.register(Contributor)
 
