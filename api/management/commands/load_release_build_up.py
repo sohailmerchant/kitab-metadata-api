@@ -53,6 +53,13 @@ DATE_CONVERTERS  = {
 DATE_TYPES = {}
 CALENDARS = {}
 
+with open("meta/alThurayya_places.json", encoding="utf-8") as file:
+    data = json.load(file)
+    ALTHURAYYA_LOOKUP = {d["properties"]["cornuData"]["cornu_URI"]: d["properties"]["cornuData"] for d in data["features"]}
+
+print(ALTHURAYYA_LOOKUP["JUBBMAYDAN_233E321N_S"])
+input("CONTINUE?")
+
 class Command(BaseCommand):
     def handle(self, **options):
         # if testing, only upload text reuse data for Tabari.Tarikh and MalikIbnAnas.Muwatta
