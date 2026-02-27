@@ -20,8 +20,8 @@ import csv
 from webbrowser import get
 from django.db import models
 
-#from api.models import CorpusInsights, Edition, TextReuseStats, 
-from api.models import Author, Text, Version, \
+#from api.models import CorpusInsights, TextReuseStats, 
+from api.models import Author, Text, Version, Edition, \
     ReleaseVersion, SourceCollectionDetails, \
     Date, DateType, Calendar, DateLink,\
     ObjectName, ObjectNameLink, A2BRelation, RelationType, \
@@ -62,23 +62,34 @@ class Command(BaseCommand):
         meta_upload=True
 
         imported_models = [ObjectNameLink, A2BRelation, DateLink, TextTypeLink,\
-                           ReleaseInfo, Calendar, DateType, RelationType, TextType, \
+                           ReleaseInfo, Calendar, DateType, RelationType, TextType, Edition,\
                            Version, ReleaseVersion, SourceCollectionDetails,\
                            ObjectName, Date, Author, Text
                           ]
-        for m in imported_models:
-            print(m)
-            try:
-                m.objects.all().delete()
-            except Exception as e:
-                print("Failed to delete data:", e)
-        input("CONTINUE?")
+        # for m in imported_models:
+        #     print(m)
+        #     try:
+        #         m.objects.all().delete()
+        #     except Exception as e:
+        #         print("Failed to delete data:", e)
+        # input("CONTINUE?")
         
         
 
         #TextReuseStats.objects.all().delete()
 
         # provide the release details here:
+
+        release_code = "2025.1.9"
+        release_date = datetime.date(2025, 12, 30) # YYYY, M, D
+        meta_fp = "meta/OpenITI_metadata_2025-1-9_wNoor.csv"
+        base_url = "https://raw.githubusercontent.com/OpenITI/RELEASE/v2025.1.9/data"
+        zenodo_link = "https://zenodo.org/records/17767721"
+        release_notes_fp = "meta/release_notes_2025-1-9.txt"
+        reuse_data_fp = None
+        #reuse_data_base_url = "http://dev.kitab-project.org/2023.1.8/"
+        reuse_data_base_url = "http://dev.kitab-project.org/2025.1.9-pairwise/"
+
 
         # release_code = "2023.1.8"
         # release_date = datetime.date(2023, 10, 17) # YYYY, M, D
@@ -111,15 +122,15 @@ class Command(BaseCommand):
         # #reuse_data_base_url = "http://dev.kitab-project.org/passim01102022/"
         # reuse_data_base_url = "http://dev.kitab-project.org/2022.1.6-pairwise/"
 
-        release_code = "2021.2.5"
-        release_date = datetime.date(2021, 10, 18) # YYYY, M, D
-        meta_fp = "meta/OpenITI_metadata_2021-2-5_wNoor.csv"
-        base_url = "https://raw.githubusercontent.com/OpenITI/RELEASE/v2021.2.5/data"
-        zenodo_link = "https://zenodo.org/record/5550338"
-        release_notes_fp="meta/release_notes_2021-2-5.txt"
-        reuse_data_fp = "reuse_data/stats-v2021-2-5_bi-dir.csv"
-        #reuse_data_base_url = "http://dev.kitab-project.org/passim01102021/"
-        reuse_data_base_url = "http://dev.kitab-project.org/2021.2.5-pairwise/"
+        # release_code = "2021.2.5"
+        # release_date = datetime.date(2021, 10, 18) # YYYY, M, D
+        # meta_fp = "meta/OpenITI_metadata_2021-2-5_wNoor.csv"
+        # base_url = "https://raw.githubusercontent.com/OpenITI/RELEASE/v2021.2.5/data"
+        # zenodo_link = "https://zenodo.org/record/5550338"
+        # release_notes_fp="meta/release_notes_2021-2-5.txt"
+        # reuse_data_fp = "reuse_data/stats-v2021-2-5_bi-dir.csv"
+        # #reuse_data_base_url = "http://dev.kitab-project.org/passim01102021/"
+        # reuse_data_base_url = "http://dev.kitab-project.org/2021.2.5-pairwise/"
 
 
         # release_code = "2021.1.4"
@@ -321,7 +332,7 @@ def get_or_create_date(date_type_slug, calendar_slug, date_str,
     try:
         dt = DATE_TYPES[date_type_slug]
     except:
-        dt = DateType.objects.create(
+        dt, created = DateType.objects.get_or_create(
             slug=date_type_slug,
             label=date_type_slug
         )
@@ -329,7 +340,7 @@ def get_or_create_date(date_type_slug, calendar_slug, date_str,
     try:
         cal = CALENDARS[calendar_slug]
     except:
-        cal = Calendar.objects.create(
+        cal, created = Calendar.objects.get_or_create(
             slug=calendar_slug,
             name=calendar_slug
         )
@@ -555,10 +566,14 @@ def format_fields(data, base_url):
     
     record['version_uri'] = data['versionUri']
     record['version_lang'] = get_version_lang(record['version_uri'])
-    record['date'] = int(data['date'])
-    record['date_AH'] = int(data['date'])
+    if data['date']:
+        date = int(data['date'])
+    else:
+        date = None
+    record['date'] = date
+    record['date_AH'] = date
     record['date_CE'] = None
-    record['date_str'] = int(data['date'])
+    record['date_str'] = date
     # add normalized versions + prefered version of the arabic-script author name:
     author_ar = re.split(' *:: *| *, *| *; *', clean(data['author_ar']))
     #normalized_author_ar = [normalize_ara_light(clean(a)) for a in author_ar if a]
@@ -647,7 +662,7 @@ def upload_release_meta(meta_fp, base_url, release_info, meta_upload=True, test=
             release_notes=release_info["release_notes"]
         )
     )
-    if created:
+    if created and VERBOSE:
         print("NEW RELEASE ENTRY CREATED:", release_obj)
 
     # Create / get the ID of the generic authorship relation,
@@ -660,7 +675,7 @@ def upload_release_meta(meta_fp, base_url, release_info, meta_upload=True, test=
         descr="Generic authorship relation between a person and a book",
         entities="person_book"
     )
-    if created:
+    if created and VERBOSE:
         print("AUTHORSHIP OBJECT CREATED:", authorship_obj)
 
     # Create / get the ID of the text_type for a generic book:
@@ -669,15 +684,24 @@ def upload_release_meta(meta_fp, base_url, release_info, meta_upload=True, test=
         label="book",
         description="a generic text_type for books in the OpenITI corpus",
     )
-    if created:
+    if created and VERBOSE:
         print("BOOK TYPE OBJECT CREATED:", book_type_obj)
 
     version_codes_d = dict()
-    fieldnames = ['versionUri', 'date', 'author_ar', 'author_lat', 'book', 'title_ar', 'title_lat', 'ed_info', 'id', 'status', 'tok_length', 'url', 'tags', 'author_from_uri', 'author_lat_shuhra', 'author_lat_full_name', 'char_length']
+    fieldnames = ['versionUri', 'date', 
+                  'author_ar', 'author_lat', 'book', 'title_ar', 'title_lat', 
+                  'ed_info', 'id', 'status', 'tok_length', 'url', 'tags', 
+                  'author_from_uri', 'author_lat_shuhra', 'author_lat_full_name', 'char_length']
+    if int(release_info["release_code"].split(".")[-1]) >= 9:
+        fieldnames = ['versionUri', 'language', 'subcorpus', 'uncorrected_OCR', 'date',
+                      'author_ar', 'author_lat', 'book', 'title_ar', 'title_lat',
+                      'ed_info', 'id', 'status', 'tok_length', 'char_length', 'url', 'tags', 
+                      'author_from_uri', 'author_lat_shuhra', 'author_lat_full_name', 
+                      'city_ar', 'city_lat', 'institution_ar', 'institution_lat', 'shelfmark', 'catalog_ref', 'parts']
     with open(meta_fp, 'r', encoding='utf-8') as f:
         reader = csv.DictReader(f, fieldnames=fieldnames, delimiter='\t')
         header = next(reader)
-
+        
         for version_data in reader:
             # add the version_code + extension to the version_codes_d (to create the url to the text reuse data later)
             version_code = version_data["id"]
@@ -702,7 +726,9 @@ def upload_release_meta(meta_fp, base_url, release_info, meta_upload=True, test=
             # for tests, only upload the metadata for authors 
             # between 300 and 325
             if test:
-                if record["date"] < 300 or record["date"] > 325:
+                if not record["date"]:
+                    continue
+                elif record["date"] < 300 or record["date"] > 325:
                     continue
 
             # check if the version uri is already in the database:
@@ -713,7 +739,8 @@ def upload_release_meta(meta_fp, base_url, release_info, meta_upload=True, test=
                     version_uri=record['version_uri']
                 )
             except Version.DoesNotExist:
-                print(record['version_uri'], "does not exist in the database")
+                if VERBOSE:
+                    print(record['version_uri'], "does not exist in the database")
 
                 # if not, check if the text author_uri is in the database:
 
@@ -721,9 +748,11 @@ def upload_release_meta(meta_fp, base_url, release_info, meta_upload=True, test=
                     am = Author.objects.get(
                         author_uri=record['author_uri']
                     )
-                    print("but author does:", record['author_uri'])
+                    if VERBOSE:
+                        print("but author does:", record['author_uri'])
                 except:
-                    print("Author URI not in database either:", record['author_uri'])
+                    if VERBOSE:
+                        print("Author URI not in database either:", record['author_uri'])
 
                     # the author is not yet in the database! Create a new author object:
 
@@ -732,7 +761,7 @@ def upload_release_meta(meta_fp, base_url, release_info, meta_upload=True, test=
                         tags=record['author_tags']
                         # do not upload bibliography and notes
                     )
-                    if am_created:
+                    if am_created and VERBOSE:
                         print("-> created", record['author_uri'])
                 
                 # Add names to the author object:
@@ -753,7 +782,6 @@ def upload_release_meta(meta_fp, base_url, release_info, meta_upload=True, test=
                     DateLink.objects.get_or_create(date=date_obj, author=am)
                 else:
                     failed_dates.add(record['author_uri'][:4])
-                    input("CONTINUE?")
 
 
                 # the author is now in the database, check if the text exists:
@@ -762,10 +790,12 @@ def upload_release_meta(meta_fp, base_url, release_info, meta_upload=True, test=
                     tm = Text.objects.get(
                         text_uri=record['text_uri']
                     )
-                    print("but text does:", record['text_uri'])
+                    if VERBOSE:
+                        print("but text does:", record['text_uri'])
                 except: 
                     # the text is not yet in the database! Create a new text object:
-                    print("Text URI not in database either:", record['text_uri'])
+                    if VERBOSE:
+                        print("Text URI not in database either:", record['text_uri'])
                     tm, tm_created = Text.objects.update_or_create(
                         text_uri=record["text_uri"],
                         #author=am,  # we add the author(s) with link_book_to_author
@@ -773,7 +803,7 @@ def upload_release_meta(meta_fp, base_url, release_info, meta_upload=True, test=
                             tags=record["text_tags"]
                         )
                     )
-                    if tm_created:
+                    if tm_created and VERBOSE:
                         print("-> created", record['text_uri'])
                 
                 link_book_to_author(tm, am, authorship_obj, authority="URI")
@@ -781,28 +811,32 @@ def upload_release_meta(meta_fp, base_url, release_info, meta_upload=True, test=
                 add_book_type(tm, book_type_obj, source="URI")
 
 
-    #             # now we are sure the author and text exist in the database, create a new version object:
+                # now we are sure the author and text exist in the database, create a new version object:
 
-    #             # (but first, we check if the edition meta object exists or create it)
+                # (but first, we check if the edition meta object exists or create it)
 
-    #             try:
-    #                 em = Edition.objects.filter(
-    #                     text=tm,
-    #                     ed_info=record['ed_info']
-    #                 )[0]  # more than one edition with the same query criteria may exist!; 
-    #                 # NB: .first() returns None if none exists, so it will not trigger the exception
-    #                 print("Edition does exist")
-    #                 print("em:", em)
-    #                 print()
-    #             except: 
-    #                 print("Neither does the edition exist")
+                try:
+                    em = Edition.objects.filter(
+                        text=tm,
+                        ed_info=record['ed_info']
+                    )[0]  # more than one edition with the same query criteria may exist!; 
+                    # NB: .first() returns None if none exists, so it will not trigger the exception
+                    if VERBOSE:
+                        print("Edition does exist")
+                        print("em:", em)
+                        print()
+                except: 
+                    if VERBOSE:
+                        print("Neither does the edition exist")
 
-    #                 em, em_created = Edition.objects.update_or_create(
-    #                     text=tm,
-    #                     ed_info=record["ed_info"],
-    #                 )
-    #                 if em_created:
-    #                     print("-> Created Edition object")
+
+
+                    em, em_created = Edition.objects.update_or_create(
+                        text=tm,
+                        ed_info=record["ed_info"],
+                    )
+                    if em_created and VERBOSE:
+                        print("-> Created Edition object")
 
                 # now create the new version object:
 
@@ -822,13 +856,12 @@ def upload_release_meta(meta_fp, base_url, release_info, meta_upload=True, test=
                     text=tm,
                     language=record["version_lang"],
                     defaults=dict(
-                        # BUILDUP: UNCOMMENT:
-                        # edition=em,
+                        edition=em,
                         source_coll=cm,
                         part_of=whole_obj
                     )
                 )     
-                if vm_created:
+                if vm_created and VERBOSE:
                     print("-> created", record['version_uri'])              
 
 
@@ -852,6 +885,8 @@ def upload_release_meta(meta_fp, base_url, release_info, meta_upload=True, test=
         print("failed dates:")
     for date in failed_dates:
         print(date)
+
+    print("Done uploading metadata!")
 
     return release_obj, version_codes_d
 

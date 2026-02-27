@@ -4,11 +4,10 @@ from django.contrib import admin
 # Register your models here.
 from .models import Author, RelationType, A2BRelation, ReleaseInfo,\
     Date, DateLink, Calendar, DateType, ObjectName, ObjectNameLink,\
-    TextType, TextTypeLink, Text, \
+    TextType, TextTypeLink, Text, Edition, \
     Version, SourceCollectionDetails, ReleaseVersion, Contributor #, AuthorshipRole, AuthorshipRoleLink , IdentifierProvider, \
     #ExternalID, ExternalIDLink, \
     #AuthorshipRole, AuthorshipRoleLink, PlaceRelationType, PlaceLink, \
-    #Edition, \
     #ManuscriptHolding, Manuscript, Country, Place, \
     #TextReuseStats, CorpusInsights, \
     #VersionwiseReuseStats, \
@@ -32,7 +31,7 @@ admin.site.register(TextTypeLink)
 admin.site.register(Author)
 admin.site.register(Text)
 admin.site.register(Version)
-##admin.site.register(Edition)
+admin.site.register(Edition)
 ##admin.site.register(ManuscriptHolding)
 ##admin.site.register(Manuscript)
 ##admin.site.register(Country)

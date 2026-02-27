@@ -301,9 +301,9 @@ class DateLink(models.Model):
                                related_name="date_links")
     text = models.ForeignKey("Text", on_delete=models.CASCADE, null=True, blank=True, 
                              related_name="date_links")
+    edition = models.ForeignKey("Edition", on_delete=models.CASCADE, null=True, blank=True, 
+                               related_name="date_links")
     # BUILDUP: UNCOMMENT:
-    # edition = models.ForeignKey("Edition", on_delete=models.CASCADE, null=True, blank=True, 
-    #                            related_name="date_links")
     # manuscript = models.ForeignKey("Manuscript", on_delete=models.CASCADE, null=True, blank=True, 
     #                            related_name="date_links")
 
@@ -315,8 +315,8 @@ class DateLink(models.Model):
         indexes = [
             models.Index(fields=["author"]),
             models.Index(fields=["text"]),
+            models.Index(fields=["edition"]),
             # BUILDUP: UNCOMMENT:
-            # models.Index(fields=["edition"]),
             # models.Index(fields=["manuscript"]),
         ]
         constraints = [
@@ -336,7 +336,7 @@ class DateLink(models.Model):
 
     def __str__(self):
         # BUILDUP: UNCOMMENT:
-        target = self.author or self.text #or self.edition
+        target = self.author or self.text or self.edition or self.manuscript
         return f"{target} ↔ {self.date}"
 
 ##############################################
@@ -814,10 +814,9 @@ class Version(models.Model):
     #     on_delete=models.DO_NOTHING)
     page_range = models.CharField(max_length=50, blank=True, null=False)
     language = models.CharField(max_length=9, blank=True)
-    # BUILDUP: UNCOMMENT:
-    # edition = models.ForeignKey("Edition", 
-    #     related_name='versions', related_query_name="version", 
-    #     on_delete=models.DO_NOTHING)
+    edition = models.ForeignKey("Edition", blank=True, null=True,
+        related_name='versions', related_query_name="version", 
+        on_delete=models.DO_NOTHING)
     source_coll = models.ForeignKey("SourceCollectionDetails", 
         related_name='versions', related_query_name="version", 
         on_delete=models.DO_NOTHING, blank=True, null=True)
@@ -831,26 +830,27 @@ class Version(models.Model):
     def __str__(self):
         return self.version_uri
 
-# BUILDUP: UNCOMMENT:
-# class Edition(models.Model):
-#     editor = models.CharField(max_length=100, blank=True)
-#     edition_place = models.CharField(max_length=100, blank=True)
-#     publisher = models.CharField(max_length=100, blank=True)
-#     #edition_date = models.CharField(max_length=100, blank=True)
-#     # multiple types of dates (edition, translation, ...) for the edition, in different calendars:
-#     dates = models.ManyToManyField(Date, through=DateLink,
-#         through_fields=("date", "edition"), related_name="editions", blank=True
-#     )
-#     ed_info = models.CharField(max_length=255, blank=True)
-#     pdf_url = models.CharField(max_length=255, blank=True)
-#     text = models.ForeignKey(Text, related_name='editions',
-#                              related_query_name="edition", on_delete=models.DO_NOTHING)
-#     external_ids = models.ManyToManyField(ExternalID, through=ExternalIDLink,
-#                     through_fields=("identifier", "edition"),  
-#                     related_name="editions", blank=True)
+
+class Edition(models.Model):
+    editor = models.CharField(max_length=100, blank=True)
+    edition_place = models.CharField(max_length=100, blank=True)
+    publisher = models.CharField(max_length=100, blank=True)
+    #edition_date = models.CharField(max_length=100, blank=True)
+    # multiple types of dates (edition, translation, ...) for the edition, in different calendars:
+    dates = models.ManyToManyField(Date, through=DateLink,
+        through_fields=("edition", "date"), related_name="editions", blank=True
+    )
+    ed_info = models.CharField(max_length=255, blank=True)
+    pdf_url = models.CharField(max_length=255, blank=True)
+    text = models.ForeignKey(Text, related_name='editions',
+                             related_query_name="edition", on_delete=models.CASCADE)
+    # BUILDUP: UNCOMMENT:
+    # external_ids = models.ManyToManyField(ExternalID, through=ExternalIDLink,
+    #                 through_fields=("identifier", "edition"),  
+    #                 related_name="editions", blank=True)
     
-#     def __str__(self):
-#         return self.ed_info
+    def __str__(self):
+        return self.ed_info
 
 # BUILDUP: UNCOMMENT:
 # class ManuscriptHolding(models.Model):
@@ -980,18 +980,18 @@ class A2BRelation(models.Model):
     text_b = models.ForeignKey(Text, 
         related_name="related_texts_b", related_query_name="related_text_b",
         on_delete=models.DO_NOTHING, null=True, blank=True)
+    edition_a = models.ForeignKey(Edition, 
+        related_name="related_editions_a", related_query_name="related_edition_a",
+        on_delete=models.DO_NOTHING, null=True, blank=True)
+    edition_b = models.ForeignKey(Edition, 
+        related_name="related_editions_b", related_query_name="related_edition_b",
+        on_delete=models.DO_NOTHING, null=True, blank=True)
     # # BUILDUP: UNCOMMENT:
     # manuscript_a = models.ForeignKey(Manuscript, 
     #     related_name="related_manuscripts_a", related_query_name="related_manuscript_a",
     #     on_delete=models.DO_NOTHING, null=True, blank=True)
     # manuscript_b = models.ForeignKey(Manuscript, 
     #     related_name="related_manuscripts_b", related_query_name="related_manuscript_b",
-    #     on_delete=models.DO_NOTHING, null=True, blank=True)
-    # edition_a = models.ForeignKey(Edition, 
-    #     related_name="related_editions_a", related_query_name="related_edition_a",
-    #     on_delete=models.DO_NOTHING, null=True, blank=True)
-    # edition_b = models.ForeignKey(Edition, 
-    #     related_name="related_editions_b", related_query_name="related_edition_b",
     #     on_delete=models.DO_NOTHING, null=True, blank=True)
     # place_a = models.ForeignKey(Place, 
     #     related_name="related_places_a", related_query_name="related_place_a",
@@ -1019,8 +1019,8 @@ class A2BRelation(models.Model):
         # BUILDUP: UNCOMMENT:
         #a = [x for x in [self.person_a, self.text_a, self.place_a, self.manuscript_a, self.edition_a] if x]
         #b = [x for x in [self.person_b, self.text_b, self.place_b, self.manuscript_b, self.edition_b] if x]
-        a = [x for x in [self.person_a] if x]
-        b = [x for x in [self.person_b] if x]
+        a = [x for x in [self.person_a, self.text_a, self.edition_a] if x]
+        b = [x for x in [self.person_b, self.text_b, self.edition_b] if x]
         
         #return str(a[0]) + self.relation_type.name + str(b[0])
         return f"{a[0]} {self.relation_type.name} {b[0]}"

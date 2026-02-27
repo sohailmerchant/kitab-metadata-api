@@ -33,10 +33,10 @@ from argparse import Namespace
 from operator import truediv
 from rest_framework import serializers
 from .models import Author, RelationType, A2BRelation, ReleaseInfo, Date, ObjectName, \
-                    Text, Version, ReleaseVersion, SourceCollectionDetails
+                    Text, Version, ReleaseVersion, SourceCollectionDetails, Edition
                     # DateLink, AuthorshipRoleLink, \
                     # CorpusInsights, TextReuseStats, \
-                    # Edition, GitHubIssue, VersionwiseReuseStats
+                    # GitHubIssue, VersionwiseReuseStats
 from rest_flex_fields import FlexFieldsModelSerializer
 from django.db.models import Q
 
@@ -143,40 +143,41 @@ class DateSerializer(FlexFieldsModelSerializer):
 #         # Return list of language dictionaries
 #         return list(grouped.values())
 
-# BUILDUP: UNCOMMENT:
-# class ShallowEditionSerializer(FlexFieldsModelSerializer):
-#     """This serializer is used to serialize the metadata from the Edition model
-#     for use in serialization of the Version model 
-#     (without the foreign key to the Text model).
-#     Keeps legacy keys: 'editor' and 'edition_date'.
-#     If you want to serialize the full Edition model, use the EditionSerializer"""
-#     edition_date = serializers.SerializerMethodField()
+class ShallowEditionSerializer(FlexFieldsModelSerializer):
+    """This serializer is used to serialize the metadata from the Edition model
+    for use in serialization of the Version model 
+    (without the foreign key to the Text model).
+    Keeps legacy keys: 'editor' and 'edition_date'.
+    If you want to serialize the full Edition model, use the EditionSerializer"""
+    edition_date = serializers.SerializerMethodField()
 
-#     def get_edition_date(self, obj):
-#         dates = list(
-#             obj.dates.filter(date_type__slug="edition_date")
-#                      .values_list("original_text", flat=True)
-#         )
-#         return ";".join(dates)
+    def get_edition_date(self, obj):
+        dates = list(
+            obj.dates.filter(date_type__slug="edition_date")
+                     .values_list("date_str", flat=True)
+        )
+        return ";".join(dates)
         
-#     class Meta:
-#         model = Edition
-#         fields = (
-#             "id",
-#             "editor",
-#             "edition_place",
-#             "publisher",
-#             "edition_date",
-#             "ed_info",
-#             "pdf_url",
-#             "worldcat_url",
-#         )
+    class Meta:
+        model = Edition
+        fields = (
+            "id",
+            "editor",
+            "edition_place",
+            "publisher",
+            "edition_date",
+            "ed_info",
+            "pdf_url",
+            # BUILDUP: UNCOMMENT:
+            # "worldcat_url",
+        )
 
-#     class Meta:
-#         model = Edition
-#         fields = ("id", "editors", "edition_place", "publisher", 
-#                   "edition_date", "ed_info", "pdf_url", "worldcat_url")
-#         depth = 1
+    class Meta:
+        model = Edition
+        # BUILDUP: UNCOMMENT:
+        fields = ("id", "editor", "edition_place", "publisher", 
+                  "edition_date", "ed_info", "pdf_url")#, "worldcat_url")
+        depth = 1
 
 
 # BUILDUP: UNCOMMENT:
@@ -231,8 +232,7 @@ class DateSerializer(FlexFieldsModelSerializer):
 class ShallowVersionSerializer(FlexFieldsModelSerializer):
     """This serializer is used to serialize the version metadata in text and author queries
     (it excludes the author and text metadata)"""
-    # BUILDUP: UNCOMMENT:
-    # edition = ShallowEditionSerializer(read_only=True)
+    edition = ShallowEditionSerializer(read_only=True)
 
     def serialize_relations(self, version_instance):
         """serialize a version's parts 
@@ -276,8 +276,7 @@ class ShallowVersionSerializer(FlexFieldsModelSerializer):
 
     class Meta:
         model = Version
-        #fields = ("id", "version_code", "version_uri", "edition", "language", "release_versions", "part_of", "parts")
-        fields = ("id", "version_code", "version_uri", "language", "release_versions", "part_of", "parts")
+        fields = ("id", "version_code", "version_uri", "edition", "language", "release_versions", "part_of", "parts")
         depth = 2  
 
 
@@ -599,7 +598,7 @@ class VersionSerializer(FlexFieldsModelSerializer):
     and includes the text and author metadata"""
     text = TextSerializer(read_only=True)
     # BUILDUP: UNCOMMENT:
-    # edition = ShallowEditionSerializer(read_only=True)
+    edition = ShallowEditionSerializer(read_only=True)
     release_versions = ShallowReleaseVersionSerializer(read_only=True, many=True)
 
     def serialize_relations(self, version_instance):
@@ -656,7 +655,7 @@ class VersionSerializer(FlexFieldsModelSerializer):
         #fields = ("__all__")
         #fields = ("id", "version_code", "version_uri", "language", "text", "edition", 
         #          "release_versions", "part_of", "github_issues")
-        fields = ("id", "version_code", "version_uri", "language", "text",
+        fields = ("id", "version_code", "version_uri", "language", "text", "edition", 
                   "release_versions", "part_of",)
         depth = 3  # expand text and author metadata
 
@@ -1214,12 +1213,11 @@ class SourceCollectionDetailsSerializer(serializers.ModelSerializer):
         depth = 1
         fields = ("__all__")
 
-# BUILDUP: UNCOMMENT:
-# class EditionSerializer(serializers.ModelSerializer):
-#     class Meta:
-#         model = Edition
-#         depth = 4
-#         fields = ("__all__")
+class EditionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Edition
+        depth = 4
+        fields = ("__all__")
 
 # BUILDUP: UNCOMMENT:
 # class GitHubIssueSerializer(serializers.ModelSerializer):
