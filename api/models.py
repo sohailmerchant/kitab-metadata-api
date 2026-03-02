@@ -52,23 +52,18 @@ class ObjectNameLink(models.Model):
         "Text", on_delete=models.CASCADE, null=True, blank=True,
         related_name="object_name_links"
     )
-    # BUILDUP: UNCOMMENT:
-    # manuscript_holding = models.ForeignKey(
-    #     "ManuscriptHolding", on_delete=models.CASCADE, null=True, blank=True,
-    #     related_name="object_name_links"
-    # )
-    # manuscript = models.ForeignKey(
-    #     "Manuscript", on_delete=models.CASCADE, null=True, blank=True,
-    #     related_name="object_name_links"
-    # )
-    # country = models.ForeignKey(
-    #     "Country", on_delete=models.CASCADE, null=True, blank=True,
-    #     related_name="object_name_links"
-    # )
-    # place = models.ForeignKey(
-    #     "Place", on_delete=models.CASCADE, null=True, blank=True,
-    #     related_name="object_name_links"
-    # )
+    manuscript_holding = models.ForeignKey(
+        "ManuscriptHolding", on_delete=models.CASCADE, null=True, blank=True,
+        related_name="object_name_links"
+    )
+    manuscript = models.ForeignKey(
+        "Manuscript", on_delete=models.CASCADE, null=True, blank=True,
+        related_name="object_name_links"
+    )
+    place = models.ForeignKey(
+        "Place", on_delete=models.CASCADE, null=True, blank=True,
+        related_name="object_name_links"
+    )
 
     is_preferred = models.BooleanField(default=False,
         help_text="Is this the preferred name of the object?")
@@ -78,11 +73,9 @@ class ObjectNameLink(models.Model):
         indexes = [
             models.Index(fields=["author"]),
             models.Index(fields=["text"]),
-            # BUILDUP: UNCOMMENT:
-            # models.Index(fields=["manuscript_holding"]),
-            # models.Index(fields=["manuscript"]),
-            # models.Index(fields=["country"]),
-            # models.Index(fields=["place"]),
+            models.Index(fields=["place"]),
+            models.Index(fields=["manuscript_holding"]),
+            models.Index(fields=["manuscript"]),
         ]
         # BUILDUP: UNCOMMENT:
         # constraints = [
@@ -102,7 +95,7 @@ class ObjectNameLink(models.Model):
 
     def __str__(self):
         # BUILDUP: UNCOMMENT:
-        target = self.author or self.text #or self.manuscript_holding or self.country or self.place
+        target = self.author or self.text or self.manuscript_holding or self.manuscript or self.place
         return f"{target} ↔ {self.object_name}"
 
 ###############################
@@ -303,9 +296,8 @@ class DateLink(models.Model):
                              related_name="date_links")
     edition = models.ForeignKey("Edition", on_delete=models.CASCADE, null=True, blank=True, 
                                related_name="date_links")
-    # BUILDUP: UNCOMMENT:
-    # manuscript = models.ForeignKey("Manuscript", on_delete=models.CASCADE, null=True, blank=True, 
-    #                            related_name="date_links")
+    manuscript = models.ForeignKey("Manuscript", on_delete=models.CASCADE, null=True, blank=True, 
+                               related_name="date_links")
 
     # Optional relationship metadata: 
     is_preferred = models.BooleanField(default=False)
@@ -316,8 +308,7 @@ class DateLink(models.Model):
             models.Index(fields=["author"]),
             models.Index(fields=["text"]),
             models.Index(fields=["edition"]),
-            # BUILDUP: UNCOMMENT:
-            # models.Index(fields=["manuscript"]),
+            models.Index(fields=["manuscript"]),
         ]
         constraints = [
             models.CheckConstraint(
@@ -487,9 +478,8 @@ class TextTypeLink(models.Model):
     text = models.ForeignKey("Text", on_delete=models.CASCADE, 
         null=True, blank=True, related_name="text_type_links")
 
-    # BUILDUP: UNCOMMENT:
-    # manuscript = models.ForeignKey("Manuscript", on_delete=models.CASCADE, 
-    #     null=True, blank=True, related_name="text_type_links")
+    manuscript = models.ForeignKey("Manuscript", on_delete=models.CASCADE, 
+        null=True, blank=True, related_name="text_type_links")
 
     # Optional metadata
     is_preferred = models.BooleanField(default=False)
@@ -500,24 +490,22 @@ class TextTypeLink(models.Model):
         indexes = [
             models.Index(fields=["text_type"]),
             models.Index(fields=["text"]),
-            # BUILDUP: UNCOMMENT:
-            # models.Index(fields=["manuscript"]),
+            models.Index(fields=["manuscript"]),
         ]
-        # BUILDUP: UNCOMMENT:
-        # constraints = [
-        #     # Enforce exactly one target object
-        #     models.CheckConstraint(
-        #         name="texttype_exactly_one_target",
-        #         condition=(   # deprecated: new argument name is `condition`
-        #             (Q(text__isnull=False) & Q(manuscript__isnull=True))
-        #             | (Q(text__isnull=True) & Q(manuscript__isnull=False))
-        #         ),
-        #     )
-        # ]
+        constraints = [
+            # Enforce exactly one target object
+            models.CheckConstraint(
+                name="texttype_exactly_one_target",
+                condition=(   # deprecated: new argument name is `condition`
+                    (Q(text__isnull=False) & Q(manuscript__isnull=True))
+                    | (Q(text__isnull=True) & Q(manuscript__isnull=False))
+                ),
+            )
+        ]
 
     def __str__(self):
         # BUILDUP: UNCOMMENT:
-        target = self.text #or self.manuscript
+        target = self.text or self.manuscript
         return f"{target} <-> {self.text_type}"
 
 ####################################
@@ -696,11 +684,11 @@ class Author(models.Model):
         related_name="persons_related",
         related_query_name="person_related"
     )
-    # # Create a relationship between a person and a place (e.g., person A was born in place B)
-    # # using a many-to-many field:
-    # related_places = models.ManyToManyField("Place", through="A2BRelation", through_fields=("person_a", "place_b"), 
-    #                                         related_name="related_persons", related_query_name="related_person")
-    # # NB: person to text relations are defined in the Text model
+    # Create a relationship between a person and a place (e.g., person A was born in place B)
+    # using a many-to-many field:
+    related_places = models.ManyToManyField("Place", through="A2BRelation", through_fields=("person_a", "place_b"), 
+                                            related_name="related_persons", related_query_name="related_person")
+    # NB: person to text relations are defined in the Text model
 
     def __str__(self):
         return self.author_uri
@@ -768,31 +756,58 @@ class Text(models.Model):
         through_fields=("text_a", "person_b"),
         related_name="related_texts", 
         related_query_name="related_text")
-    # # BUILDUP: UNCOMMENT:
-    # # Create a relationship between a text and a place (e.g., text A is a history of place B; text A was written in place B)
-    # # using a many-to-many field:
-    # related_places = models.ManyToManyField("Place", through="A2BRelation", through_fields=("text_a", "place_b"),
-    #                                         related_name="related_texts", related_query_name="related_text")
+    # Create a relationship between a text and a place (e.g., text A is a history of place B; text A was written in place B)
+    # using a many-to-many field:
+    related_places = models.ManyToManyField("Place", through="A2BRelation", through_fields=("text_a", "place_b"),
+                                            related_name="related_texts", related_query_name="related_text")
 
     def __str__(self):
         return self.text_uri
 
+class Script(models.Model):
+    code = models.CharField(max_length=50, 
+        blank=False, null=False)
+    name = models.CharField(max_length=100, 
+        blank=True, null=False)
+    description = models.TextField(
+        blank=True, null=False)
 
-## !Now Replaced with many-to-many relationship with ObjectName model!
-## class PersonName(models.Model):
-##     """Describes the elements of a person's name in the database."""
-##     language = models.CharField(max_length=3, blank=False)
-##     shuhra = models.CharField(max_length=255, blank=True)
-##     nasab = models.CharField(max_length=255, blank=True)
-##     kunya = models.CharField(max_length=255, blank=True)
-##     ism = models.CharField(max_length=255, blank=True)
-##     laqab = models.CharField(max_length=255, blank=True)
-##     nisba = models.CharField(max_length=255, blank=True)
-##     author = models.ForeignKey(Author, related_name='name_elements',
-##                                     related_query_name="name_element", on_delete=models.DO_NOTHING)
+class Language(models.Model):
+    code = models.CharField(max_length=50, 
+        blank=False, null=False)
+    name = models.CharField(max_length=100, 
+        blank=True, null=False)
+    description = models.TextField(
+        blank=True, null=False)
+    
+class SubCorpus(models.Model):
+    code = models.CharField(max_length=10, 
+        blank=False, null=False)
+    name = models.CharField(max_length=100, 
+        blank=True, null=False)
+    description = models.TextField(
+        blank=True, null=False)
 
-##     def __str__(self):
-##         return self.language
+class LanguageScriptCombo(models.Model):
+    """Describes the combination of language and 
+    the script used to write it.
+
+    Some languages are written in multiple scripts, 
+    e.g., Persian is usually written in Arabic script, 
+    but Judaeo-Persian is Persian in Hebrew script.
+    """
+    code = models.CharField(max_length=3, 
+        blank=False, null=False)
+    name = models.CharField(max_length=50, 
+        blank=True, null=False)
+    description = models.TextField(
+        blank=True, null=False)
+    language = models.ForeignKey("Language", blank=True, null=True,
+        related_name="language_script_combo", 
+        on_delete=models.DO_NOTHING)
+    script = models.ForeignKey("Script", blank=True, null=True,
+        related_name="language_script_combo", 
+        on_delete=models.DO_NOTHING)
 
 class Version(models.Model):
     """Describes a digital version of a text in the database.
@@ -808,12 +823,13 @@ class Version(models.Model):
     text = models.ForeignKey(Text, blank=True, null=True,
         related_name='versions', related_query_name="version", 
         on_delete=models.DO_NOTHING)
-    # BUILDUP: UNCOMMENT:
-    # manuscript = models.ForeignKey("Manuscript", blank=True, null=True,
-    #     related_name='transcriptions', related_query_name="transcription", 
-    #     on_delete=models.DO_NOTHING)
-    page_range = models.CharField(max_length=50, blank=True, null=False)
-    language = models.CharField(max_length=9, blank=True)
+    manuscript = models.ForeignKey("Manuscript", blank=True, null=True,
+        related_name='transcriptions', related_query_name="transcription", 
+        on_delete=models.DO_NOTHING)
+    language = models.CharField(max_length=25, blank=True)
+    language_script_combo = models.ManyToManyField(LanguageScriptCombo,
+        related_name='versions', related_query_name="version",
+        blank=True) 
     edition = models.ForeignKey("Edition", blank=True, null=True,
         related_name='versions', related_query_name="version", 
         on_delete=models.DO_NOTHING)
@@ -834,6 +850,9 @@ class Version(models.Model):
 class Edition(models.Model):
     editor = models.CharField(max_length=100, blank=True)
     edition_place = models.CharField(max_length=100, blank=True)
+    # ALTERNATIVELY:
+    # edition_place = models.ManyToManyField("Place", through="A2BRelation", through_fields=("edition_a", "edition_b"),
+    #                                         related_name="editions", related_query_name="edition")
     publisher = models.CharField(max_length=100, blank=True)
     #edition_date = models.CharField(max_length=100, blank=True)
     # multiple types of dates (edition, translation, ...) for the edition, in different calendars:
@@ -842,8 +861,13 @@ class Edition(models.Model):
     )
     ed_info = models.CharField(max_length=255, blank=True)
     pdf_url = models.CharField(max_length=255, blank=True)
-    text = models.ForeignKey(Text, related_name='editions',
-                             related_query_name="edition", on_delete=models.CASCADE)
+    text = models.ForeignKey(Text, 
+        related_name='editions',
+        related_query_name="edition", on_delete=models.CASCADE)
+    # manuscript = models.ForeignKey("Manuscript",  blank=True, null=True,
+    #     related_name='editions',
+    #     related_query_name="edition", on_delete=models.CASCADE)
+    
     # BUILDUP: UNCOMMENT:
     # external_ids = models.ManyToManyField(ExternalID, through=ExternalIDLink,
     #                 through_fields=("identifier", "edition"),  
@@ -852,52 +876,82 @@ class Edition(models.Model):
     def __str__(self):
         return self.ed_info
 
-# BUILDUP: UNCOMMENT:
-# class ManuscriptHolding(models.Model):
-#     """Describes a manuscript holding location in the database."""
-#     #author_uri = models.CharField(max_length=50, unique=True, null=False)
-#     loc_uri = models.CharField(max_length=50, null=False)
-#     names = models.ManyToManyField(ObjectName, through=ObjectNameLink,
-#         through_fields=("object_name", "manuscript_holding"), 
-#         related_name="manuscript_holdings", blank=True
-#     )
-#     country = models.ForeignKey("Country", related_name="manuscript_holdings", 
-#                                 on_delete=models.DO_NOTHING, null=True, blank=True)
-#     city = models.ForeignKey("Place", related_name="manuscript_holdings", 
-#                              on_delete=models.DO_NOTHING, null=True, blank=True)
-#     external_ids = models.ManyToManyField(ExternalID, through=ExternalIDLink,
-#                     through_fields=("identifier", "manuscript_holding"),  
-#                     related_name="manuscript_holdings", blank=True)
-#     notes = models.TextField(null=False, blank=True)
+class ManuscriptHolding(models.Model):
+    """Describes a manuscript holding  (institution, private collection) in the database."""
+    loc_uri = models.CharField(max_length=50, null=False)
+    names = models.ManyToManyField(ObjectName, through=ObjectNameLink,
+        through_fields=("manuscript_holding", "object_name"), 
+        related_name="manuscript_holdings", blank=True
+    )
+    country = models.ForeignKey("Place", related_name="country_manuscript_holdings", 
+                                on_delete=models.CASCADE, null=True, blank=True)
+    city = models.ForeignKey("Place", related_name="city_manuscript_holdings", 
+                             on_delete=models.CASCADE, null=True, blank=True)
+    # BUILDUP: UNCOMMENT:
+    # external_ids = models.ManyToManyField(ExternalID, through=ExternalIDLink,
+    #                 through_fields=("identifier", "manuscript_holding"),  
+    #                 related_name="manuscript_holdings", blank=True)
+    notes = models.TextField(null=False, blank=True)
 
-#     def __str__(self):
-#         return self.loc_uri
+    def __str__(self):
+        return self.loc_uri
 
 
-# BUILDUP: UNCOMMENT:
-# class Manuscript(models.Model):
-#     """Describes a manuscript in the database."""
-#     manuscript_holding = models.ForeignKey(ManuscriptHolding,
-#         related_name="manuscripts", related_query_name="manuscript",
-#         on_delete=models.DO_NOTHING)
-#     manuscript_uri = models.CharField(max_length=50, null=False)
-#     manuscript_types = models.ManyToManyField(TextType, 
-#         through=TextTypeLink,
-#         through_fields=("text_type", "manuscript"), 
-#         related_name="manuscripts", blank=True
-#     )
-#     authors = models.ManyToManyField("Author", through=AuthorshipRoleLink,
-#         through_fields=("author", "manuscript"), related_name="manuscripts", blank=True
-#     )
-#     titles = models.ManyToManyField(ObjectName, through=ObjectNameLink,
-#         through_fields=("object_name", "manuscript"), related_name="manuscripts", blank=True
-#     )
-#     dates = models.ManyToManyField(Date, through=DateLink,
-#         through_fields=("date", "manuscript"), related_name="manuscripts", blank=True
-#     )
-#     places = models.ManyToManyField("PlaceLink", through=PlaceLink,
-#         through_fields=("place", "manuscript"), related_name="manuscripts", blank=True
-#     )
+class Manuscript(models.Model):
+    """Describes a manuscript in the database."""
+    manuscript_holding = models.ForeignKey(ManuscriptHolding,
+        related_name="manuscripts", related_query_name="manuscript",
+        on_delete=models.DO_NOTHING)
+    manuscript_uri = models.CharField(max_length=100, null=False)
+    shelfmark = models.CharField(max_length=255, blank=True)
+    catalog_reference = models.CharField(max_length=255, blank=True)
+    script = models.CharField(max_length=255, blank=True)
+    binding = models.CharField(max_length=255, blank=True)
+    colophon = models.TextField(blank=True)
+    incipit = models.TextField(blank=True)
+    explicit = models.TextField(blank=True)
+    columns = models.IntegerField(null=True, default=None)
+    decoration = models.TextField(blank=True)
+    hands = models.TextField(blank=True)
+    height = models.FloatField(null=True, default=None)
+    width = models.FloatField(null=True, default=None)
+    ink = models.CharField(max_length=255, blank=True)
+    lines_per_page = models.CharField(max_length=255, blank=True)
+    stamps = models.TextField(blank=True)
+    volumes = models.CharField(max_length=100, blank=True)
+    # # BUILD UP: UNCOMMENT:
+    # external_ids = models.ManyToManyField(ExternalID, through=ExternalIDLink,
+    #     through_fields=("identifier", "country"),  
+    #     related_name="countries", blank=True)
+    manuscript_types = models.ManyToManyField(TextType, 
+        through=TextTypeLink,
+        through_fields=("manuscript", "text_type"), 
+        related_name="manuscripts", blank=True
+    )
+    related_persons = models.ManyToManyField("Author", through="A2BRelation",
+        through_fields=("manuscript_b", "person_a"), related_name="manuscripts", blank=True
+    )
+    titles = models.ManyToManyField(ObjectName, through=ObjectNameLink,
+        through_fields=("manuscript", "object_name"), related_name="manuscripts", blank=True
+    )
+    related_texts = models.ManyToManyField("Text", through="A2BRelation",
+        through_fields=("manuscript_a", "text_b"), related_name="manuscripts", blank=True
+    )
+    related_manuscripts = models.ManyToManyField("self", through="A2BRelation",
+        through_fields=("manuscript_a", "manuscript_b"), 
+        symmetrical=False, blank=True,
+        related_name="manuscripts_related", 
+        related_query_name="manuscript_related"
+    )
+    dates = models.ManyToManyField(Date, through=DateLink,
+        through_fields=("manuscript", "date"), related_name="manuscripts", blank=True
+    )
+    related_places = models.ManyToManyField("Place", through="A2BRelation",
+        through_fields=("manuscript_a", "place_b"), related_name="manuscripts", blank=True
+    )
+    tags =  models.CharField(max_length=255, blank=True)
+    bibliography = models.TextField(null=False, blank=True)
+    notes = models.TextField(null=False, blank=True)
 
 # BUILDUP: UNCOMMENT:
 # class Country(models.Model):
@@ -914,26 +968,36 @@ class Edition(models.Model):
 #     def __str__(self):
 #         return self.country_code
 
-# BUILDUP: UNCOMMENT:
-# class Place (models.Model):
-#     """Describes a place in the database."""
-#     #thuraya_uri = models.CharField(max_length=100, blank=True)
-#     external_ids = models.ManyToManyField(ExternalID, through=ExternalIDLink,
-#                     through_fields=("identifier", "place"),  
-#                     related_name="places", blank=True)
-#     #name_ar = models.CharField(max_length=100, blank=True)
-#     #name_lat = models.CharField(max_length=100, blank=True)
-#     names =  models.ManyToManyField(ObjectName, through=ObjectNameLink,
-#         through_fields=("object_name", "author"), related_name="authors", blank=True
-#     )
-#     # store as string for now; TODO: use geoDjango later?
-#     coordinates_str = models.CharField(max_length=50, blank=True)
-#     # Define relation between places (A is capital of B, place A is in region B, region A is in region B, ...):
-#     related_places = models.ManyToManyField("self", through="A2BRelation", through_fields=("place_a", "place_b"),
-#                                              symmetrical=False, related_name="places_related", related_query_name="place_related")
+class Place(models.Model):
+    """Describes a place in the database."""
+    # BUILDUP: UNCOMMENT:
+    # external_ids = models.ManyToManyField(ExternalID, through=ExternalIDLink,
+    #                 through_fields=("identifier", "place"),  
+    #                 related_name="places", blank=True)
+    # # old key:
+    # #thuraya_uri = models.CharField(max_length=100, blank=True)
+    code = models.CharField(max_length=100, blank=True)
+    names =  models.ManyToManyField(ObjectName, through=ObjectNameLink,
+        through_fields=("place", "object_name"), related_name="places", blank=True
+    )
+    # old keys: 
+    #name_ar = models.CharField(max_length=100, blank=True)
+    #name_lat = models.CharField(max_length=100, blank=True)
+
+    # store coordinates as a string and as decimal fields
+    coordinates_str = models.CharField(max_length=50, blank=True)
+    lat = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    lon = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+
+    # Define relation between places (A is capital of B, place A is in region B, region A is in region B, ...):
+    related_places = models.ManyToManyField("self", through="A2BRelation", through_fields=("place_a", "place_b"),
+                                             symmetrical=False, related_name="places_related", related_query_name="place_related")
+    # call code, for countries:
+    country_code = models.CharField(max_length=4, blank=True)
     
-    # def __str__(self):
-    #     return self.thuraya_uri
+    def __str__(self):
+        first_name = self.names.first()
+        return first_name.name if first_name else f"Place {self.pk}"
 
 class RelationType(models.Model):
     """Describes a relation type in the database."""
@@ -945,6 +1009,7 @@ class RelationType(models.Model):
     # # the following makes hierarchical structure of relation types possible (unnecessary complication):
     # parent_types = models.ManyToManyField("self", symmetrical=False, blank=True,
     #                                       related_name="sub_types", related_query_name="sub_type")
+
     # define the entities between which this relation type exists: person_person, place_place, person_place, ...
     entities = models.CharField(max_length=50, blank=True)
 
@@ -961,10 +1026,10 @@ class A2BRelation(models.Model):
     For text to text relations (A is a commentary on B): fill in text_a and text_b
     For person to person relations (A is a student of B): fill in person_a and person_b
     For person to place relations (A was born in B): fill in person_a and place_b
-    For text to person relations (A is a biography of B): fill in text_a and person_b
-    For manuscript to text relations (A is a copy of B): fill in manuscript_a and person_b
+    For authorship relations (A is the author of B; A is the translator of B): fill in person_a and text_b
+    For other text to person relations (A is a biography of B): fill in text_a and person_b
+    For manuscript to text relations (A is a witness of B): fill in manuscript_a and text_b
     For person to manuscript relations (A is the copyist of B): fill in person_a and manuscript_b
-    
     
     """
     # define A and B (pick two, depending on the type of relationship):
@@ -986,19 +1051,19 @@ class A2BRelation(models.Model):
     edition_b = models.ForeignKey(Edition, 
         related_name="related_editions_b", related_query_name="related_edition_b",
         on_delete=models.DO_NOTHING, null=True, blank=True)
-    # # BUILDUP: UNCOMMENT:
-    # manuscript_a = models.ForeignKey(Manuscript, 
-    #     related_name="related_manuscripts_a", related_query_name="related_manuscript_a",
-    #     on_delete=models.DO_NOTHING, null=True, blank=True)
-    # manuscript_b = models.ForeignKey(Manuscript, 
-    #     related_name="related_manuscripts_b", related_query_name="related_manuscript_b",
-    #     on_delete=models.DO_NOTHING, null=True, blank=True)
-    # place_a = models.ForeignKey(Place, 
-    #     related_name="related_places_a", related_query_name="related_place_a",
-    #     on_delete=models.DO_NOTHING, null=True, blank=True)
-    # place_b = models.ForeignKey(Place, 
-    #     related_name="related_places_b", related_query_name="related_place_b",
-    #     on_delete=models.DO_NOTHING, null=True, blank=True)
+    place_a = models.ForeignKey(Place, 
+        related_name="related_places_a", related_query_name="related_place_a",
+        on_delete=models.DO_NOTHING, null=True, blank=True)
+    place_b = models.ForeignKey(Place, 
+        related_name="related_places_b", related_query_name="related_place_b",
+        on_delete=models.DO_NOTHING, null=True, blank=True)
+    manuscript_a = models.ForeignKey(Manuscript, 
+        related_name="related_manuscripts_a", related_query_name="related_manuscript_a",
+        on_delete=models.DO_NOTHING, null=True, blank=True)
+    manuscript_b = models.ForeignKey(Manuscript, 
+        related_name="related_manuscripts_b", related_query_name="related_manuscript_b",
+        on_delete=models.DO_NOTHING, null=True, blank=True)
+    
 
     # define the type of relationship between entity A and entity B:
     relation_type = models.ForeignKey(RelationType, on_delete=models.DO_NOTHING, null=True, blank=True)
@@ -1014,15 +1079,12 @@ class A2BRelation(models.Model):
     #                              on_delete=models.SET_NULL, related_name="+")
     authority = models.CharField(max_length=100, null=False, blank=True)
     confidence = models.IntegerField(null=True, blank=True)
+    notes = models.TextField(blank=True)
 
     def __str__(self):
-        # BUILDUP: UNCOMMENT:
-        #a = [x for x in [self.person_a, self.text_a, self.place_a, self.manuscript_a, self.edition_a] if x]
-        #b = [x for x in [self.person_b, self.text_b, self.place_b, self.manuscript_b, self.edition_b] if x]
-        a = [x for x in [self.person_a, self.text_a, self.edition_a] if x]
-        b = [x for x in [self.person_b, self.text_b, self.edition_b] if x]
+        a = [x for x in [self.person_a, self.text_a, self.place_a, self.manuscript_a, self.edition_a] if x]
+        b = [x for x in [self.person_b, self.text_b, self.place_b, self.manuscript_b, self.edition_b] if x]
         
-        #return str(a[0]) + self.relation_type.name + str(b[0])
         return f"{a[0]} {self.relation_type.name} {b[0]}"
 
 # BUILDUP: UNCOMMENT:
@@ -1076,6 +1138,9 @@ class ReleaseVersion(models.Model):
     char_length = models.IntegerField(null=True, blank=True)
     tok_length = models.IntegerField(null=True, blank=True)
     url = models.CharField(max_length=255, null=False, blank=True)
+    subcorpus = models.ForeignKey(SubCorpus, null=True, blank=True,
+        related_name="release_versions",
+        on_delete=models.DO_NOTHING)
     analysis_priority = models.CharField(max_length=3, null=False, blank=True,
         help_text="Primary or secondary text? Use 'pri' or 'sec'")
     annotation_status = models.CharField(max_length=50, null=False, blank=True,
@@ -1088,6 +1153,9 @@ class ReleaseVersion(models.Model):
         help_text="character recognition/transcription model used for OCR")
     contributors = models.ManyToManyField("Contributor", blank=True, 
         related_name='release_versions', related_query_name="release_version")
+    uncorrected_ocr = models.BooleanField(default=False,
+        help_text="Was this version generated by OCR and not manually corrected?")
+    page_range = models.CharField(max_length=50, blank=True, null=False)
     tags = models.CharField(max_length=100, blank=True)
     notes = models.TextField(null=False, blank=True)
 

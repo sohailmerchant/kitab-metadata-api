@@ -32,18 +32,106 @@ import re
 from argparse import Namespace
 from operator import truediv
 from rest_framework import serializers
-from .models import Author, RelationType, A2BRelation, ReleaseInfo, Date, ObjectName, \
-                    Text, Version, ReleaseVersion, SourceCollectionDetails, Edition
+from .models import Author, RelationType, A2BRelation, ReleaseInfo, Date, \
+                    ObjectName, ObjectNameLink, \
+                    Text, Version, ReleaseVersion, SourceCollectionDetails, Edition, \
+                    ManuscriptHolding, Place, Manuscript
                     # DateLink, AuthorshipRoleLink, \
                     # CorpusInsights, TextReuseStats, \
                     # GitHubIssue, VersionwiseReuseStats
 from rest_flex_fields import FlexFieldsModelSerializer
 from django.db.models import Q
 
+####################
+# HELPER FUNCTIONS #
+####################
+
+def preferred_names_by_language(links):
+    """
+    Gets the preferred name in each language for a database item
+    (if no name has is_preferred in the ObjectNameLink through table,
+    use the first name in a language)
+
+    Args:
+        links: iterable of ObjectNameLink with .object_name already available
+
+    Returns: 
+        {lang: name}
+    """
+    preferred = {}
+    for link in links:
+        print("preferred names link:", link)
+        lang = (link.object_name.language or "und").strip() or "und"
+        if lang not in preferred:
+            preferred[lang] = link.object_name.name
+        else:
+            if link.is_preferred:
+                preferred[lang] = link.object_name.name
+    return preferred
+
+class PreferredNamesByLanguageField(serializers.Field):
+    """
+    Serializes a `names` field to a dictionary,
+    picking only one name per language: {<lang>: <preferred_name>}
+    """
+    def to_representation(self, value):
+        # value might be: instance.object_name_links (RelatedManager)
+        links = value.all() if hasattr(value, "all") else value
+        print(links)
+
+        return preferred_names_by_language(links)
+
+###############
+# SERIALIZERS #
+###############
+
 class ObjectNameSerializer(FlexFieldsModelSerializer):
     class Meta:
         model = ObjectName
         fields = "__all__"
+
+
+class ShallowPlaceSerializer(serializers.ModelSerializer):
+    """Serialize only one name per language"""
+    display_names = PreferredNamesByLanguageField(source="object_name_links", read_only=True)
+
+    # display_names = serializers.SerializerMethodField()
+
+    # def get_display_names(self, place):
+    #     """
+    #     Return a dict: { "<lang>": "<best name>" }
+    #     where "best name" = preferred name in that language if available,
+    #     else the first name in that language.
+    #     """
+    #     # Pull all name links for this place in one go
+    #     links = (
+    #         ObjectNameLink.objects
+    #         .filter(place=place)
+    #         .select_related("object_name")
+    #         .order_by(
+    #             "object_name__language",     # group by language
+    #             "-is_preferred",             # preferred first
+    #             "object_name__id"            # stable "first"
+    #         )
+    #     )
+
+    #     best_by_lang = {}
+    #     for link in links:
+    #         lang = (link.object_name.language or "und").strip() or "und"
+    #         if lang not in best_by_lang:
+    #             best_by_lang[lang] = link.object_name.name
+
+    #     return best_by_lang
+
+    class Meta:
+        model = Place
+        fields = ("id", "code", "display_names")  # add loc_uri if you have one
+
+class ShallowCountrySerializer(ShallowPlaceSerializer):
+    """Serialize only one name per language"""
+    class Meta (ShallowPlaceSerializer.Meta):
+        fields = ("id", "display_names", "country_code")  # add loc_uri if you have one
+
 
 class DateSerializer(FlexFieldsModelSerializer):
     # represent foreign keys by their slug instead of numerical key:
@@ -179,7 +267,6 @@ class ShallowEditionSerializer(FlexFieldsModelSerializer):
                   "edition_date", "ed_info", "pdf_url")#, "worldcat_url")
         depth = 1
 
-
 # BUILDUP: UNCOMMENT:
 # class AuthorshipRoleLinkSerializer(serializers.ModelSerializer):
 #     author = ShallowAuthorSerializer(read_only=True)
@@ -279,6 +366,125 @@ class ShallowVersionSerializer(FlexFieldsModelSerializer):
         fields = ("id", "version_code", "version_uri", "edition", "language", "release_versions", "part_of", "parts")
         depth = 2  
 
+
+class ShallowManuscriptSerializer(FlexFieldsModelSerializer):
+    transcriptions = ShallowVersionSerializer(many=True, read_only=True)
+
+    def serialize_titles(self, ms_instance):
+        """
+        Create key-value pairs for the manuscript's titles;
+        """
+        data = {
+            "titles": []
+        }
+
+        links = (
+            ms_instance.object_name_links
+            .select_related("object_name")
+            .all()
+        )
+
+        if not links:
+            return data
+        
+        for link in links:
+            n = link.object_name
+            if not n.name:
+                continue
+
+            # Add the title data:
+            data["titles"].append({
+                "title": n.name,
+                "normalized_title": n.normalized_name,
+                "title_type": n.name_type,
+                "language": n.language,
+                "is_preferred": link.is_preferred,
+                "source": link.source
+            })
+
+        return data
+
+    def serialize_dates(self, ms_instance):
+        """Create key-value pairs for dates related to the manuscript"""
+        data = {"dates": []}
+
+        # get a full list of date dictionaries:
+        dates_qs = ms_instance.dates.select_related("date_type", "calendar").all()
+        
+        data["dates"] = DateSerializer(dates_qs, many=True, context=self.context).data
+
+        return data
+
+    def to_representation(self, instance):
+        """Override the default json representation"""
+
+        # make the default serialization:
+        json_rep = super().to_representation(instance)
+
+        # add the titles to the default representation:
+        try:
+            json_rep = {**json_rep, **self.serialize_titles(instance)}
+        except Exception as e:
+            print("Error adding titles:", e)
+
+        
+        # add the dates to the default representation:
+        try:
+            json_rep = {**json_rep, **self.serialize_dates(instance)}
+        except Exception as e:
+            print("Error adding dates:", e)
+
+
+        return json_rep
+
+    class Meta:
+        model = Manuscript
+        fields = ("manuscript_uri", 
+                  "tags", "bibliography", "notes", "transcriptions")
+        depth = 1
+
+
+
+class ShallowManuscriptHoldingSerializer(FlexFieldsModelSerializer):
+    country = ShallowCountrySerializer(read_only=True)
+    city = ShallowPlaceSerializer(read_only=True)
+    names = PreferredNamesByLanguageField(source="object_name_links", read_only=True)
+
+    # def serialize_names(self, instance):
+    #     """
+    #     Serialize all related ObjectNames.
+    #     """
+    #     names = instance.names.all()
+
+    #     return {
+    #         "names": ShallowObjectNameSerializer(
+    #             names,
+    #             many=True,
+    #             context=self.context
+    #         ).data
+    #     }
+
+    # def to_representation(self, instance):
+    #     json_rep = super().to_representation(instance)
+
+    #     try:
+    #         json_rep = {
+    #             **json_rep,
+    #             **self.serialize_names(instance)
+    #         }
+    #     except Exception as e:
+    #         print("ERROR serializing names in ManuscriptHolding:", e)
+
+    #     return json_rep
+
+    class Meta:
+        model = ManuscriptHolding
+        fields = (
+            "names",
+            "loc_uri",
+            "country",
+            "city"
+        )
 
 # BUILDUP: UNCOMMENT:
 # class PersonNameSerializer(FlexFieldsModelSerializer):
@@ -401,12 +607,8 @@ class TextSerializer(FlexFieldsModelSerializer):
     def serialize_relations(self, text_instance):
         """serialize a text's relations"""
         # get all relationships in which the current text is involved:
-        # BUILDUP: UNCOMMENT:
-        # relationship_instances = A2BRelation.objects\
-        #     .select_related("relation_type", "person_a", "person_b", "text_a", "text_b", "place_a", "place_b")\
-        #     .filter(Q(text_a=text_instance) | Q(text_b=text_instance))
         relationship_instances = A2BRelation.objects\
-            .select_related("relation_type", "person_a", "person_b", "text_a", "text_b")\
+            .select_related("relation_type", "person_a", "person_b", "text_a", "text_b", "place_a", "place_b")\
             .filter(Q(text_a=text_instance) | Q(text_b=text_instance))
         # NB: select_related creates a more complex SQL query that joins the relevant tables,
         # so that the foreign-key relationships are included in the query set
@@ -468,15 +670,16 @@ class TextSerializer(FlexFieldsModelSerializer):
                         #authors.append(d.person_b.author_uri)
                     continue
                 related_persons.append(new_d)
-            # BUILDUP: UNCOMMENT:
-            # elif d.place_a or d.place_b:
-            #     if d.place_a:
-            #         new_d["related_place_uri"] = d.place_a.thuraya_uri
-            #         new_d["relation_type_name"]= d.relation_type.name_inverted
-            #     else: 
-            #         new_d["related_place_uri"] = d.place_b.thuraya_uri
-            #         new_d["relation_type_name"]= d.relation_type.name
-            #     related_places.append(new_d)
+            elif d.place_a or d.place_b:
+                if d.place_a:
+                    new_d["related_place_id"] = d.place_a.id
+                    new_d["related_place_name"] = d.place_a.names.first()
+                    new_d["relation_type_name"]= d.relation_type.name_inverted
+                else: 
+                    new_d["related_place_id"] = d.place_b.id
+                    new_d["related_place_name"] = d.place_b.names.first()
+                    new_d["relation_type_name"]= d.relation_type.name
+                related_places.append(new_d)
 
         # combine the categories into a dictionary that will be added to the json representation:
         d =  dict()
@@ -519,6 +722,7 @@ class TextSerializer(FlexFieldsModelSerializer):
 
     class Meta:
         model = Text
+        # TODO: add text types
         fields = ("text_uri", "tags", "bibliography", "versions")
         depth = 1
 
@@ -593,10 +797,255 @@ class ShallowReleaseVersionSerializer(FlexFieldsModelSerializer):
 
 
 
+class ManuscriptHoldingSerializer(FlexFieldsModelSerializer):
+    country = ShallowCountrySerializer(read_only=True)
+    city = ShallowPlaceSerializer(read_only=True)
+    names = PreferredNamesByLanguageField(source="object_name_links", read_only=True)
+    manuscripts = ShallowManuscriptSerializer(many=True, read_only=True)
+
+    # def serialize_names(self, instance):
+    #     """
+    #     Serialize all related ObjectNames.
+    #     """
+    #     names = instance.names.all()
+
+    #     return {
+    #         "names": ShallowObjectNameSerializer(
+    #             names,
+    #             many=True,
+    #             context=self.context
+    #         ).data
+    #     }
+
+    # def to_representation(self, instance):
+    #     json_rep = super().to_representation(instance)
+
+    #     try:
+    #         json_rep = {
+    #             **json_rep,
+    #             **self.serialize_names(instance)
+    #         }
+    #     except Exception as e:
+    #         print("ERROR serializing names in ManuscriptHolding:", e)
+
+    #     return json_rep
+
+    class Meta:
+        model = ManuscriptHolding
+        fields = (
+            "id",
+            "names",
+            "loc_uri",
+            "country",
+            "city",
+            "notes",
+            "manuscripts"
+        )
+
+class ManuscriptSerializer(FlexFieldsModelSerializer):
+    include_related_texts = True
+    include_related_persons = True
+    include_related_places = True
+    include_related_manuscripts = True
+    include_related_editions = True
+    transcriptions = ShallowVersionSerializer(many=True, read_only=True)
+    manuscript_holding = ShallowManuscriptHoldingSerializer()
+
+    def serialize_titles(self, ms_instance):
+        """
+        Create key-value pairs for the manuscript's titles;
+        """
+        data = {
+            "titles": []
+        }
+
+        links = (
+            ms_instance.object_name_links
+            .select_related("object_name")
+            .all()
+        )
+
+        if not links:
+            return data
+        
+        for link in links:
+            n = link.object_name
+            if not n.name:
+                continue
+
+            # Add the title data:
+            data["titles"].append({
+                "title": n.name,
+                "normalized_title": n.normalized_name,
+                "title_type": n.name_type,
+                "language": n.language,
+                "is_preferred": link.is_preferred,
+                "source": link.source
+            })
+
+        return data
+
+    def serialize_dates(self, ms_instance):
+        """Create key-value pairs for dates related to the manuscript"""
+        data = {"dates": []}
+
+        # get a full list of date dictionaries:
+        dates_qs = ms_instance.dates.select_related("date_type", "calendar").all()
+        
+        data["dates"] = DateSerializer(dates_qs, many=True, context=self.context).data
+
+        return data
+
+    def serialize_relations(self, ms_instance):
+        """serialize a manuscript's relations"""
+        # get all relationships in which the current manuscript is involved:
+        relationship_instances = A2BRelation.objects\
+            .select_related("relation_type", "person_a", "person_b", "text_a", "text_b", 
+                            "place_a", "place_b", "manuscript_a", "manuscript_b",
+                            "edition_a", "edition_b",)\
+            .filter(Q(manuscript_a=ms_instance) | Q(manuscript_b=ms_instance))
+        # NB: select_related creates a more complex SQL query that joins the relevant tables,
+        # so that the foreign-key relationships are included in the query set
+        # and no further database lookups are needed to get attributes from the foreign-key related table 
+        # (see https://docs.djangoproject.com/en/4.2/ref/models/querysets/#select-related)
+
+        # divide these relations into the relevant categories:
+
+        related_persons = []
+        related_texts = []
+        related_places = []
+        related_manuscripts = []
+        related_editions = []
+        for d in relationship_instances:
+
+            # create a new dictionary in which we only collect the relevant fields:
+            
+            new_d = dict(
+                relation_type_code=d.relation_type.code,
+                relation_subtype_code=d.relation_type.subtype_code,
+                # BUILDUP: UNCOMMENT:
+                #start_date_AH=d.start_date_AH,
+                #end_date_AH=d.end_date_AH,
+                authority=d.authority,
+                confidence=d.confidence
+            )
+
+            # add relevant fields for each type of relation:
+            if d.manuscript_a and d.manuscript_b:
+                # BUILDUP: UNCOMMENT:
+                # # delete keys irrelevant to manuscript-to-manuscript relations:
+                # del new_d["start_date_AH"]
+                # del new_d["end_date_AH"]
+                # add only the information about the related book:
+                if d.manuscript_a.manuscript_uri == ms_instance.manuscript_uri:
+                    new_d["relation_type_name"] = d.relation_type.name
+                    new_d["related_manuscript_uri"] = d.manuscript_b.manuscript_uri
+                else:
+                    new_d["relation_type_name"] = d.relation_type.name_inverted
+                    new_d["related_manuscript_uri"] = d.manuscript_a.manuscript_uri
+                related_manuscripts.append(new_d)
+            elif d.text_a or d.text_b:
+                # BUILDUP: UNCOMMENT:
+                # # remove keys irrelevant to manuscript-text relation:
+                # del new_d["start_date_AH"]
+                # del new_d["end_date_AH"]
+                # add the relevant relation_type_name:
+                if d.text_a:
+                    new_d["related_text_uri"] = d.text_a.text_uri
+                    new_d["relation_type_name"]= d.relation_type.name_inverted
+                else:
+                    new_d["related_text_uri"] = d.text_b.text_uri
+                    new_d["relation_type_name"]= d.relation_type.name
+                related_texts.append(new_d)
+            elif d.edition_a or d.edition_b:
+                # BUILDUP: UNCOMMENT:
+                # # remove keys irrelevant to manuscript-edition relation:
+                # del new_d["start_date_AH"]
+                # del new_d["end_date_AH"]
+                # add the relevant relation_type_name:
+                if d.edition_a:
+                    new_d["ed_info"] = d.edition_a.ed_info
+                    new_d["relation_type_name"]= d.relation_type.name_inverted
+                else:
+                    new_d["ed_info"] = d.edition_b.ed_info
+                    new_d["relation_type_name"]= d.relation_type
+                related_editions.append(new_d)
+            elif d.person_a or d.person_b:
+                if d.person_a:
+                    new_d["related_person_uri"] = d.person_a.author_uri
+                    new_d["relation_type_name"]= d.relation_type.name_inverted
+                    person_obj = d.person_a
+                else: 
+                    new_d["related_person_uri"] = d.person_b.author_uri
+                    new_d["relation_type_name"]= d.relation_type.name
+                    person_obj = d.person_b
+                related_persons.append(new_d)
+            elif d.place_a or d.place_b:
+                if d.place_a:
+                    new_d["related_place_id"] = d.place_a.id
+                    new_d["related_place_name"] = d.place_a.names.first()
+                    new_d["relation_type_name"]= d.relation_type.name_inverted
+                else: 
+                    new_d["related_place_id"] = d.place_b.id
+                    new_d["related_place_name"] = d.place_b.names.first()
+                    new_d["relation_type_name"]= d.relation_type.name
+                related_places.append(new_d)
+
+        # combine the categories into a dictionary that will be added to the json representation:
+        d =  dict()
+        if self.include_related_texts:
+            d["related_texts"] = related_texts
+        if  self.include_related_persons:
+            d["related_persons"] = related_persons
+        if  self.include_related_places:
+            d["related_places"] = related_places
+        if  self.include_related_manuscripts:
+            d["related_manuscripts"] = related_manuscripts
+        if  self.include_related_editions:
+            d["related_editions"] = related_editions
+        
+        return d
+
+    def to_representation(self, instance):
+        """Override the default json representation"""
+
+        # make the default serialization:
+        json_rep = super().to_representation(instance)
+
+        # add the titles to the default representation:
+        try:
+            json_rep = {**json_rep, **self.serialize_titles(instance)}
+        except Exception as e:
+            print("Error adding titles:", e)
+
+        
+        # add the dates to the default representation:
+        try:
+            json_rep = {**json_rep, **self.serialize_dates(instance)}
+        except Exception as e:
+            print("Error adding dates:", e)
+
+        # add the relationships to the default representation (__all__ fields):
+        try:
+            json_rep = {**json_rep, **self.serialize_relations(instance)}
+        except Exception as e:
+            print("Error adding book relations:", e)
+
+        return json_rep
+
+    class Meta:
+        model = Manuscript
+        fields = ("manuscript_uri", "manuscript_holding", 
+                  "tags", "bibliography", "notes", "transcriptions")
+        depth = 1
+
+
+
 class VersionSerializer(FlexFieldsModelSerializer):
     """This serializer is used to serialize the version metadata in version queries,
     and includes the text and author metadata"""
     text = TextSerializer(read_only=True)
+    manuscript = ShallowManuscriptSerializer(read_only=True)
     # BUILDUP: UNCOMMENT:
     edition = ShallowEditionSerializer(read_only=True)
     release_versions = ShallowReleaseVersionSerializer(read_only=True, many=True)
@@ -655,7 +1104,7 @@ class VersionSerializer(FlexFieldsModelSerializer):
         #fields = ("__all__")
         #fields = ("id", "version_code", "version_uri", "language", "text", "edition", 
         #          "release_versions", "part_of", "github_issues")
-        fields = ("id", "version_code", "version_uri", "language", "text", "edition", 
+        fields = ("id", "version_code", "version_uri", "language", "text", "manuscript", "edition", 
                   "release_versions", "part_of",)
         depth = 3  # expand text and author metadata
 
@@ -823,10 +1272,10 @@ class AuthorSerializer(FlexFieldsModelSerializer):
         # select the relations in which the current person is involved:
         # BUILDUP: UNCOMMENT:
         # relationship_instances = A2BRelation.objects\
-        #     .select_related("relation_type", "person_a", "person_b", "text_a", "text_b", "place_a", "place_b")\
+        #     .select_related("relation_type", "person_a", "person_b", "text_a", "text_b", "place_a", "place_b", "manuscript_a", "manuscript_b")\
         #     .filter(Q(person_a=person_instance) | Q(person_b=person_instance))
         relationship_instances = A2BRelation.objects\
-            .select_related("relation_type", "person_a", "person_b")\
+            .select_related("relation_type", "person_a", "person_b", "text_a", "text_b", "place_a", "place_b")\
             .filter(Q(person_a=person_instance) | Q(person_b=person_instance))
         
         # NB: select_related creates a more complex SQL query that joins the relevant tables,
@@ -882,14 +1331,16 @@ class AuthorSerializer(FlexFieldsModelSerializer):
                         authored_texts.append(text_d)
                     continue
                 related_texts.append(new_d)
-            # elif d.place_a or d.place_b:
-            #     if d.place_a:
-            #         new_d["related_place_uri"] = d.place_a.thuraya_uri
-            #         new_d["relation_type_name"]= d.relation_type.name_inverted
-            #     else: 
-            #         new_d["related_place_uri"] = d.place_b.thuraya_uri
-            #         new_d["relation_type_name"]= d.relation_type.name
-            #     related_places.append(new_d)
+            elif d.place_a or d.place_b:
+                if d.place_a:
+                    new_d["related_place_id"] = d.place_a.id
+                    new_d["related_place_name"] = d.place_a.names.first()
+                    new_d["relation_type_name"]= d.relation_type.name_inverted
+                else: 
+                    new_d["related_place_id"] = d.place_b.id
+                    new_d["related_place_name"] = d.place_b.names.first()
+                    new_d["relation_type_name"]= d.relation_type.name
+                related_places.append(new_d)
 
         # combine the categories into a dictionary that will be added to the json representation:
 
@@ -1229,3 +1680,4 @@ class EditionSerializer(serializers.ModelSerializer):
 #         model = GitHubIssue
 #         depth = 4
 #         fields = ("id", "title", "labels", "state", "about_author", "about_text", "about_version")
+

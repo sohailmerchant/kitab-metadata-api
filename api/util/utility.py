@@ -3,6 +3,9 @@
 import json
 import os
 import re
+import datetime
+import convertdate
+
 
 from openiti.git import get_issues
 from openiti.helper.ara import deNoise, ar_cnt_file
@@ -11,6 +14,30 @@ from api.util.betacode import betacodeToArSimple, betacodeToSearch
 
 geo_URIs = dict()
 text_rel_d = dict()
+
+DATE_CONVERTERS  = {
+    "AH": convertdate.islamic,
+    "hijri": convertdate.islamic,
+    "qamari": convertdate.islamic,
+    "shamsi": convertdate.persian,
+    "persian": convertdate.persian,
+    "coptic": convertdate.coptic,
+    "armenian": convertdate.armenian,
+    "hebrew": convertdate.hebrew
+}
+
+# Create a lookup dictionary for the country codes:
+# source: https://gist.githubusercontent.com/anubhavshrimal/75f6183458db8c453306f93521e93d37/raw/f77e7598a8503f1f70528ae1cbf9f66755698a16/CountryCodes.json
+with open("meta/CountryCodes.json", encoding="utf-8") as file:
+    data = json.load(file)
+    COUNTRY_CODES = dict()
+    for d in data:
+        n = int(re.sub(r"\D+", "", d["dial_code"]))
+        code = f"{n:04d}"
+        if code not in COUNTRY_CODES:
+            COUNTRY_CODES[code] = {"name": d["name"], "db_object": None}
+        else:
+            COUNTRY_CODES[code]["name"] += "; " + d["name"]
 
 
 
@@ -121,16 +148,160 @@ def ce2ah(date):
     """convert CE date to AH date"""
     return (int(date) - 622) * 365.25 / 354
 
+def to_datetime(gregorian_tuple):
+    """
+    convertdate.<cal>.to_gregorian returns (year, month, day) tuples.
+    Convert to datetime.date.
+    """
+    if not gregorian_tuple:
+        return None
+    y, m, d = gregorian_tuple
+    return datetime.date(int(y), int(m), int(d))
+
+def normalize_precision(precision, month, day):
+    """
+    precision can be: "year", "month", "day" or whatever you store.
+    If missing/invalid, infer from the presence/absence of month/day.
+    """
+    if precision in ("year", "month", "day"):
+        return precision
+    if not month:
+        return "year"
+    if not day:
+        return "month"
+    return "day"
+
+def compute_ce_range(calendar, year, month=None, day=None, precision=None):
+    """
+    Compute (ce_start, ce_end) as datetime.date objects from a calendar date.
+
+    Args:
+        calendar (str): "gregorian", "hijri", "persian", ...
+        year (int): the year value
+        month (int): the month value
+        day (int): the day value
+        precision (str): "year" | "month" | "day"; if None, the precision
+            will be infrerred from the presence/absence of month and day values
+
+    Returns:
+        (datetime, datetime)
+    """
+    if year is None:
+        return (None, None)
+
+    if calendar == "gregorian":
+        return compute_ce_range_from_gregorian(year, 
+            month=month, day=day, precision=precision)
+
+    return compute_ce_range_from_other_calendar(calendar, year, 
+            month=month, day=day, precision=precision)
+
+def compute_ce_range_from_gregorian(year, month=None, day=None, precision=None):
+    """
+    Compute (ce_start, ce_end) as datetime.date objects from a CE calendar date.
+
+    Args:
+        year (int): the year value
+        month (int): the month value
+        day (int): the day value
+        precision (str): "year" | "month" | "day"; if None, the precision
+            will be infrerred from the presence/absence of month and day values
+    
+    Returns:
+        (datetime, datetime)
+    """
+    if year is None:
+        return (None, None)
+
+    precision = normalize_precision(precision, month, day)
+
+    if precision == "year":
+        return (datetime.date(year, 1, 1), datetime.date(year, 12, 31))
+
+    if precision == "month" and month:
+        start = datetime.date(year, month, 1)
+        if month == 12:
+            end = datetime.date(year, 12, 31)
+        else:
+            end = datetime.date(year, month + 1, 1) - datetime.timedelta(days=1)
+        return (start, end)
+
+    if precision == "day" and month and day:
+        d = datetime.date(year, month, day)
+        return (d, d)
+
+    return (None, None)
+
+
+def compute_ce_range_from_other_calendar(calendar, year, month=None, day=None, precision=None):
+    """
+    Compute (ce_start, ce_end) as datetime.date objects from a non-CE calendar date.
+    
+    Uses convertdate.* converters. 
+
+    Args:
+        calendar (str): "gregorian", "hijri", "persian", ...
+        year (int): the year value
+        month (int): the month value
+        day (int): the day value
+        precision (str): "year" | "month" | "day"; if None, the precision
+            will be infrerred from the presence/absence of month and day values
+    
+    Returns:
+        (datetime, datetime)
+    """
+    if year is None:
+        return (None, None)
+
+    converter = DATE_CONVERTERS.get(calendar)
+    if converter is None:
+        print("UNKNOWN CALENDAR:", calendar)
+        return (None, None)
+
+    precision = normalize_precision(precision, month, day)
+
+    # YEAR precision: whole year in that calendar
+    if precision == "year":
+        start = to_datetime(converter.to_gregorian(year, 1, 1))
+
+        # last day of last month of the year, in that calendar
+        # (convertdate modules generally provide month_length)
+        last_month = 12
+        try:
+            last_day = converter.month_length(year, last_month)
+        except Exception:
+            last_day = 30 # approximation
+
+        end = to_datetime(converter.to_gregorian(year, last_month, last_day))
+        return (start, end)
+
+    # MONTH precision: whole month in that calendar
+    if precision == "month" and month:
+        start = to_datetime(converter.to_gregorian(year, month, 1))
+        try:
+            last_day = converter.month_length(year, month)
+        except Exception:
+            last_day = 30 # approximation
+        end = to_datetime(converter.to_gregorian(year, month, last_day))
+        return (start, end)
+
+    # DAY precision: specific day
+    if precision == "day" and month and day:
+        d = to_datetime(converter.to_gregorian(year, month, day))
+        return (d, d)
+
+    return (None, None)
+
 def insert_spaces(s):
     """Split the camel-case string s and insert a space before each capital."""
-    return re.sub("([A-Z])", r" \1", s).strip()
+    return re.sub(r"([A-Z])", r" \1", s).strip()
 
 def replace_c_with_cayn(s):
     """Replace the c in an OpenITI URI string with ʿAyn"""
     # lower-case: simply replace c with ʿayn
     s = s.replace("c", "ʿ") 
     # upper-case: make the next letter upper case!
-    s = re.sub("C([a-z])", lambda match: "ʿ"+match.group(1).upper(), s)
+    s = re.sub(r"C([a-z])", lambda match: "ʿ"+match.group(1).upper(), s)
     return s
 
 def get_name_el(d, k):
@@ -157,9 +328,9 @@ def date_from_string(s):
     
     year, month, day = s.split("-")
     day = day[:2].strip()
-    start_year = re.sub("[Xx]", "0", year)
-    end_year = re.sub("[Xx]", "9", year)
-    if re.findall("[Xx]", month):
+    start_year = re.sub(r"[Xx]", "0", year)
+    end_year = re.sub(r"[Xx]", "9", year)
+    if re.findall(r"[Xx]", month):
         start_month = "01"
         end_month = "12"
     else:
@@ -169,8 +340,8 @@ def date_from_string(s):
         except:
             start_month = month
             end_month = month
-    start_day = re.sub("[Xx]", "0", day)
-    end_day = re.sub("[Xx]", "9", day)
+    start_day = re.sub(r"[Xx]", "0", day)
+    end_day = re.sub(r"[Xx]", "9", day)
     if int(start_day) < 1:
         start_day = "01"
     if int(end_day) > 30:
@@ -238,18 +409,18 @@ def extract_metadata_from_header(fp, VERBOSE=False):
                 val = ""
             else:
                 # remove line endings within heading categories: 
-                val = re.sub(" +", "@@@", val)
-                val = re.sub("\s+", "¶ ", val)
-                val = re.sub("@@@", " ", val).strip()
+                val = re.sub(r" +", "@@@", val)
+                val = re.sub(r"\s+", "¶ ", val)
+                val = re.sub(r"@@@", " ", val).strip()
                 if val.isnumeric():
                     val = str(int(val))
             if val != "":
-                key = re.sub("\# ", "", split_line[0])
+                key = re.sub(r"\# ", "", split_line[0])
                 all_meta[key] = val
                 # reorganize the relevant headers under overarching categories:
                 if key in headings_dict:
                     cat = headings_dict[key]
-                    val = re.sub("¶.+", "", val)
+                    val = re.sub(r"¶.+", "", val)
                     meta[cat].append(val)
         else:
             unreadable.append(line)
@@ -376,7 +547,7 @@ def collect_version_yml_data(version_yml_fp, version_uri, corpus_folder, base_ur
         input()
 
     # - issues: 
-    version_tags = re.findall("[A-Z_]{5,}", vers_d["90#VERS#ISSUES###:"])
+    version_tags = re.findall(r"[A-Z_]{5,}", vers_d["90#VERS#ISSUES###:"])
 
     version_meta = dict(
         # version_meta:
@@ -426,9 +597,9 @@ def collect_text_yml_data(text_yml_fp, text_uri):
     title_from_uri = text_uri.split(".")[1]
     title_from_uri = insert_spaces(title_from_uri)
     title_from_uri = replace_c_with_cayn(title_from_uri)
-    #title_from_uri = re.sub("([A-Z])", r" \1", text_uri.split(".")[1]).strip()
+    #title_from_uri = re.sub(r"([A-Z])", r" \1", text_uri.split(".")[1]).strip()
     #title_from_uri = title_from_uri.replace("c", "ʿ")
-    #title_from_uri = re.sub("C([a-z])", lambda match: "ʿ"+match.group(1).upper(), title_from_uri)
+    #title_from_uri = re.sub(r"C([a-z])", lambda match: "ʿ"+match.group(1).upper(), title_from_uri)
     
     title_lat.append(title_from_uri)
     normalized_title_lat = [betacodeToSearch(t) for t in title_lat if t]
@@ -441,18 +612,18 @@ def collect_text_yml_data(text_yml_fp, text_uri):
     # - tags
     tags = []
     if text_d["10#BOOK#GENRES###:"] and not text_d["10#BOOK#GENRES###:"].startswith("src"):
-        for genre in re.split("[\s¶]*[,:;]+[\s¶]*", text_d["10#BOOK#GENRES###:"]):
+        for genre in re.split(r"[\s¶]*[,:;]+[\s¶]*", text_d["10#BOOK#GENRES###:"]):
             tags.append(genre)
 
     # - text date:
     place_relations = []
     places = []
     if text_d["20#BOOK#WROTE####:"] and not text_d["20#BOOK#WROTE####:"].startswith("URIs from Althurayya"):
-        for place in re.split("[\s¶]*[:,;]+[\s¶]*", text_d["20#BOOK#WROTE####:"]):
+        for place in re.split(r"[\s¶]*[:,;]+[\s¶]*", text_d["20#BOOK#WROTE####:"]):
             places.append(place)
     dates = []
     if text_d["30#BOOK#WROTE##AH:"] and not text_d["30#BOOK#WROTE##AH:"].startswith("YEAR-MON-DA"):
-        for date in re.split("[\s¶]*[:,;]+[\s¶]*", text_d["30#BOOK#WROTE##AH:"]):
+        for date in re.split(r"[\s¶]*[:,;]+[\s¶]*", text_d["30#BOOK#WROTE##AH:"]):
             dates.append(date)
     if places:
         if len(dates) <= len(places):
@@ -484,23 +655,23 @@ def collect_text_yml_data(text_yml_fp, text_uri):
         if text_d["40#BOOK#RELATED##:"].strip() and not text_d["40#BOOK#RELATED##:"].strip().startswith("URI of"):
             # get the book relations string and split it into relations (rels):
             rels = text_d["40#BOOK#RELATED##:"].strip()
-            rels = re.sub(" *[\r\n¶]+ *", " ", rels)
-            rels = re.split(" *[;:]+ *", rels)
+            rels = re.sub(r" *[\r\n¶]+ *", " ", rels)
+            rels = re.split(r" *[;:]+ *", rels)
 
             # add each relation to the relevant list:
             for rel in rels:
-                rel = re.sub(" +", " ", rel)
+                rel = re.sub(r" +", " ", rel)
                 if "@" in rel:  # new format: COMM.sharh@0255Jahiz.Hayawan
                     rel_types = rel.split("@")[0]
                     rel_text = rel.split("@")[1]
                 else:           # old format: 0255Jahiz.Hayawan (COMM.sharh)
                     try:
-                        rel_types = re.findall("\(([^\)]+)", rel)[0]
+                        rel_types = re.findall(r"\(([^\)]+)", rel)[0]
                     except:
                         print(text_uri, ":")
                         print("    no relationship type found in ", rel)
                         continue
-                    rel_text = re.sub(" *\(.+", "", rel).strip()
+                    rel_text = re.sub(r" *\(.+", "", rel).strip()
                 
                 # prepare to store the relations in both directions
                 if not text_uri in text_rel_d:
@@ -509,10 +680,10 @@ def collect_text_yml_data(text_yml_fp, text_uri):
                     text_rel_d[rel_text] = []
 
                 # 
-                for rel_type in re.split(" *, *", rel_types):
+                for rel_type in re.split(r" *, *", rel_types):
                     if "." in rel_type:
-                        main_rel_type = re.split(" *\. *", rel_type)[0]
-                        sec_rel_type = re.split(" *\. *", rel_type)[1]
+                        main_rel_type = re.split(r" *\. *", rel_type)[0]
+                        sec_rel_type = re.split(r" *\. *", rel_type)[1]
                     else:
                         main_rel_type = rel_type
                         sec_rel_type = ""
@@ -617,13 +788,13 @@ def collect_author_yml_data(author_yml_fp, author_uri):
     name_from_uri = author_uri[4:]
     name_from_uri = insert_spaces(name_from_uri)
     name_from_uri = replace_c_with_cayn(name_from_uri)
-    #name_from_uri = re.sub("([A-Z])", r" \1", author_uri[4:]).strip()
+    #name_from_uri = re.sub(r"([A-Z])", r" \1", author_uri[4:]).strip()
     #name_from_uri = name_from_uri.replace("c", "ʿ").replace("C", "ʿ")
 
     # collect author name elements:
     present_languages = []
     for key in auth_d:
-        lang = re.findall("#([A-Z]{2}):", key)
+        lang = re.findall(r"#([A-Z]{2}):", key)
         if lang and lang[0] not in present_languages and lang[0] not in ["AH", "CE"]:
             present_languages.append(lang[0])
     #print(present_languages)
@@ -633,7 +804,7 @@ def collect_author_yml_data(author_yml_fp, author_uri):
         add = False
         for yml_k in ["10#AUTH#SHUHRA#AR:"]+name_comps:
             yml_k = yml_k.replace("#AR:", "#{}:".format(lang))
-            k = re.findall("(?<=10#AUTH#)\w+", yml_k)[0].lower()
+            k = re.findall(r"(?<=10#AUTH#)\w+", yml_k)[0].lower()
             lang_d[k] = get_name_el(auth_d, yml_k)
             if lang_d[k]:
                 add = True
@@ -684,7 +855,7 @@ def collect_author_yml_data(author_yml_fp, author_uri):
     if "40#AUTH#STUDENTS#:" in auth_d:
         if not "from OpenITI" in auth_d["40#AUTH#STUDENTS#:"]:
             for student in auth_d["40#AUTH#STUDENTS#:"].split(","):
-                student_uri = re.findall("\d{4}[A-Z][a-zA-Z]+", student)
+                student_uri = re.findall(r"\d{4}[A-Z][a-zA-Z]+", student)
                 if student_uri:
                     if not student.strip() == student_uri[0]:
                         print("Additional information in student field?", student)
@@ -695,9 +866,9 @@ def collect_author_yml_data(author_yml_fp, author_uri):
         input()
     if not "from OpenITI" in auth_d["40#AUTH#TEACHERS#:"]:
         for teacher in auth_d["40#AUTH#TEACHERS#:"].split(","):
-            teacher_uri = re.findall("\d{4}[A-Z][a-zA-Z]+", teacher)
+            teacher_uri = re.findall(r"\d{4}[A-Z][a-zA-Z]+", teacher)
             if teacher_uri:
-                if not re.sub("[\s¶]+", "", teacher) == teacher_uri[0]:
+                if not re.sub(r"[\s¶]+", "", teacher) == teacher_uri[0]:
                     print("Additional information in teacher field?", teacher)
                 person_relations.append(dict(code="STUDENT", subtype_code="", person_a=author_uri, person_b=teacher_uri[0]))
 

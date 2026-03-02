@@ -17,7 +17,8 @@ from rest_framework import filters
 from django.db.models import Field
 from django.db.models.lookups import In
 
-from .models import Author, Text, Version, ReleaseVersion\
+from .models import Author, Text, Version, ReleaseVersion,\
+      ManuscriptHolding, Manuscript
       #, PersonName, CorpusInsights, TextReuseStats
 
 
@@ -436,6 +437,122 @@ class AuthorFilter(django_filters.FilterSet):
         #fields = ["date_AH", "id"]
         fields = ["id"]
 
+
+class ManuscriptHoldingFilter(django_filters.FilterSet):
+    """Define the fields by which ManuscriptHolding objects can be filtered.
+
+    The variable name will be used in the query in the URL;
+    the field name is the name of the field in the model;
+    and the lookup_expr defines which lookup method must be used (lt = less than, gt = greater than,
+        icontains = case insensitive substring)
+
+    E.g., 
+
+    http://127.0.0.1:8000/ms-holding/all/?loc_uri=MS0044LondonKhalili
+
+    """
+    loc_uri = django_filters.CharFilter(lookup_expr='icontains', 
+        field_name="loc_uri", label="Manuscript holding URI") 
+    # BUILDUP: UNCOMMENT:
+    # author_ar = django_filters.CharFilter(lookup_expr='icontains', 
+    #     field_name="author_ar", label="Author name (Arabic script)")
+    # author_lat = django_filters.CharFilter(lookup_expr='icontains',
+    #     field_name="author_lat",  label="Author name (Latin script)")
+    # died_after_AH = django_filters.NumberFilter(lookup_expr="gt", 
+    #     field_name="date_AH", label="Author died after (AH)")  # /?died_after_AH=309
+    # died_before_AH = django_filters.NumberFilter(lookup_expr="lt", 
+    #     field_name="date_AH", label="Author died before (AH)")  # /?died_before_AH=311
+    # died_between_AH = NumberRangeFilter(lookup_expr="range", 
+    #     field_name="date_AH", label="Author died between (AH, comma-separated)")       # /?died_between_AH=309,311
+
+    # shuhra = django_filters.CharFilter(lookup_expr='icontains', 
+    #     field_name="name_element__shuhra", label="Author's shuhra")
+    # ism = django_filters.CharFilter(lookup_expr='icontains', 
+    #     field_name="name_element__ism", label="Author's ism")
+    # nasab = django_filters.CharFilter(lookup_expr='icontains', 
+    #     field_name="name_element__nasab", label="Author's nasab")
+    # kunya = django_filters.CharFilter(lookup_expr='icontains', 
+    #     field_name="name_element__kunya", label="Author's kunya")
+    # laqab = django_filters.CharFilter(lookup_expr='icontains', 
+    #     field_name="name_element__laqab", label="Author's laqab")
+    # nisba = django_filters.CharFilter(lookup_expr='icontains', 
+    #     field_name="name_element__nisba", label="Author's nisba")
+
+    # text_title_ar = django_filters.CharFilter(lookup_expr='icontains', 
+    #     field_name="text__titles_ar", label="Title of text (Arabic script)")
+    # text_title_lat = django_filters.CharFilter(lookup_expr='icontains', 
+    #     field_name="text__titles_lat", label="Title of text (Latin script)")
+
+    class Meta:
+        model = ManuscriptHolding
+        # additional fields with the default lookup ("exact"):
+        # BUILDUP: UNCOMMENT:
+        #fields = ["date_AH", "id"]
+        fields = ["id"]
+
+class ManuscriptFilter(django_filters.FilterSet):
+    """Define the fields by which manuscript objects can be filtered.
+
+    The variable name will be used in the query in the URL;
+    the field name is the name of the field in the model;
+    and the lookup_expr defines which lookup method must be used (lt = less than, gt = greater than,
+        icontains = case insensitive substring)
+
+    E.g., 
+    http://127.0.0.1:8000/text/?died_after_AH=309&died_before_AH=310
+    http://127.0.0.1:8000/author/?title_ar=تاريخ
+    http://127.0.0.1:8000/author/?date_AH=310
+    http://127.0.0.1:8000/author/?author_uri=0310Tabari
+
+    """
+    manuscript_uri = django_filters.CharFilter(lookup_expr='icontains',
+        field_name="manuscript_uri", label="Manuscript URI")
+    # BUILDUP: UNCOMMENT:
+    # title_ar = django_filters.CharFilter(lookup_expr='icontains',
+    #     field_name="text__titles_ar", label="Title (Arabic script)")
+    # title_lat = django_filters.CharFilter(lookup_expr='icontains', 
+    #     field_name="text__titles_lat", label="Title (Latin script)")
+    # text_type = django_filters.CharFilter(lookup_expr='icontains', 
+    #     field_name="text_type", label="Text type (book/document)")
+    tag = django_filters.CharFilter(field_name="tags", lookup_expr='icontains')
+
+    # BUILDUP: UNCOMMENT:
+    # author_ar = django_filters.CharFilter(lookup_expr='icontains', 
+    #     field_name="author__author_ar", label="Author's name (Arabic script)")
+    # author_lat = django_filters.CharFilter(lookup_expr='icontains', 
+    #     field_name="author__author_lat", label="Author's name (Latin script)")
+    # author_died_after_AH = django_filters.NumberFilter(lookup_expr="gt",          # /?died_after_AH=309
+    #     field_name="author__date_AH", label="Author died after the hijrī year")  
+    # author_died_before_AH = django_filters.NumberFilter(lookup_expr="lt",         # /?died_before_AH=311
+    #     field_name="author__date_AH", label="Author died before the hijrī year")  
+    # author_died_between_AH = NumberRangeFilter(lookup_expr="range",               # /?died_between_AH=309,311
+    #     field_name="author__date_AH", label="Author died between the hijrī years (comma-separated)")       
+
+    # author_shuhra = django_filters.CharFilter(lookup_expr='icontains', 
+    #     field_name="author__name_element__shuhra", label="Author's shuhra")
+    # author_ism = django_filters.CharFilter(lookup_expr='icontains', 
+    #     field_name="author__name_element__ism", label="Author's ism")
+    # author_nasab = django_filters.CharFilter(lookup_expr='icontains', 
+    #     field_name="author__name_element__nasab", label="Author's nasab")
+    # author_kunya = django_filters.CharFilter(lookup_expr='icontains', 
+    #     field_name="author__name_element__kunya", label="Author's kunya")
+    # author_laqab = django_filters.CharFilter(lookup_expr='icontains', 
+    #     field_name="author__name_element__laqab", label="Author's laqab")
+    # author_nisba = django_filters.CharFilter(lookup_expr='icontains', 
+    #     field_name="author__name_element__nisba", label="Author's nisba")
+
+    # related_text_title_lat = django_filters.CharFilter(lookup_expr='icontains', 
+    #     field_name="related_texts__titles_lat", 
+    #     label="Title of a related text (commentary, translation; Latin script)")
+    # related_text_title_ar = django_filters.CharFilter(lookup_expr='icontains', 
+    #     field_name="related_texts__titles_ar", 
+    #     label="Title of a related text (commentary, translation; Arabic script)")
+
+    class Meta:
+        model = Manuscript
+        # additional fields with the default lookup ("exact"):
+        #fields = ["author_uri", "author_lat", "author_ar", "date_AH"]
+        fields = ["id"]
 
 class TextFilter(django_filters.FilterSet):
     """Define the fields by which text objects can be filtered.

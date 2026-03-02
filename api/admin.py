@@ -5,10 +5,12 @@ from django.contrib import admin
 from .models import Author, RelationType, A2BRelation, ReleaseInfo,\
     Date, DateLink, Calendar, DateType, ObjectName, ObjectNameLink,\
     TextType, TextTypeLink, Text, Edition, \
-    Version, SourceCollectionDetails, ReleaseVersion, Contributor #, AuthorshipRole, AuthorshipRoleLink , IdentifierProvider, \
+    Version, SourceCollectionDetails, ReleaseVersion, Contributor,\
+    ManuscriptHolding, Place, Manuscript
+    #, AuthorshipRole, AuthorshipRoleLink , IdentifierProvider, \
     #ExternalID, ExternalIDLink, \
     #AuthorshipRole, AuthorshipRoleLink, PlaceRelationType, PlaceLink, \
-    #ManuscriptHolding, Manuscript, Country, Place, \
+    #Country, \
     #TextReuseStats, CorpusInsights, \
     #VersionwiseReuseStats, \
     #GitHubIssue, GitHubIssueLabel
@@ -32,10 +34,10 @@ admin.site.register(Author)
 admin.site.register(Text)
 admin.site.register(Version)
 admin.site.register(Edition)
-##admin.site.register(ManuscriptHolding)
-##admin.site.register(Manuscript)
+admin.site.register(ManuscriptHolding)
+admin.site.register(Manuscript)
 ##admin.site.register(Country)
-##admin.site.register(Place)
+admin.site.register(Place)
 admin.site.register(RelationType)
 admin.site.register(A2BRelation)
 ##admin.site.register(TextReuseStats)

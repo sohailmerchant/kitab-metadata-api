@@ -30,14 +30,15 @@ from django_filters import rest_framework as django_filters
 
 from .models import Author, Text, Version, ReleaseVersion, \
                     ReleaseInfo, RelationType, A2BRelation,\
-                    SourceCollectionDetails
+                    SourceCollectionDetails, ManuscriptHolding, Manuscript
 # BUILDUP: UNCOMMENT:
 # from .models import PersonName, CorpusInsights, \
 #                     TextReuseStats, GitHubIssue
 from .serializers import  AllRelationsSerializer, AllRelationTypesSerializer, \
                           AuthorSerializer, ReleaseInfoSerializer, TextSerializer,\
                           VersionSerializer, ReleaseVersionSerializer, \
-                          SourceCollectionDetailsSerializer
+                          SourceCollectionDetailsSerializer,\
+                          ManuscriptHoldingSerializer, ManuscriptSerializer
 # BUILDUP: UNCOMMENT:
 # from .serializers import PersonNameSerializer, \
 #                          TextReuseStatsSerializer, CorpusInsightsSerializer, \
@@ -45,7 +46,8 @@ from .serializers import  AllRelationsSerializer, AllRelationTypesSerializer, \
 #                          GitHubIssueSerializer
 
 from .filters import AuthorFilter, CustomSearchFilter, TextFilter, VersionFilter,\
-                     ReleaseVersionFilter, VersionSearchFilter, ReleaseVersionSearchFilter
+                     ReleaseVersionFilter, VersionSearchFilter, ReleaseVersionSearchFilter,\
+                     ManuscriptHoldingFilter, ManuscriptFilter
 # BUILDUP: UNCOMMENT:
 # from .filters import TextReuseFilter
 
@@ -247,6 +249,49 @@ def get_text(request, text_uri, release_code=None):
 #     except Text.DoesNotExist:
 #         raise Http404
 
+@api_view(['GET'])
+def get_manuscript(request, manuscript_uri, release_code=None):
+    """Get a ManucriptHolding record by its loc_uri (and, if provided, release_code)"""
+    try:
+        if release_code:
+            ms = Manuscript.objects\
+                .filter(manuscript_uri=manuscript_uri)\
+                .first() # multiple (identical) results will be returned because of the join strategy; take the first one
+            # BUILDUP: UNCOMMENT:
+            #loc = ManuscriptHolding.objects\
+                #.filter(loc_uri=loc_uri, text__version__release_version__release_info__release_code=release_code)\
+                #.first() # multiple (identical) results will be returned because of the join strategy; take the first one
+        else:
+            ms = Manuscript.objects.get(manuscript_uri=manuscript_uri)
+        serializer = ManuscriptSerializer(ms, many=False)
+        return Response(serializer.data)
+        
+    except Exception as e:
+        print("get_manuscript failed:")
+        print(e)
+        raise Http404
+
+@api_view(['GET'])
+def get_manuscript_holding(request, loc_uri, release_code=None):
+    """Get a ManucriptHolding record by its loc_uri (and, if provided, release_code)"""
+    try:
+        if release_code:
+            loc = ManuscriptHolding.objects\
+                .filter(loc_uri=loc_uri)\
+                .first() # multiple (identical) results will be returned because of the join strategy; take the first one
+            # BUILDUP: UNCOMMENT:
+            #loc = ManuscriptHolding.objects\
+                #.filter(loc_uri=loc_uri, text__version__release_version__release_info__release_code=release_code)\
+                #.first() # multiple (identical) results will be returned because of the join strategy; take the first one
+        else:
+            loc = ManuscriptHolding.objects.get(loc_uri=loc_uri)
+        serializer = ManuscriptHoldingSerializer(loc, many=False)
+        return Response(serializer.data)
+        
+    except Exception as e:
+        print("get_manuscript_holding failed:")
+        print(e)
+        raise Http404
 
 @api_view(['GET'])
 def get_author(request, author_uri, release_code=None):
@@ -372,6 +417,149 @@ class AuthorListView(CustomListView):
         return queryset
 
 
+class ManuscriptHoldingListView(CustomListView):
+    """
+    Return a paginated list of ManusriptHolding metadata objects
+    (each containing metadata on a manuscript holding, its manuscripts and their transcriptions)
+
+    Filter, sort and search are enabled, and fields can be selected.
+
+    Examples: 
+        /ms-holding/all/
+        /ms-holding/all/?fields=loc_uri,country   # get only these two fields!
+        /ms-holding/all/?search=London
+        /ms-holding/all/?ordering=loc_uri
+        /ms-holding/all/?page=2
+        /ms-holding/all/?page_size=100     # default: 10, max: 200
+        /ms-holding/all/?fields=loc_uri,country&search=France&page=2   # TO DO: fix search Error: "Related Field got invalid lookup: icontains"
+    """
+    serializer_class = ManuscriptHoldingSerializer
+
+    # customize the search:
+    search_fields = [field.name for field in ManuscriptHolding._meta.get_fields() if (field.name not in excl_flds)]
+    # BUILDUP: UNCOMMENT:
+    # search_fields = [field.name for field in Author._meta.get_fields() if (field.name not in excl_flds)] \
+    #     + ["text__" + field.name for field in Text._meta.get_fields() if (field.name not in excl_flds)] \
+    #     + ["text__version__" + field.name for field in Version._meta.get_fields() if (field.name not in excl_flds)] \
+    #     + ["name_element__" + field.name for field in PersonName._meta.get_fields()
+    #        if (field.name not in excl_flds)]
+    search_fields = (search_fields)
+
+    # Customize filtering:
+    filterset_class = ManuscriptHoldingFilter
+
+    def get_queryset(self):
+        """Filter the author objects present in the specified release, 
+        if a release_code was specified in the URL"""
+        try:
+            release_code = self.kwargs['release_code']
+        except: 
+            release_code = None
+        if release_code:
+            
+            queryset = ManuscriptHolding.objects\
+                .distinct()
+            # BUILDUP: UNCOMMENT:
+            # queryset = Author.objects\
+            #     .filter(text__version__release_version__release_info__release_code=release_code)\
+            #     .distinct()
+        else:
+            queryset = ManuscriptHolding.objects.all()
+
+        # Create a list of all valid filters to validate the request:
+        # 1. get all filters defined in the body of the filter class: 
+        declared_filters = list(self.filterset_class.declared_filters.keys())  
+        # 2. get all fields listed for exact lookup in the filter class' Meta class:
+        declared_filters += list(self.filterset_class.get_fields().keys())     
+        #print(dir(self.filterset_class))  # gets you a list of all available properties of the filterset_class
+        # 3. add the default allowed parameters (like search, page, fields, ...):
+        all_allowed_parameters = allowed_parameters + declared_filters
+        # # 3. create an additional filter "__in" for each declared filter; this allows "OR" filtering:
+        # declared_filters_in = [f+"__in" for f in declared_filters]
+        # # 4. add the default allowed parameters (like search, page, fields, ...):
+        # all_allowed_parameters = allowed_parameters + declared_filters + declared_filters_in
+
+        # Now check all elements in the query URL to check if they are valid:
+        for p in self.request.GET:
+            if p not in all_allowed_parameters:
+                msg = {"message": "Invalid parameter: "+ p}
+                res = serializers.ValidationError(msg)
+                res.status_code=200
+                raise res
+
+        return queryset
+    
+class ManuscriptListView(CustomListView):
+    """
+    Return a paginated list of Manusript metadata objects
+    (each containing metadata on a manuscript and its transcriptions)
+
+    Filter, sort and search are enabled, and fields can be selected.
+
+    Examples: 
+        /manuscript/all/
+        /manuscript/all/?fields=manuscript_uri,titles   # get only these two fields!
+        /manuscript/all/?search=London
+        /manuscript/all/?ordering=manuscript_uri
+        /manuscript/all/?page=2
+        /manuscript/all/?page_size=100     # default: 10, max: 200
+        /manuscript/all/?fields=manuscript_uri,titles&search=Paris&page=2   # TO DO: fix search Error: "Related Field got invalid lookup: icontains"
+    """
+    serializer_class = ManuscriptSerializer
+
+    # customize the search:
+    search_fields = [field.name for field in Manuscript._meta.get_fields() if (field.name not in excl_flds)]
+    # BUILDUP: UNCOMMENT:
+    # search_fields = [field.name for field in Author._meta.get_fields() if (field.name not in excl_flds)] \
+    #     + ["text__" + field.name for field in Text._meta.get_fields() if (field.name not in excl_flds)] \
+    #     + ["text__version__" + field.name for field in Version._meta.get_fields() if (field.name not in excl_flds)] \
+    #     + ["name_element__" + field.name for field in PersonName._meta.get_fields()
+    #        if (field.name not in excl_flds)]
+    search_fields = (search_fields)
+
+    # Customize filtering:
+    filterset_class = ManuscriptFilter
+
+    def get_queryset(self):
+        """Filter the manuscript objects present in the specified release, 
+        if a release_code was specified in the URL"""
+        try:
+            release_code = self.kwargs['release_code']
+        except: 
+            release_code = None
+        if release_code:
+            
+            queryset = Manuscript.objects\
+                .distinct()
+            # BUILDUP: UNCOMMENT:
+            # queryset = Author.objects\
+            #     .filter(text__version__release_version__release_info__release_code=release_code)\
+            #     .distinct()
+        else:
+            queryset = Manuscript.objects.all()
+
+        # Create a list of all valid filters to validate the request:
+        # 1. get all filters defined in the body of the filter class: 
+        declared_filters = list(self.filterset_class.declared_filters.keys())  
+        # 2. get all fields listed for exact lookup in the filter class' Meta class:
+        declared_filters += list(self.filterset_class.get_fields().keys())     
+        #print(dir(self.filterset_class))  # gets you a list of all available properties of the filterset_class
+        # 3. add the default allowed parameters (like search, page, fields, ...):
+        all_allowed_parameters = allowed_parameters + declared_filters
+        # # 3. create an additional filter "__in" for each declared filter; this allows "OR" filtering:
+        # declared_filters_in = [f+"__in" for f in declared_filters]
+        # # 4. add the default allowed parameters (like search, page, fields, ...):
+        # all_allowed_parameters = allowed_parameters + declared_filters + declared_filters_in
+
+        # Now check all elements in the query URL to check if they are valid:
+        for p in self.request.GET:
+            if p not in all_allowed_parameters:
+                msg = {"message": "Invalid parameter: "+ p}
+                res = serializers.ValidationError(msg)
+                res.status_code=200
+                raise res
+
+        return queryset
 
 # class VersionListView(generics.ListAPIView):
 class VersionListView(CustomListView):

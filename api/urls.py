@@ -57,6 +57,27 @@ urlpatterns = [
     path('<str:release_code>/author/all/', views.AuthorListView.as_view(), name='one-release-all-authors'),
     path('<str:release_code>/author/<str:author_uri>/', views.get_author, name='one-release-one-author'),
 
+    # manuscript holding endpoints:
+
+    path('all-releases/ms-holding/', views.ManuscriptHoldingListView.as_view(), name='all-releases-all-manuscript-holdings'),
+    path('all-releases/ms-holding/all/', views.ManuscriptHoldingListView.as_view(), name='all-releases-all-manuscript-holdings'),
+    path('all-releases/ms-holding/<str:loc_uri>/', views.get_manuscript_holding, name='all-releases-one-manuscript-holding'),
+
+    path('<str:release_code>/ms-holding/', views.ManuscriptHoldingListView.as_view(), name='one-release-all-manuscript-holdings'),
+    path('<str:release_code>/ms-holding/all/', views.ManuscriptHoldingListView.as_view(), name='one-release-all-manuscript-holdings'),
+    path('<str:release_code>/ms-holding/<str:loc_uri>/', views.get_manuscript_holding, name='one-release-one-manuscript-holding'),
+
+    # manuscript endpoints:
+
+    path('all-releases/manuscript/', views.ManuscriptListView.as_view(), name='all-releases-all-manuscripts'),
+    path('all-releases/manuscript/all/', views.ManuscriptListView.as_view(), name='all-releases-all-manuscripts'),
+    path('all-releases/manuscript/<str:manuscript_uri>/', views.get_manuscript, name='all-releases-one-manuscript'),
+
+    path('<str:release_code>/manuscript/', views.ManuscriptListView.as_view(), name='one-release-all-manuscripts'),
+    path('<str:release_code>/manuscript/all/', views.ManuscriptListView.as_view(), name='one-release-all-manuscripts'),
+    path('<str:release_code>/manuscript/<str:manuscript_uri>/', views.get_manuscript, name='one-release-one-manuscript'),
+
+
     # release info endpoints:
 
     path('all-releases/release-info/', views.GetReleaseInfoList.as_view(), name='all-release-info'),
@@ -71,12 +92,11 @@ urlpatterns = [
     path('relation-type/all/', views.RelationTypesListView.as_view(), name='all-releases-relations'),
     path('relation-type/<str:code>/', views.get_relation_type, name='all-releases-relations'),
 
-    # BUILDUP: UNCOMMENT:
     # # source collections info (independent of releases):
 
-    # path('source-collection/all/', views.GetSourceCollectionDetailsList.as_view(), name='all-source-collections'),
-    # path('source-collection/', views.GetSourceCollectionDetailsList.as_view(), name='all-source-collections'),
-    # path('source-collection/<str:code>/', views.get_source_collection, name='source-collection'),
+    path('source-collection/all/', views.GetSourceCollectionDetailsList.as_view(), name='all-source-collections'),
+    path('source-collection/', views.GetSourceCollectionDetailsList.as_view(), name='all-source-collections'),
+    path('source-collection/<str:code>/', views.get_source_collection, name='source-collection'),
 
     # BUILDUP: UNCOMMENT:
     # # corpus insights (statistics on the number of books, largest book, etc. for each release):

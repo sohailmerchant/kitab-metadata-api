@@ -25,40 +25,30 @@ from api.models import Author, Text, Version, Edition, \
     ReleaseVersion, SourceCollectionDetails, \
     Date, DateType, Calendar, DateLink,\
     ObjectName, ObjectNameLink, A2BRelation, RelationType, \
-    TextType, TextTypeLink, ReleaseInfo
+    TextType, TextTypeLink, ReleaseInfo, \
+    ManuscriptHolding, Place, Manuscript
 from django.core.management.base import BaseCommand
 import re
 import datetime
-import convertdate
 import json
 import traceback
+from decimal import Decimal
+
 
 from openiti.helper.ara import normalize_ara_light
-from api.util.betacode import betacodeToSearch
+from api.util.betacode import betacodeToSearch, betacodeToArabic
+from api.util.utility import compute_ce_range, COUNTRY_CODES
 
 from itertools import islice
 
-version_codes = dict()
-VERBOSE = False
-DATE_CONVERTERS  = {
-    "AH": convertdate.islamic,
-    "hijri": convertdate.islamic,
-    "qamari": convertdate.islamic,
-    "shamsi": convertdate.persian,
-    "persian": convertdate.persian,
-    "coptic": convertdate.coptic,
-    "armenian": convertdate.armenian,
-    "hebrew": convertdate.hebrew
-}
+VERSION_CODES = dict()  # NOT USED??
+VERBOSE = True
 DATE_TYPES = {}
 CALENDARS = {}
 
 with open("meta/alThurayya_places.json", encoding="utf-8") as file:
     data = json.load(file)
     ALTHURAYYA_LOOKUP = {d["properties"]["cornuData"]["cornu_URI"]: d["properties"]["cornuData"] for d in data["features"]}
-
-print(ALTHURAYYA_LOOKUP["JUBBMAYDAN_233E321N_S"])
-input("CONTINUE?")
 
 class Command(BaseCommand):
     def handle(self, **options):
@@ -170,7 +160,7 @@ def main(meta_fp, base_url, release_info, reuse_data_fp, reuse_data_base_url, te
     # # check for duplicate version_codes:
     # print("-"*60)
     # no_duplicates=True
-    # for version_code, fn_list in version_codes.items():
+    # for version_code, fn_list in VERSION_CODES.items():
     #     if len(fn_list) > 1:
     #         print("DUPLICATE ID:", version_code)
     #         print(fn_list)
@@ -203,6 +193,133 @@ def get_annotation_status(value):
 # def ah2ce(date):
 #     """convert AH date to CE date"""
 #     return 622 + (int(date) * 354 / 365.25)
+
+def get_city_from_loc_uri(loc_uri):
+    if not re.findall(r"^MS\d{4}", loc_uri):
+        return ""
+    # build the city, character by character,
+    # starting from the character after the 
+    city = loc_uri[6]
+    for char in loc_uri[7:]:
+        if char.isupper(): # start of a new word in the URI
+            if city not in ("Los", "St", "Saint", "New", "San", "Al", "El"):
+                return city
+        city += char
+    return ""
+
+def get_or_create_country_obj(country_code):
+    
+    if country_code not in COUNTRY_CODES:
+        print("UNKNOWN COUNTRY CODE:", country_code)
+        return None
+    else:
+        # if the country does not yet exist in the database, create it:
+        country_obj = COUNTRY_CODES[country_code]["db_object"]
+        if not country_obj:
+            # create the country object in the database:
+            country_obj = Place.objects.create(
+                code=country_code,
+                country_code=country_code
+            )
+        
+            # add the country name in the database:
+            country_name = COUNTRY_CODES[country_code]["name"]
+            nm = get_or_create_name_obj(country_name, "EN", "country_name")
+            link_name_to_obj(nm, place_obj=country_obj, is_preferred=True)
+
+            # store the object for later use:
+            COUNTRY_CODES[country_code]["db_object"] = country_obj
+    
+    return country_obj
+    
+
+
+def get_or_create_place_obj(place_code, part_of_obj, thurayya_uri=False):
+    """Get a place object from the database, or create it if it does not exist
+    
+    Args:
+        place_code (str): the unique code for a place object
+        part_of_obj (obj): generic relation type for hierarchy of places
+        thurayya_uri (bool): if True, the place_code is a Thurayya URI
+    """
+    pm, created = Place.objects.get_or_create(
+        code=place_code
+    )
+    # if it already existed, return the reference to the object:
+    if not created:
+        return pm
+    
+    elif thurayya_uri:
+        # get the coordinates and names from the Thurayya dataset
+        # and upload them to the database
+        d = ALTHURAYYA_LOOKUP[thurayya_uri]
+
+        # add the coordinates:
+        lat_str = d["coord_lat"]
+        lon_str = d["coord_lon"]
+        if lat_str:
+            pm.lat = Decimal(lat_str)
+        if lon_str:
+            pm.lon = Decimal(lon_str)
+        if lat_str and lon_str:
+            if lat_str.startswith("-"):
+                lat_letter = "W"
+            else:
+                lat_letter = "E"
+            if lon_str.startswith("-"):
+                lon_letter = "S"
+            else: 
+                lon_letter = "N"
+            pm.coordinates_str = f"{lat_str}{lat_letter}, {lon_str}{lon_letter}"
+        
+        # add the preferred Arabic name:
+        name_ar_prefered = d["toponym_arabic"]
+        nm = get_or_create_name_obj(name_ar_prefered, "AR", "toponym")
+        link_name_to_obj(nm, place_obj=pm, is_preferred=True)
+        
+        # add alternative Arabic names:
+        for name in re.split(" *، *", d["toponym_arabic_other"]):
+            # do not duplicate the prefered name:
+            if name == name_ar_prefered:
+                continue
+            nm = get_or_create_name_obj(name, "AR", "toponym")
+            link_name_to_obj(nm, place_obj=pm, is_preferred=False)
+        
+        # add the preferred Latin name:
+        name_lat_prefered = d["toponym_translit"]
+        nm = get_or_create_name_obj(name_lat_prefered, "LAT", "toponym")
+        link_name_to_obj(nm, place_obj=pm, is_preferred=True)
+        
+        # add alternative Latin names:
+        for name in re.split(" *، *", d["toponym_translit_other"]):
+            # do not duplicate the prefered name:
+            if name == name_lat_prefered:
+                continue
+            nm = get_or_create_name_obj(name, "LAT", "toponym")
+            link_name_to_obj(nm, place_obj=pm, is_preferred=False)
+        
+        # create the region name if it does not exist yet:
+        region_code = d["region_code"]
+        rm, region_created = Place.objects.get_or_create(
+            code=region_code
+        )
+        if region_created:
+            # Add the Latin region name:
+            region_lat = betacodeToSearch(d["region_spelled"])
+            nm = get_or_create_name_obj(region_lat, "LAT", "toponym")
+            link_name_to_obj(nm, place_obj=rm, is_preferred=True)
+
+            # Add the Arabic region name:
+            region_ar = betacodeToArabic(d["region_spelled"])
+            nm = get_or_create_name_obj(region_ar, "AR", "toponym")
+            link_name_to_obj(nm, place_obj=rm, is_preferred=True)
+
+        # link the place to the region:
+        link_places(pm, rm, part_of_obj)
+
+    
+
+    return pm
 
 def get_or_create_name_obj(name, language, name_type):
     if not name:
@@ -244,7 +361,7 @@ def get_or_create_name_obj(name, language, name_type):
 #         link.save(update_fields=["is_preferred"])
 
 def link_name_to_obj(name_obj, author_obj=None, text_obj=None, 
-                     is_preferred=False, source=""):
+                     loc_obj=None, place_obj=None, manuscr_obj=None, is_preferred=False, source=""):
     if name_obj is None:
         return
     #print("Linking name object", nm, "to other object", (author_obj or text_obj))
@@ -252,6 +369,9 @@ def link_name_to_obj(name_obj, author_obj=None, text_obj=None,
     link, link_created = ObjectNameLink.objects.get_or_create(
         author=author_obj,
         text=text_obj,
+        place=place_obj,
+        manuscript_holding=loc_obj,
+        manuscript=manuscr_obj,
         object_name=name_obj,
         source=source,
         defaults={"is_preferred": is_preferred}
@@ -268,6 +388,117 @@ def link_book_to_author(text_obj, author_obj, rel_type_obj, authority=""):
         relation_type=rel_type_obj,
         authority=authority
     )
+
+def link_manuscript_to_author(ms_obj, record, rel_type_obj, 
+                              failed_dates, authority=""):
+    author_obj = get_or_create_author(record, failed_dates)
+    rel, created = A2BRelation.objects.get_or_create(
+        person_a=author_obj,
+        manuscript_b=ms_obj,
+        relation_type=rel_type_obj,
+        authority=authority
+    )
+
+def link_manuscript_to_texts(ms_obj, record, rel_type_obj, authority=""):
+    """Link a  manuscript object to text_uris of texts inside it"""
+    for text_uri, page_range in record["text_uris"]:
+        print("RELATED TEXT URI:", text_uri)
+        if page_range:
+            page_range = "Page range: " + page_range
+        else:
+            page_range = ""
+        # get or create the text object in the database:
+        tm, tm_created = Text.objects.get_or_create(
+            text_uri=text_uri,
+            defaults={
+                "notes": page_range
+            }
+        )
+        rel, created = A2BRelation.objects.get_or_create(
+            manuscript_a=ms_obj,
+            text_b=tm,
+            relation_type=rel_type_obj,
+            authority=authority
+        )
+
+def link_manuscript_to_dates(ms_obj, record, source=""):
+    # TODO: when loading metadata from YML files, 
+    # parse the 30#MS#DATE#AH####: key
+    if "dates" not in record:
+        return
+    try:
+        dd, mm, yyyy = date.split("-")
+        try: 
+            dd = int(dd)
+        except:
+            dd = None
+        try: 
+            mm = int(mm)
+        except:
+            mm = None
+        try:
+            yyyy = int(yyyy)
+        except:
+            yyyy = None
+    except:
+        dd = None
+        mm = None
+        yyyy = None
+    for date, page_range in record["dates"]:
+        date_obj = get_or_create_date(
+            date_type_slug="date_written",
+            calendar_slug="hijri",
+            date_str=date,
+            year=yyyy,
+            month=mm,
+            day=mm,
+            source=source,
+        )
+
+def link_manuscript_to_whole(holding_obj, ms_obj, record, rel_type_obj, authority=""):
+    if "ms_part_of" in record:
+        parent_uri = record["ms_part_of"]
+        print("PARENT URI:", parent_uri)
+        parent_obj, created = Manuscript.objects.get_or_create(
+            manuscript_uri=parent_uri,
+            manuscript_holding=holding_obj
+        )
+        
+        rel, created = A2BRelation.objects.get_or_create(
+            manuscript_a=ms_obj,
+            manuscript_b=parent_obj,
+            relation_type=rel_type_obj,
+            authority=authority
+        )
+
+def link_places(place_a, place_b, rel_type_obj, authority=""):
+    if not (place_a and place_b):
+        print("None-existent place:")
+        print("- place_a:", place_a)
+        print("- place_b:", place_b)
+        return
+    rel, created = A2BRelation.objects.get_or_create(
+        place_a=place_a,
+        place_b=place_b,
+        relation_type=rel_type_obj,
+        authority=authority
+    )
+
+
+def link_manuscript_to_titles(mm, record):
+    """Add various titles to a manuscript object"""
+    for name in record['titles_ar'].split(" :: "):
+        nm = get_or_create_name_obj(name, "AR", "title")
+        link_name_to_obj(nm, manuscr_obj=mm, is_preferred=False)
+    for name in record['titles_lat'].split(" :: "):
+        nm = get_or_create_name_obj(name, "LAT", "title")
+        link_name_to_obj(nm, manuscr_obj=mm, is_preferred=False)
+    name = record['title_ar_prefered']
+    nm = get_or_create_name_obj(name, "AR", "title")
+    link_name_to_obj(nm, manuscr_obj=mm, is_preferred=True)
+    name = record['title_lat_prefered']
+    nm = get_or_create_name_obj(name, "LAT", "title")
+    link_name_to_obj(nm, manuscr_obj=mm, is_preferred=True)
 
 def link_book_to_titles(tm, record):
     """Add various titles to a book/text object"""
@@ -299,6 +530,24 @@ def add_book_type(text_obj, text_type_obj, is_preferred=False,
     if is_preferred and not link_created and not link.is_preferred:
         link.is_preferred = True
         link.save(update_fields=["is_preferred"])
+
+def add_holding_names(hm, record):
+    """Add various names to a manuscript holding object"""
+    for name in record['institution_ar'].split(" :: "):
+        nm = get_or_create_name_obj(name, "AR", "institution_name")
+        link_name_to_obj(nm, loc_obj=hm, is_preferred=False)
+    for name in record['institution_lat'].split(" :: "):
+        nm = get_or_create_name_obj(name, "LAT", "institution_name")
+        link_name_to_obj(nm, loc_obj=hm, is_preferred=False)
+
+def add_city_names(city_obj, record):
+    """Add various names to a manuscript holding object"""
+    for name in record['city_ar'].split(" :: "):
+        nm = get_or_create_name_obj(name, "AR", "city_name")
+        link_name_to_obj(nm, place_obj=city_obj, is_preferred=False)
+    for name in record['city_lat'].split(" :: "):
+        nm = get_or_create_name_obj(name, "LAT", "city_name")
+        link_name_to_obj(nm, place_obj=city_obj, is_preferred=False)
 
 def add_author_names(am, record):
     """Add various names to an author object"""
@@ -389,149 +638,7 @@ def get_or_create_date(date_type_slug, calendar_slug, date_str,
         return None
     return obj
 
-def to_datetime(gregorian_tuple):
-    """
-    convertdate.<cal>.to_gregorian returns (year, month, day) tuples.
-    Convert to datetime.date.
-    """
-    if not gregorian_tuple:
-        return None
-    y, m, d = gregorian_tuple
-    return datetime.date(int(y), int(m), int(d))
 
-def normalize_precision(precision, month, day):
-    """
-    precision can be: "year", "month", "day" or whatever you store.
-    If missing/invalid, infer from the presence/absence of month/day.
-    """
-    if precision in ("year", "month", "day"):
-        return precision
-    if not month:
-        return "year"
-    if not day:
-        return "month"
-    return "day"
-
-def compute_ce_range(calendar, year, month=None, day=None, precision=None):
-    """
-    Compute (ce_start, ce_end) as datetime.date objects from a calendar date.
-
-    Args:
-        calendar (str): "gregorian", "hijri", "persian", ...
-        year (int): the year value
-        month (int): the month value
-        day (int): the day value
-        precision (str): "year" | "month" | "day"; if None, the precision
-            will be infrerred from the presence/absence of month and day values
-
-    Returns:
-        (datetime, datetime)
-    """
-    if year is None:
-        return (None, None)
-
-    if calendar == "gregorian":
-        return compute_ce_range_from_gregorian(year, 
-            month=month, day=day, precision=precision)
-
-    return compute_ce_range_from_other_calendar(calendar, year, 
-            month=month, day=day, precision=precision)
-
-def compute_ce_range_from_gregorian(year, month=None, day=None, precision=None):
-    """
-    Compute (ce_start, ce_end) as datetime.date objects from a CE calendar date.
-
-    Args:
-        year (int): the year value
-        month (int): the month value
-        day (int): the day value
-        precision (str): "year" | "month" | "day"; if None, the precision
-            will be infrerred from the presence/absence of month and day values
-    
-    Returns:
-        (datetime, datetime)
-    """
-    if year is None:
-        return (None, None)
-
-    precision = normalize_precision(precision, month, day)
-
-    if precision == "year":
-        return (datetime.date(year, 1, 1), datetime.date(year, 12, 31))
-
-    if precision == "month" and month:
-        start = datetime.date(year, month, 1)
-        if month == 12:
-            end = datetime.date(year, 12, 31)
-        else:
-            end = datetime.date(year, month + 1, 1) - datetime.timedelta(days=1)
-        return (start, end)
-
-    if precision == "day" and month and day:
-        d = datetime.date(year, month, day)
-        return (d, d)
-
-    return (None, None)
-
-
-def compute_ce_range_from_other_calendar(calendar, year, month=None, day=None, precision=None):
-    """
-    Compute (ce_start, ce_end) as datetime.date objects from a non-CE calendar date.
-    
-    Uses convertdate.* converters. 
-
-    Args:
-        calendar (str): "gregorian", "hijri", "persian", ...
-        year (int): the year value
-        month (int): the month value
-        day (int): the day value
-        precision (str): "year" | "month" | "day"; if None, the precision
-            will be infrerred from the presence/absence of month and day values
-    
-    Returns:
-        (datetime, datetime)
-    """
-    if year is None:
-        return (None, None)
-
-    converter = DATE_CONVERTERS.get(calendar)
-    if converter is None:
-        print("UNKNOWN CALENDAR:", calendar)
-        return (None, None)
-
-    precision = normalize_precision(precision, month, day)
-
-    # YEAR precision: whole year in that calendar
-    if precision == "year":
-        start = to_datetime(converter.to_gregorian(year, 1, 1))
-
-        # last day of last month of the year, in that calendar
-        # (convertdate modules generally provide month_length)
-        last_month = 12
-        try:
-            last_day = converter.month_length(year, last_month)
-        except Exception:
-            last_day = 30 # approximation
-
-        end = to_datetime(converter.to_gregorian(year, last_month, last_day))
-        return (start, end)
-
-    # MONTH precision: whole month in that calendar
-    if precision == "month" and month:
-        start = to_datetime(converter.to_gregorian(year, month, 1))
-        try:
-            last_day = converter.month_length(year, month)
-        except Exception:
-            last_day = 30 # approximation
-        end = to_datetime(converter.to_gregorian(year, month, last_day))
-        return (start, end)
-
-    # DAY precision: specific day
-    if precision == "day" and month and day:
-        d = to_datetime(converter.to_gregorian(year, month, day))
-        return (d, d)
-
-    return (None, None)
 
 def attach_dates_to_author(author, date_objs):
     """
@@ -556,7 +663,8 @@ def split_tag_list(tag_list):
             version_tags.append("CLEANED_VERSION")
         elif "NO_MAJOR_ISSUES" in tag:
             version_tags.append("NO_MAJOR_ISSUES")
-        elif "born@" in tag or "died@" in tag or "resided@" in tag or "visited@" in tag:
+        #elif "born@" in tag or "died@" in tag or "resided@" in tag or "visited@" in tag:
+        elif re.findall("born@|died@|resided@|visited@", tag):
             author_tags.append(tag)
         elif "@" in tag or tag.startswith("_"):
             text_tags.append(tag)
@@ -572,7 +680,14 @@ def format_fields(data, base_url):
     record = dict()
     
     record['version_uri'] = data['versionUri']
-    record['version_lang'] = get_version_lang(record['version_uri'])
+
+
+    # TODO: deal with multi-language items!
+    if "language" in data:
+        record['version_lang'] = data['language']
+    else:
+        record['version_lang'] = get_version_lang(record['version_uri'])
+    
     if data['date']:
         date = int(data['date'])
     else:
@@ -652,9 +767,425 @@ def format_fields(data, base_url):
     else:
         record["type"] = "book"
 
+    ##manuscriptfields:
+    ms_keys = ['city_ar', 'city_lat', 'institution_ar', 'institution_lat', 
+               'catalog_ref', 'shelfmark']
+    for k in ms_keys:
+        if k in data:
+            record[k] = data[k]
+        else:
+            record[k] = ""
+    
+    manuscript_uri = ".".join(data["versionUri"].split(".")[:2])
+    record["manuscript_uri"] = manuscript_uri
+
+    if "uncorrected_OCR" in data:
+        if data["uncorrected_OCR"] in ("FALSE", "False", False):
+           record["uncorrected_OCR"] = False
+        elif data["uncorrected_OCR"] in ("TRUE", "True", True):
+           record["uncorrected_OCR"] = True
+        else:
+            print("Unexpected value for 'uncorrected_OCR':", repr(data["uncorrected_OCR"]))
+            record["uncorrected_OCR"] = None
+    else:
+        if "UNCORRECTED_OCR" in data["tags"]:
+            record["uncorrected_OCR"] = True
+        else:
+            record["uncorrected_OCR"] = None            
+
+    if "subcorpus" in data:
+        record["subcorpus"] = data["subcorpus"]
+    else:
+        record["subcorpus"] = record['version_lang']
+
+    # deal with manuscripts that contain one or more specific texts:
+    record["text_uris"] = []
+    if "parts" in data:
+        for part in re.split(" *[;,:]+ *", data["parts"]):
+            if not part:
+                continue
+            if "@" in part:
+                text_uri, page_range = part.split("@")
+                record["text_uris"].append((text_uri, page_range))
+            else:
+                record["text_uris"].append((part, None))
+
+    # check if the manuscript object is part of a complete manuscript:
+    if re.findall(r"P\d+[AB]?\d*$", manuscript_uri):
+        parent = re.sub(r"P\d+[AB]?\d*$", "", manuscript_uri)
+        record["ms_part_of"] = parent
+        print(manuscript_uri, "is part of", parent)
+    
     return record
 
-# BUILDUP: UNCOMMENT:
+def get_or_create_author(record, failed_dates):
+    try:
+        am = Author.objects.get(
+            author_uri=record['author_uri']
+        )
+        if VERBOSE:
+            print("but author does:", record['author_uri'])
+    except:
+        if VERBOSE:
+            print("Author URI not in database either:", record['author_uri'])
+
+        # the author is not yet in the database! Create a new author object:
+
+        am, am_created = Author.objects.get_or_create(
+            author_uri=record['author_uri'],
+            tags=record['author_tags']
+            # do not upload bibliography and notes
+        )
+        if am_created and VERBOSE:
+            print("-> created", record['author_uri'])
+    
+    # Add names to the author object:
+    add_author_names(am, record)
+    
+    # add dates related to the author:
+    # first, create the date itself: 
+    date_obj = get_or_create_date(
+        date_type_slug="death_date",
+        calendar_slug="hijri",
+        date_str=record['author_uri'][:4],
+        year=record['date'],
+        precision="year",
+        source="URI",
+    )
+    # then, add the link to the author:
+    if date_obj:
+        DateLink.objects.get_or_create(date=date_obj, author=am)
+    else:
+        failed_dates.add(record['author_uri'][:4])
+
+    return am
+
+def upload_book_corpus_meta(record, authorship_obj, book_type_obj, release_obj, failed_dates):
+    # check if the version uri is already in the database:
+
+    #if True:  # TO DO replace with the try... except... block when folding in Versions:
+    try:
+        vm = Version.objects.get(
+            version_uri=record['version_uri']
+        )
+    except Version.DoesNotExist:
+        if VERBOSE:
+            print(record['version_uri'], "does not exist in the database")
+
+        # if not, check if the text author_uri is in the database:
+
+        am = get_or_create_author(record, failed_dates)
+
+        # try:
+        #     am = Author.objects.get(
+        #         author_uri=record['author_uri']
+        #     )
+        #     if VERBOSE:
+        #         print("but author does:", record['author_uri'])
+        # except:
+        #     if VERBOSE:
+        #         print("Author URI not in database either:", record['author_uri'])
+
+        #     # the author is not yet in the database! Create a new author object:
+
+        #     am, am_created = Author.objects.get_or_create(
+        #         author_uri=record['author_uri'],
+        #         tags=record['author_tags']
+        #         # do not upload bibliography and notes
+        #     )
+        #     if am_created and VERBOSE:
+        #         print("-> created", record['author_uri'])
+        
+        # # Add names to the author object:
+        # add_author_names(am, record)
+        
+        # # add dates related to the author:
+        # # first, create the date itself: 
+        # date_obj = get_or_create_date(
+        #     date_type_slug="death_date",
+        #     calendar_slug="hijri",
+        #     date_str=record['author_uri'][:4],
+        #     year=record['date'],
+        #     precision="year",
+        #     source="URI",
+        # )
+        # # then, add the link to the author:
+        # if date_obj:
+        #     DateLink.objects.get_or_create(date=date_obj, author=am)
+        # else:
+        #     failed_dates.add(record['author_uri'][:4])
+
+
+        # the author is now in the database, check if the text exists:
+        
+        try:
+            tm = Text.objects.get(
+                text_uri=record['text_uri']
+            )
+            if VERBOSE:
+                print("but text does:", record['text_uri'])
+        except: 
+            # the text is not yet in the database! Create a new text object:
+            if VERBOSE:
+                print("Text URI not in database either:", record['text_uri'])
+            tm, tm_created = Text.objects.update_or_create(
+                text_uri=record["text_uri"],
+                #author=am,  # we add the author(s) with link_book_to_author
+                defaults=dict(
+                    tags=record["text_tags"]
+                )
+            )
+            if tm_created and VERBOSE:
+                print("-> created", record['text_uri'])
+        
+        link_book_to_author(tm, am, authorship_obj, authority="URI")
+        link_book_to_titles(tm, record)
+        add_book_type(tm, book_type_obj, source="URI")
+
+
+        # now we are sure the author and text exist in the database, create a new version object:
+
+        # (but first, we check if the edition meta object exists or create it)
+
+        try:
+            em = Edition.objects.filter(
+                text=tm,
+                ed_info=record['ed_info']
+            )[0]  # more than one edition with the same query criteria may exist!; 
+            # NB: .first() returns None if none exists, so it will not trigger the exception
+            if VERBOSE:
+                print("Edition does exist")
+                print("em:", em)
+                print()
+        except: 
+            if VERBOSE:
+                print("Neither does the edition exist")
+
+
+
+            em, em_created = Edition.objects.update_or_create(
+                text=tm,
+                ed_info=record["ed_info"],
+            )
+            if em_created and VERBOSE:
+                print("-> Created Edition object")
+
+        # now create the new version object:
+
+        # upload the collection code if it doesn't exist yet:
+        cm, cm_created = SourceCollectionDetails.objects.get_or_create(
+            code=record["collection_code"]
+        )
+
+        if "part_of" in record:
+            whole_obj = Version.objects.get(version_uri=record["part_of"])
+        else:
+            whole_obj = None
+
+        vm, vm_created = Version.objects.update_or_create(
+            version_code=record["version_code"],
+            version_uri=record["version_uri"],
+            text=tm,
+            language=record["version_lang"],
+            defaults=dict(
+                edition=em,
+                source_coll=cm,
+                part_of=whole_obj
+            )
+        )     
+        if vm_created and VERBOSE:
+            print("-> created", record['version_uri'])              
+
+
+    # now that we know that the version object is in the database, 
+    # create or update the ReleaseVersion object:
+    rvm, rvm_created = ReleaseVersion.objects.update_or_create(
+        release_info=release_obj,
+        version=vm,
+        defaults=dict(
+            url=record["url"],
+            char_length=record["char_length"],
+            tok_length=record["tok_length"],
+            analysis_priority=record["analysis_priority"],
+            annotation_status=record["annotation_status"],
+            tags=record["version_tags"]
+        )
+    )
+    if rvm_created and VERBOSE:
+        print("NEW RELEASE VERSION OBJECT CREATED:", rvm)
+
+def upload_ms_corpus_meta(record, authorship_obj, release_obj, part_of_obj, failed_dates):
+    # check if the version uri is already in the database:
+    #print(record)
+
+    try:
+        vm = Version.objects.get(
+            version_uri=record['version_uri']
+        )
+    except Version.DoesNotExist:
+        if VERBOSE:
+            print(record['version_uri'], "does not exist in the database")
+
+        # if not, check if the manuscript holding (loc) is in the database:
+        loc_uri = record['version_uri'].split(".")[0]
+
+        try:
+            hm = ManuscriptHolding.objects.get(
+                loc_uri=loc_uri
+            )
+            if VERBOSE:
+                print("but manuscript holding does:", loc_uri)
+        except:
+            if VERBOSE:
+                print("manuscript holding not in database either:", loc_uri)
+
+            # the manuscript holding is not yet in the database! 
+            # Create a new manuscript holding object:
+
+            hm, hm_created = ManuscriptHolding.objects.get_or_create(
+                loc_uri=loc_uri
+            )
+            if hm_created and VERBOSE:
+                print("-> created", loc_uri)
+        
+        # Add names to the ManuscriptHolding object:
+        add_holding_names(hm, record)
+
+        # Add city to the ManuscriptHolding object:
+        place_code = get_city_from_loc_uri(loc_uri)
+        hm.code = place_code
+        if place_code:
+            city_obj = get_or_create_place_obj(place_code, part_of_obj)
+            add_city_names(city_obj, record)
+            hm.city = city_obj
+            print(place_code, city_obj)
+        
+        # Add country to the ManuscriptHolding object:
+        country_code = loc_uri[2:6]
+        country_obj = get_or_create_country_obj(country_code)
+        if country_obj:
+            print("COUNTRY OBJECT FOR", country_code, country_obj)
+            hm.country = country_obj
+            hm.save(update_fields=["city", "country"])
+
+            # link the city to the country:
+            link_places(city_obj, country_obj, part_of_obj)
+
+            print(country_code, country_obj)        
+        
+    #     # add dates related to the manuscript:
+    #     # first, create the date itself: 
+    #     date_obj = get_or_create_date(
+    #         date_type_slug="death_date",
+    #         calendar_slug="hijri",
+    #         date_str=record['author_uri'][:4],
+    #         year=record['date'],
+    #         precision="year",
+    #         source="URI",
+    #     )
+    #     # then, add the link to the author:
+    #     if date_obj:
+    #         DateLink.objects.get_or_create(date=date_obj, author=am)
+    #     else:
+    #         failed_dates.add(record['author_uri'][:4])
+
+
+        # the manuscript holding is now in the database, 
+        # check if the manuscript exists:
+        
+        try:
+            mm = Manuscript.objects.get(
+                manuscript_uri=record['manuscript_uri']
+            )
+            if VERBOSE:
+                print("but manuscript does:", record['manuscript_uri'])
+        except: 
+            # the manuscript is not yet in the database! Create a new Manuscript object:
+            if VERBOSE:
+                print("Manuscript URI not in database either:", record['manuscript_uri'])
+            mm, mm_created = Manuscript.objects.update_or_create(
+                manuscript_uri=record["manuscript_uri"],
+                defaults=dict(
+                    tags=record["text_tags"],
+                    manuscript_holding=hm
+                )
+            )
+            if mm_created and VERBOSE:
+                print("-> created", record['manuscript_uri'])
+        
+        link_manuscript_to_titles(mm, record)
+        #link_manuscript_to_author(mm, record, authorship_obj, failed_dates)
+        link_manuscript_to_texts(mm, record, part_of_obj)
+        link_manuscript_to_dates(mm, record)
+        link_manuscript_to_whole(hm, mm, record, part_of_obj)
+
+
+        # now we are sure the manuscript holding and manuscript exist in the database, 
+        # create a new version object:
+
+        # # (but first, we check if the edition meta object exists or create it)
+        
+        # TODO: Add edition object:
+        # try:
+        #     em = Edition.objects.filter(
+        #         text=tm,
+        #         ed_info=record['ed_info']
+        #     )[0]  # more than one edition with the same query criteria may exist!; 
+        #     # NB: .first() returns None if none exists, so it will not trigger the exception
+        #     if VERBOSE:
+        #         print("Edition does exist")
+        #         print("em:", em)
+        #         print()
+        # except: 
+        #     if VERBOSE:
+        #         print("Neither does the edition exist")
+
+        #     em, em_created = Edition.objects.update_or_create(
+        #         text=tm,
+        #         ed_info=record["ed_info"],
+        #     )
+        #     if em_created and VERBOSE:
+        #         print("-> Created Edition object")
+
+
+        # upload the collection code if it doesn't exist yet:
+        cm, cm_created = SourceCollectionDetails.objects.get_or_create(
+            code=record["collection_code"]
+        )
+
+        # now create the new version object:
+
+        vm, vm_created = Version.objects.update_or_create(
+            version_code=record["version_code"],
+            version_uri=record["version_uri"],
+            manuscript=mm,
+            language=record["version_lang"], # TODO switch to language-script combo
+            defaults=dict(
+                #edition=em,  # TODO
+                source_coll=cm,
+            )
+        )     
+        if vm_created and VERBOSE:
+            print("-> created", record['version_uri'])              
+
+
+    # now that we know that the version object is in the database, 
+    # create or update the ReleaseVersion object:
+    rvm, rvm_created = ReleaseVersion.objects.update_or_create(
+        release_info=release_obj,
+        version=vm,
+        defaults=dict(
+            url=record["url"],
+            char_length=record["char_length"],
+            tok_length=record["tok_length"],
+            analysis_priority=record["analysis_priority"],
+            annotation_status=record["annotation_status"],
+            tags=record["version_tags"]
+        )
+    )
+    if rvm_created and VERBOSE:
+        print("NEW RELEASE VERSION OBJECT CREATED:", rvm)
+
 def upload_release_meta(meta_fp, base_url, release_info, meta_upload=True, test=False):
     print(f"Uploading release {release_info['release_code']} metadata...")
     failed_dates = set()
@@ -694,17 +1225,32 @@ def upload_release_meta(meta_fp, base_url, release_info, meta_upload=True, test=
     if created and VERBOSE:
         print("BOOK TYPE OBJECT CREATED:", book_type_obj)
 
+    # Create / get the ID of the generic relation between a part and a whole
+    part_of_obj, created = RelationType.objects.get_or_create(
+        code="PARTOF",
+        name="is part of",
+        name_inverted="has part",
+        descr="Generic relation between a part and a whole",
+        entities=""
+    )
+
     version_codes_d = dict()
     fieldnames = ['versionUri', 'date', 
                   'author_ar', 'author_lat', 'book', 'title_ar', 'title_lat', 
-                  'ed_info', 'id', 'status', 'tok_length', 'url', 'tags', 
-                  'author_from_uri', 'author_lat_shuhra', 'author_lat_full_name', 'char_length']
+                  'ed_info', 'id', 'status', 'tok_length', 
+                  'url', 'tags', 
+                  'author_from_uri', 'author_lat_shuhra', 'author_lat_full_name', 
+                  'char_length']
     if int(release_info["release_code"].split(".")[-1]) >= 9:
-        fieldnames = ['versionUri', 'language', 'subcorpus', 'uncorrected_OCR', 'date',
-                      'author_ar', 'author_lat', 'book', 'title_ar', 'title_lat',
-                      'ed_info', 'id', 'status', 'tok_length', 'char_length', 'url', 'tags', 
+        fieldnames = ['versionUri', 
+                       'language','subcorpus', 'uncorrected_OCR',                                  # not in previous releases!
+                      'date', 'author_ar', 'author_lat', 'book', 'title_ar', 'title_lat',
+                      'ed_info', 'id', 'status', 'tok_length', 
+                      'char_length',                                                               # different order in previous releases!
+                      'url', 'tags', 
                       'author_from_uri', 'author_lat_shuhra', 'author_lat_full_name', 
-                      'city_ar', 'city_lat', 'institution_ar', 'institution_lat', 'shelfmark', 'catalog_ref', 'parts']
+                      'city_ar', 'city_lat', 'institution_ar', 'institution_lat',                  # not in previous releases!
+                      'shelfmark', 'catalog_ref', 'parts']                                         # not in previous releases!
     with open(meta_fp, 'r', encoding='utf-8') as f:
         reader = csv.DictReader(f, fieldnames=fieldnames, delimiter='\t')
         header = next(reader)
@@ -727,167 +1273,172 @@ def upload_release_meta(meta_fp, base_url, release_info, meta_upload=True, test=
             if not meta_upload:
                 continue
 
-            # read in the metadata for a version and format it:
-            record = format_fields(version_data, base_url)
-
             # for tests, only upload the metadata for authors 
             # between 300 and 325
             if test:
-                if not record["date"]:
+                #if not version_data["date"]:
+                #    continue
+                if version_data["date"] and (int(version_data["date"]) < 310 or int(version_data["date"]) > 310):
                     continue
-                elif record["date"] < 300 or record["date"] > 325:
-                    continue
 
-            # check if the version uri is already in the database:
+            # read in the metadata for a version and format it:
+            record = format_fields(version_data, base_url)
+            print(version_data["versionUri"])
 
-            #if True:  # TO DO replace with the try... except... block when folding in Versions:
-            try:
-                vm = Version.objects.get(
-                    version_uri=record['version_uri']
-                )
-            except Version.DoesNotExist:
-                if VERBOSE:
-                    print(record['version_uri'], "does not exist in the database")
+            if version_data["versionUri"].startswith("MS"):
+                upload_ms_corpus_meta(record, authorship_obj, release_obj, part_of_obj, failed_dates)
+            else:
+                upload_book_corpus_meta(record, authorship_obj, book_type_obj, release_obj, failed_dates)
+            # # check if the version uri is already in the database:
 
-                # if not, check if the text author_uri is in the database:
+            # #if True:  # TO DO replace with the try... except... block when folding in Versions:
+            # try:
+            #     vm = Version.objects.get(
+            #         version_uri=record['version_uri']
+            #     )
+            # except Version.DoesNotExist:
+            #     if VERBOSE:
+            #         print(record['version_uri'], "does not exist in the database")
 
-                try:
-                    am = Author.objects.get(
-                        author_uri=record['author_uri']
-                    )
-                    if VERBOSE:
-                        print("but author does:", record['author_uri'])
-                except:
-                    if VERBOSE:
-                        print("Author URI not in database either:", record['author_uri'])
+            #     # if not, check if the text author_uri is in the database:
 
-                    # the author is not yet in the database! Create a new author object:
+            #     try:
+            #         am = Author.objects.get(
+            #             author_uri=record['author_uri']
+            #         )
+            #         if VERBOSE:
+            #             print("but author does:", record['author_uri'])
+            #     except:
+            #         if VERBOSE:
+            #             print("Author URI not in database either:", record['author_uri'])
 
-                    am, am_created = Author.objects.get_or_create(
-                        author_uri=record['author_uri'],
-                        tags=record['author_tags']
-                        # do not upload bibliography and notes
-                    )
-                    if am_created and VERBOSE:
-                        print("-> created", record['author_uri'])
+            #         # the author is not yet in the database! Create a new author object:
+
+            #         am, am_created = Author.objects.get_or_create(
+            #             author_uri=record['author_uri'],
+            #             tags=record['author_tags']
+            #             # do not upload bibliography and notes
+            #         )
+            #         if am_created and VERBOSE:
+            #             print("-> created", record['author_uri'])
                 
-                # Add names to the author object:
-                add_author_names(am, record)
+            #     # Add names to the author object:
+            #     add_author_names(am, record)
                 
-                # add dates related to the author:
-                # first, create the date itself: 
-                date_obj = get_or_create_date(
-                    date_type_slug="death_date",
-                    calendar_slug="hijri",
-                    date_str=record['author_uri'][:4],
-                    year=record['date'],
-                    precision="year",
-                    source="URI",
-                )
-                # then, add the link to the author:
-                if date_obj:
-                    DateLink.objects.get_or_create(date=date_obj, author=am)
-                else:
-                    failed_dates.add(record['author_uri'][:4])
+            #     # add dates related to the author:
+            #     # first, create the date itself: 
+            #     date_obj = get_or_create_date(
+            #         date_type_slug="death_date",
+            #         calendar_slug="hijri",
+            #         date_str=record['author_uri'][:4],
+            #         year=record['date'],
+            #         precision="year",
+            #         source="URI",
+            #     )
+            #     # then, add the link to the author:
+            #     if date_obj:
+            #         DateLink.objects.get_or_create(date=date_obj, author=am)
+            #     else:
+            #         failed_dates.add(record['author_uri'][:4])
 
 
-                # the author is now in the database, check if the text exists:
+            #     # the author is now in the database, check if the text exists:
                 
-                try:
-                    tm = Text.objects.get(
-                        text_uri=record['text_uri']
-                    )
-                    if VERBOSE:
-                        print("but text does:", record['text_uri'])
-                except: 
-                    # the text is not yet in the database! Create a new text object:
-                    if VERBOSE:
-                        print("Text URI not in database either:", record['text_uri'])
-                    tm, tm_created = Text.objects.update_or_create(
-                        text_uri=record["text_uri"],
-                        #author=am,  # we add the author(s) with link_book_to_author
-                        defaults=dict(
-                            tags=record["text_tags"]
-                        )
-                    )
-                    if tm_created and VERBOSE:
-                        print("-> created", record['text_uri'])
+            #     try:
+            #         tm = Text.objects.get(
+            #             text_uri=record['text_uri']
+            #         )
+            #         if VERBOSE:
+            #             print("but text does:", record['text_uri'])
+            #     except: 
+            #         # the text is not yet in the database! Create a new text object:
+            #         if VERBOSE:
+            #             print("Text URI not in database either:", record['text_uri'])
+            #         tm, tm_created = Text.objects.update_or_create(
+            #             text_uri=record["text_uri"],
+            #             #author=am,  # we add the author(s) with link_book_to_author
+            #             defaults=dict(
+            #                 tags=record["text_tags"]
+            #             )
+            #         )
+            #         if tm_created and VERBOSE:
+            #             print("-> created", record['text_uri'])
                 
-                link_book_to_author(tm, am, authorship_obj, authority="URI")
-                link_book_to_titles(tm, record)
-                add_book_type(tm, book_type_obj, source="URI")
+            #     link_book_to_author(tm, am, authorship_obj, authority="URI")
+            #     link_book_to_titles(tm, record)
+            #     add_book_type(tm, book_type_obj, source="URI")
 
 
-                # now we are sure the author and text exist in the database, create a new version object:
+            #     # now we are sure the author and text exist in the database, create a new version object:
 
-                # (but first, we check if the edition meta object exists or create it)
+            #     # (but first, we check if the edition meta object exists or create it)
 
-                try:
-                    em = Edition.objects.filter(
-                        text=tm,
-                        ed_info=record['ed_info']
-                    )[0]  # more than one edition with the same query criteria may exist!; 
-                    # NB: .first() returns None if none exists, so it will not trigger the exception
-                    if VERBOSE:
-                        print("Edition does exist")
-                        print("em:", em)
-                        print()
-                except: 
-                    if VERBOSE:
-                        print("Neither does the edition exist")
-
-
-
-                    em, em_created = Edition.objects.update_or_create(
-                        text=tm,
-                        ed_info=record["ed_info"],
-                    )
-                    if em_created and VERBOSE:
-                        print("-> Created Edition object")
-
-                # now create the new version object:
-
-                # upload the collection code if it doesn't exist yet:
-                cm, cm_created = SourceCollectionDetails.objects.get_or_create(
-                    code=record["collection_code"]
-                )
-
-                if "part_of" in record:
-                    whole_obj = Version.objects.get(version_uri=record["part_of"])
-                else:
-                    whole_obj = None
-
-                vm, vm_created = Version.objects.update_or_create(
-                    version_code=record["version_code"],
-                    version_uri=record["version_uri"],
-                    text=tm,
-                    language=record["version_lang"],
-                    defaults=dict(
-                        edition=em,
-                        source_coll=cm,
-                        part_of=whole_obj
-                    )
-                )     
-                if vm_created and VERBOSE:
-                    print("-> created", record['version_uri'])              
+            #     try:
+            #         em = Edition.objects.filter(
+            #             text=tm,
+            #             ed_info=record['ed_info']
+            #         )[0]  # more than one edition with the same query criteria may exist!; 
+            #         # NB: .first() returns None if none exists, so it will not trigger the exception
+            #         if VERBOSE:
+            #             print("Edition does exist")
+            #             print("em:", em)
+            #             print()
+            #     except: 
+            #         if VERBOSE:
+            #             print("Neither does the edition exist")
 
 
-            # now that we know that the version object is in the database, 
-            # create or update the ReleaseVersion object:
-            rvm, rvm_created = ReleaseVersion.objects.update_or_create(
-                release_info=release_obj,
-                version=vm,
-                defaults=dict(
-                    url=record["url"],
-                    char_length=record["char_length"],
-                    tok_length=record["tok_length"],
-                    analysis_priority=record["analysis_priority"],
-                    annotation_status=record["annotation_status"],
-                    tags=record["version_tags"]
-                )
-            )
-            if rvm_created and VERBOSE:
-                print("NEW RELEASE VERSION OBJECT CREATED:", rvm)
+
+            #         em, em_created = Edition.objects.update_or_create(
+            #             text=tm,
+            #             ed_info=record["ed_info"],
+            #         )
+            #         if em_created and VERBOSE:
+            #             print("-> Created Edition object")
+
+            #     # now create the new version object:
+
+            #     # upload the collection code if it doesn't exist yet:
+            #     cm, cm_created = SourceCollectionDetails.objects.get_or_create(
+            #         code=record["collection_code"]
+            #     )
+
+            #     if "part_of" in record:
+            #         whole_obj = Version.objects.get(version_uri=record["part_of"])
+            #     else:
+            #         whole_obj = None
+
+            #     vm, vm_created = Version.objects.update_or_create(
+            #         version_code=record["version_code"],
+            #         version_uri=record["version_uri"],
+            #         text=tm,
+            #         language=record["version_lang"],
+            #         defaults=dict(
+            #             edition=em,
+            #             source_coll=cm,
+            #             part_of=whole_obj
+            #         )
+            #     )     
+            #     if vm_created and VERBOSE:
+            #         print("-> created", record['version_uri'])              
+
+
+            # # now that we know that the version object is in the database, 
+            # # create or update the ReleaseVersion object:
+            # rvm, rvm_created = ReleaseVersion.objects.update_or_create(
+            #     release_info=release_obj,
+            #     version=vm,
+            #     defaults=dict(
+            #         url=record["url"],
+            #         char_length=record["char_length"],
+            #         tok_length=record["tok_length"],
+            #         analysis_priority=record["analysis_priority"],
+            #         annotation_status=record["annotation_status"],
+            #         tags=record["version_tags"]
+            #     )
+            # )
+            # if rvm_created and VERBOSE:
+            #     print("NEW RELEASE VERSION OBJECT CREATED:", rvm)
     if failed_dates:
         print("failed dates:")
     for date in failed_dates:
