@@ -1,7 +1,7 @@
 # TO DO: add a tags model!
 
 from django.db import models
-from django.db.models import Q
+from django.db.models import Q, Case, When, Value, IntegerField, ExpressionWrapper
 import datetime
 import convertdate
 
@@ -334,125 +334,138 @@ class DateLink(models.Model):
 # MANY TO MANY HELPERS: EXTERNAL IDENTIFIERS #
 ##############################################
 
-# class IdentifierProvider(models.Model):
-#     """
-#     The namespace/provider for authority control: VIAF, Wikidata, GeoNames, ISNI, ...
-#     """
-#     slug = models.SlugField(unique=True)   # e.g. "viaf", "wikidata", "geonames"
-#     name = models.CharField(max_length=100)
-#     # optionally, provide the base link that, combined with the ID,
-#     # gives you a direct link to the object: e.g. https://www.wikidata.org/wiki/
-#     base_url = models.URLField(blank=True) 
+class IdentifierProvider(models.Model):
+    """
+    The namespace/provider for authority control: VIAF, Wikidata, GeoNames, ISNI, ...
+    """
+    slug = models.SlugField(unique=True)   # e.g. "viaf", "wikidata", "geonames"
+    name = models.CharField(max_length=100)
+    # optionally, provide the base link that, combined with the ID,
+    # gives you a direct link to the object: e.g. https://www.wikidata.org/wiki/
+    base_url = models.URLField(blank=True) 
 
-#     def __str__(self):
-#         return self.name
+    def __str__(self):
+        return self.name
 
-# class ExternalID(models.Model):
-#     """External identifier (e.g. Wikidata QID, VIAF id, GeoNames id)"""
-#     provider = models.ForeignKey(IdentifierProvider,on_delete=models.PROTECT,related_name="external_ids")
-#     external_id = models.CharField(max_length=255)
+class ExternalID(models.Model):
+    """External identifier (e.g. Wikidata QID, VIAF id, GeoNames id)"""
+    provider = models.ForeignKey(IdentifierProvider,on_delete=models.PROTECT,related_name="external_ids")
+    external_id = models.CharField(max_length=255)
 
-#     class Meta:
-#         indexes = [
-#             models.Index(fields=["provider", "external_id"]),
-#             models.Index(fields=["external_id"]),
-#         ]
-#         constraints = [
-#             models.UniqueConstraint(
-#                 fields=["provider", "external_id"],
-#                 name="uniq_provider_external_id",
-#             )
-#         ]
+    @property
+    def url(self):
+        """Generate the direct link to the object if a base_url is provided"""
+        if self.provider.base_url:
+            return f"{self.provider.base_url}{self.external_id}"
+        return ""
 
-#     def __str__(self):
-#         return f"{self.provider.slug}:{self.external_id}"
+    class Meta:
+        indexes = [
+            models.Index(fields=["provider", "external_id"]),
+            models.Index(fields=["external_id"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["provider", "external_id"],
+                name="uniq_provider_external_id",
+            )
+        ]
 
-#     @property
-#     def url(self):
-#         if self.provider.base_url:
-#             return f"{self.provider.base_url}{self.external_id}"
-#         return ""
+    def __str__(self):
+        return f"{self.provider.slug}:{self.external_id}"
 
+class ExternalIDLink(models.Model):
+    """
+    Single link table: links an ExternalID to exactly one of
+    (Author, Text, ManuscriptHolding, Place, Edition, Version, Country).
+    """
+    identifier = models.ForeignKey("ExternalID", on_delete=models.CASCADE, related_name="links")
 
-# class ExternalIDLink(models.Model):
-#     """
-#     Single link table: links an ExternalID to exactly one of
-#     (Author, Text, ManuscriptHolding, Place, Edition, Version, Country).
-#     """
-#     identifier = models.ForeignKey("ExternalID", on_delete=models.CASCADE, related_name="links")
+    # Exactly ONE of these must be set:
+    author = models.ForeignKey("Author", on_delete=models.CASCADE, 
+                               null=True, blank=True, related_name="external_id_links")
+    text = models.ForeignKey("Text", on_delete=models.CASCADE, 
+                             null=True, blank=True, related_name="external_id_links")
+    manuscript_holding = models.ForeignKey("ManuscriptHolding", on_delete=models.CASCADE, 
+                                           null=True, blank=True, related_name="external_id_links")
+    manuscript = models.ForeignKey("Manuscript", on_delete=models.CASCADE,
+                                 null=True, blank=True, related_name="external_id_links")
+    place = models.ForeignKey("Place", on_delete=models.CASCADE, 
+                              null=True, blank=True, related_name="external_id_links")
+    edition = models.ForeignKey("Edition", on_delete=models.CASCADE, 
+                                null=True, blank=True, related_name="external_id_links")
+    version = models.ForeignKey("Version", on_delete=models.CASCADE, 
+                                null=True, blank=True, related_name="external_id_links")
+    
 
-#     # Exactly ONE of these must be set:
-#     author = models.ForeignKey("Author", on_delete=models.CASCADE, 
-#                                null=True, blank=True, related_name="external_id_links")
-#     text = models.ForeignKey("Text", on_delete=models.CASCADE, 
-#                              null=True, blank=True, related_name="external_id_links")
-#     manuscript_holding = models.ForeignKey("ManuscriptHolding", on_delete=models.CASCADE, 
-#                                            null=True, blank=True, related_name="external_id_links")
-#     place = models.ForeignKey("Place", on_delete=models.CASCADE, 
-#                               null=True, blank=True, related_name="external_id_links")
-#     edition = models.ForeignKey("Edition", on_delete=models.CASCADE, 
-#                                 null=True, blank=True, related_name="external_id_links")
-#     version = models.ForeignKey("Version", on_delete=models.CASCADE, 
-#                                 null=True, blank=True, related_name="external_id_links")
-#     country = models.ForeignKey("Country", on_delete=models.CASCADE,
-#                                  null=True, blank=True, related_name="external_id_links")
+    #is_preferred = models.BooleanField(default=False)
+    #source = models.CharField(max_length=255, blank=True)
 
-#     is_preferred = models.BooleanField(default=False)
-#     source = models.CharField(max_length=255, blank=True)
+    class Meta:
+        indexes = [
+            models.Index(fields=["identifier"]),
+            models.Index(fields=["author"]),
+            models.Index(fields=["text"]),
+            models.Index(fields=["manuscript_holding"]),
+            models.Index(fields=["place"]),
+            models.Index(fields=["edition"]),
+            models.Index(fields=["version"]),
+            models.Index(fields=["manuscript"]),
+        ]
+        constraints = [
+            # Enforce exactly one target object
+            models.CheckConstraint(
+                name="externalid_exactly_one_target",
+                # condition=ExpressionWrapper(
+                #     (
+                #         Case(When(author__isnull=False, then=Value(1)), default=Value(0), output_field=IntegerField()) +
+                #         Case(When(text__isnull=False, then=Value(1)), default=Value(0), output_field=IntegerField()) +
+                #         Case(When(version__isnull=False, then=Value(1)), default=Value(0), output_field=IntegerField()) +
+                #         Case(When(edition__isnull=False, then=Value(1)), default=Value(0), output_field=IntegerField()) +
+                #         Case(When(manuscript_holding__isnull=False, then=Value(1)), default=Value(0), output_field=IntegerField()) +
+                #         Case(When(place__isnull=False, then=Value(1)), default=Value(0), output_field=IntegerField()) +
+                #         Case(When(manuscript__isnull=False, then=Value(1)), default=Value(0), output_field=IntegerField())
+                #     ) == Value(1),
+                #     output_field=models.BooleanField()
+                # )
+                condition=(
+                    # author only
+                    (Q(author__isnull=False) & Q(text__isnull=True) & Q(manuscript_holding__isnull=True) & Q(place__isnull=True)
+                     & Q(edition__isnull=True) & Q(version__isnull=True) & Q(manuscript__isnull=True))
+                    |
+                    # text only
+                    (Q(author__isnull=True) & Q(text__isnull=False) & Q(manuscript_holding__isnull=True) & Q(place__isnull=True)
+                     & Q(edition__isnull=True) & Q(version__isnull=True) & Q(manuscript__isnull=True))
+                    |
+                    # manuscript_holding only
+                    (Q(author__isnull=True) & Q(text__isnull=True) & Q(manuscript_holding__isnull=False) & Q(place__isnull=True)
+                     & Q(edition__isnull=True) & Q(version__isnull=True) & Q(manuscript__isnull=True))
+                    |
+                    # place only
+                    (Q(author__isnull=True) & Q(text__isnull=True) & Q(manuscript_holding__isnull=True) & Q(place__isnull=False)
+                     & Q(edition__isnull=True) & Q(version__isnull=True) & Q(manuscript__isnull=True))
+                    |
+                    # edition only
+                    (Q(author__isnull=True) & Q(text__isnull=True) & Q(manuscript_holding__isnull=True) & Q(place__isnull=True)
+                     & Q(edition__isnull=False) & Q(version__isnull=True) & Q(manuscript__isnull=True))
+                    |
+                    # version only
+                    (Q(author__isnull=True) & Q(text__isnull=True) & Q(manuscript_holding__isnull=True) & Q(place__isnull=True)
+                     & Q(edition__isnull=True) & Q(version__isnull=False) & Q(manuscript__isnull=True))
+                    |
+                    # country only
+                    (Q(author__isnull=True) & Q(text__isnull=True) & Q(manuscript_holding__isnull=True) & Q(place__isnull=True)
+                     & Q(edition__isnull=True) & Q(version__isnull=True) & Q(manuscript__isnull=False))
+                ),
+            ),
+        ]
 
-#     class Meta:
-#         indexes = [
-#             models.Index(fields=["identifier"]),
-#             models.Index(fields=["author"]),
-#             models.Index(fields=["text"]),
-#             models.Index(fields=["manuscript_holding"]),
-#             models.Index(fields=["place"]),
-#             models.Index(fields=["edition"]),
-#             models.Index(fields=["version"]),
-#             models.Index(fields=["country"]),
-#         ]
-#         constraints = [
-#             # Enforce exactly one target object
-#             models.CheckConstraint(
-#                 name="externalid_exactly_one_target",
-#                 condition=(    # deprecated: new argument name is `condition`
-#                     # author only
-#                     (Q(author__isnull=False) & Q(text__isnull=True) & Q(manuscript_holding__isnull=True) & Q(place__isnull=True)
-#                      & Q(edition__isnull=True) & Q(version__isnull=True) & Q(country__isnull=True))
-#                     |
-#                     # text only
-#                     (Q(author__isnull=True) & Q(text__isnull=False) & Q(manuscript_holding__isnull=True) & Q(place__isnull=True)
-#                      & Q(edition__isnull=True) & Q(version__isnull=True) & Q(country__isnull=True))
-#                     |
-#                     # manuscript_holding only
-#                     (Q(author__isnull=True) & Q(text__isnull=True) & Q(manuscript_holding__isnull=False) & Q(place__isnull=True)
-#                      & Q(edition__isnull=True) & Q(version__isnull=True) & Q(country__isnull=True))
-#                     |
-#                     # place only
-#                     (Q(author__isnull=True) & Q(text__isnull=True) & Q(manuscript_holding__isnull=True) & Q(place__isnull=False)
-#                      & Q(edition__isnull=True) & Q(version__isnull=True) & Q(country__isnull=True))
-#                     |
-#                     # edition only
-#                     (Q(author__isnull=True) & Q(text__isnull=True) & Q(manuscript_holding__isnull=True) & Q(place__isnull=True)
-#                      & Q(edition__isnull=False) & Q(version__isnull=True) & Q(country__isnull=True))
-#                     |
-#                     # version only
-#                     (Q(author__isnull=True) & Q(text__isnull=True) & Q(manuscript_holding__isnull=True) & Q(place__isnull=True)
-#                      & Q(edition__isnull=True) & Q(version__isnull=False) & Q(country__isnull=True))
-#                     |
-#                     # country only
-#                     (Q(author__isnull=True) & Q(text__isnull=True) & Q(manuscript_holding__isnull=True) & Q(place__isnull=True)
-#                      & Q(edition__isnull=True) & Q(version__isnull=True) & Q(country__isnull=False))
-#                 ),
-#             ),
-#         ]
-
-#     def __str__(self):
-#         target = (
-#             self.author or self.text or self.manuscript_holding or
-#             self.place or self.edition or self.version or self.country
-#         )
-#         return f"{target} <-> {self.identifier}"
+    def __str__(self):
+        target = (
+            self.author or self.text or self.manuscript_holding or
+            self.place or self.edition or self.version or self.country
+        )
+        return f"{target} <-> {self.identifier}"
 
 ##################################
 # MANY TO MANY HELPERS: TEXTTYPE #
@@ -496,7 +509,7 @@ class TextTypeLink(models.Model):
             # Enforce exactly one target object
             models.CheckConstraint(
                 name="texttype_exactly_one_target",
-                condition=(   # deprecated: new argument name is `condition`
+                condition=( 
                     (Q(text__isnull=False) & Q(manuscript__isnull=True))
                     | (Q(text__isnull=True) & Q(manuscript__isnull=False))
                 ),
@@ -550,7 +563,7 @@ class TextTypeLink(models.Model):
 #             # Enforce exactly one target object
 #             models.CheckConstraint(
 #                 name="authorship_exactly_one_target",
-#                 condition=(  # deprecated: new argument name is `condition`
+#                 condition=(  
 #                     (Q(text__isnull=False) & Q(edition__isnull=True) & Q(manuscript__isnull=True))
 #                     | (Q(text__isnull=True) & Q(edition__isnull=False) & Q(manuscript__isnull=True))
 #                     | (Q(text__isnull=True) & Q(edition__isnull=True) & Q(manuscript__isnull=False))
@@ -633,7 +646,7 @@ class TextTypeLink(models.Model):
 #             # Exactly one target object
 #             models.CheckConstraint(
 #                 name="placelink_exactly_one_target",
-#                 condition=(  # deprecated: new argument name is `condition`
+#                 condition=(  
 #                     (Q(author__isnull=False) & Q(text__isnull=True) & Q(edition__isnull=True) & Q(manuscript_holding__isnull=True) & Q(manuscript__isnull=True))
 #                     | (Q(author__isnull=True) & Q(text__isnull=False) & Q(edition__isnull=True) & Q(manuscript_holding__isnull=True) & Q(manuscript__isnull=True))
 #                     | (Q(author__isnull=True) & Q(text__isnull=True) & Q(edition__isnull=False) & Q(manuscript_holding__isnull=True) & Q(manuscript__isnull=True))
@@ -669,10 +682,9 @@ class Author(models.Model):
     bibliography = models.TextField(null=False, blank=True)
     notes = models.TextField(null=False, blank=True)
 
-    # BUILDUP: UNCOMMENT:
-    # external_ids = models.ManyToManyField(ExternalID, through=ExternalIDLink,
-    #                 through_fields=("identifier", "author"),  
-    #                 related_name="authors", blank=True)
+    external_ids = models.ManyToManyField(ExternalID, through=ExternalIDLink,
+                    through_fields=("author", "identifier"),  
+                    related_name="authors", blank=True)
 
     # Create a relationship between two persons (e.g., person A is a student of person B)
     # using a many-to-many field:
@@ -735,11 +747,10 @@ class Text(models.Model):
     tags =  models.CharField(max_length=255, blank=True)
     bibliography = models.TextField(null=False, blank=True)
     notes = models.TextField(null=False, blank=True)
-    # BUILDUP: UNCOMMENT:
-    # external_ids = models.ManyToManyField(ExternalID, through=ExternalIDLink,
-    #     through_fields=("identifier", "text"),  
-    #     related_name="texts", blank=True
-    # )
+    external_ids = models.ManyToManyField(ExternalID, through=ExternalIDLink,
+        through_fields=("text", "identifier"),  
+        related_name="texts", blank=True
+    )
 
     # Create a relationship between two texts (e.g., text A is a commentary on text B)
     # using a many-to-many field:
@@ -838,10 +849,10 @@ class Version(models.Model):
         on_delete=models.DO_NOTHING, blank=True, null=True)
     part_of = models.ForeignKey("self", related_name='parts', related_query_name="part", 
                                 on_delete=models.DO_NOTHING, blank=True, null=True)
-    # BUILDUP: UNCOMMENT:
-    # external_ids = models.ManyToManyField(ExternalID, through=ExternalIDLink,
-    #                 through_fields=("identifier", "version"),  
-    #                 related_name="versions", blank=True)
+    external_ids = models.ManyToManyField(ExternalID, through=ExternalIDLink,
+                    through_fields=("version", "identifier"),  
+                    related_name="versions", blank=True)
+
 
     def __str__(self):
         return self.version_uri
@@ -868,10 +879,9 @@ class Edition(models.Model):
     #     related_name='editions',
     #     related_query_name="edition", on_delete=models.CASCADE)
     
-    # BUILDUP: UNCOMMENT:
-    # external_ids = models.ManyToManyField(ExternalID, through=ExternalIDLink,
-    #                 through_fields=("identifier", "edition"),  
-    #                 related_name="editions", blank=True)
+    external_ids = models.ManyToManyField(ExternalID, through=ExternalIDLink,
+                    through_fields=("edition", "identifier"),  
+                    related_name="editions", blank=True)
     
     def __str__(self):
         return self.ed_info
@@ -887,10 +897,9 @@ class ManuscriptHolding(models.Model):
                                 on_delete=models.CASCADE, null=True, blank=True)
     city = models.ForeignKey("Place", related_name="city_manuscript_holdings", 
                              on_delete=models.CASCADE, null=True, blank=True)
-    # BUILDUP: UNCOMMENT:
-    # external_ids = models.ManyToManyField(ExternalID, through=ExternalIDLink,
-    #                 through_fields=("identifier", "manuscript_holding"),  
-    #                 related_name="manuscript_holdings", blank=True)
+    external_ids = models.ManyToManyField(ExternalID, through=ExternalIDLink,
+                    through_fields=("manuscript_holding", "identifier"),
+                    related_name="manuscript_holdings", blank=True)
     notes = models.TextField(null=False, blank=True)
 
     def __str__(self):
@@ -919,10 +928,10 @@ class Manuscript(models.Model):
     lines_per_page = models.CharField(max_length=255, blank=True)
     stamps = models.TextField(blank=True)
     volumes = models.CharField(max_length=100, blank=True)
-    # # BUILD UP: UNCOMMENT:
-    # external_ids = models.ManyToManyField(ExternalID, through=ExternalIDLink,
-    #     through_fields=("identifier", "country"),  
-    #     related_name="countries", blank=True)
+    external_ids = models.ManyToManyField(ExternalID,                                   
+        through=ExternalIDLink,
+        through_fields=("manuscript", "identifier"),  
+        related_name="manuscripts", blank=True)
     manuscript_types = models.ManyToManyField(TextType, 
         through=TextTypeLink,
         through_fields=("manuscript", "text_type"), 
@@ -970,10 +979,9 @@ class Manuscript(models.Model):
 
 class Place(models.Model):
     """Describes a place in the database."""
-    # BUILDUP: UNCOMMENT:
-    # external_ids = models.ManyToManyField(ExternalID, through=ExternalIDLink,
-    #                 through_fields=("identifier", "place"),  
-    #                 related_name="places", blank=True)
+    external_ids = models.ManyToManyField(ExternalID, through=ExternalIDLink,
+                    through_fields=("place", "identifier"),  
+                    related_name="places", blank=True)
     # # old key:
     # #thuraya_uri = models.CharField(max_length=100, blank=True)
     code = models.CharField(max_length=100, blank=True)

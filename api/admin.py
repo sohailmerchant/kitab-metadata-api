@@ -6,9 +6,9 @@ from .models import Author, RelationType, A2BRelation, ReleaseInfo,\
     Date, DateLink, Calendar, DateType, ObjectName, ObjectNameLink,\
     TextType, TextTypeLink, Text, Edition, \
     Version, SourceCollectionDetails, ReleaseVersion, Contributor,\
-    ManuscriptHolding, Place, Manuscript
-    #, AuthorshipRole, AuthorshipRoleLink , IdentifierProvider, \
-    #ExternalID, ExternalIDLink, \
+    ManuscriptHolding, Place, Manuscript, \
+    IdentifierProvider, ExternalID, ExternalIDLink
+    #, AuthorshipRole, AuthorshipRoleLink, \
     #AuthorshipRole, AuthorshipRoleLink, PlaceRelationType, PlaceLink, \
     #Country, \
     #TextReuseStats, CorpusInsights, \
@@ -21,9 +21,9 @@ admin.site.register(Calendar)
 admin.site.register(DateType)
 admin.site.register(Date)
 admin.site.register(DateLink)
-##admin.site.register(IdentifierProvider)
-##admin.site.register(ExternalID)
-##admin.site.register(ExternalIDLink)
+admin.site.register(IdentifierProvider)
+admin.site.register(ExternalID)
+admin.site.register(ExternalIDLink)
 admin.site.register(TextType)
 admin.site.register(TextTypeLink)
 #admin.site.register(AuthorshipRole)

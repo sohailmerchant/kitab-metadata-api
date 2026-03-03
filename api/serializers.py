@@ -35,7 +35,7 @@ from rest_framework import serializers
 from .models import Author, RelationType, A2BRelation, ReleaseInfo, Date, \
                     ObjectName, ObjectNameLink, \
                     Text, Version, ReleaseVersion, SourceCollectionDetails, Edition, \
-                    ManuscriptHolding, Place, Manuscript
+                    ManuscriptHolding, Place, Manuscript, ExternalID, ExternalIDLink
                     # DateLink, AuthorshipRoleLink, \
                     # CorpusInsights, TextReuseStats, \
                     # GitHubIssue, VersionwiseReuseStats
@@ -85,6 +85,19 @@ class PreferredNamesByLanguageField(serializers.Field):
 # SERIALIZERS #
 ###############
 
+class ExternalIDSerializer(serializers.ModelSerializer):
+    #url = serializers.Field()
+    url = serializers.SerializerMethodField(read_only=True)
+    provider = serializers.SlugRelatedField(read_only=True, slug_field="slug")
+    # TODO: add to_representation to make the url field work
+
+    def get_url(self, object):
+        return object.url
+
+    class Meta:
+        model = ExternalID
+        fields = ('provider', 'external_id', 'url')
+
 class ObjectNameSerializer(FlexFieldsModelSerializer):
     class Meta:
         model = ObjectName
@@ -94,6 +107,16 @@ class ObjectNameSerializer(FlexFieldsModelSerializer):
 class ShallowPlaceSerializer(serializers.ModelSerializer):
     """Serialize only one name per language"""
     display_names = PreferredNamesByLanguageField(source="object_name_links", read_only=True)
+    external_ids = serializers.SerializerMethodField()
+
+    def get_external_ids(self, instance):
+        qs = (ExternalIDLink.objects
+              .filter(place=instance)
+              .select_related("identifier")
+        )
+        ids = [link.identifier for link in qs]
+        return ExternalIDSerializer(ids, many=True, context=self.context).data
+
 
     # display_names = serializers.SerializerMethodField()
 
@@ -125,7 +148,7 @@ class ShallowPlaceSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Place
-        fields = ("id", "code", "display_names")  # add loc_uri if you have one
+        fields = ("id", "code", "display_names", "external_ids") 
 
 class ShallowCountrySerializer(ShallowPlaceSerializer):
     """Serialize only one name per language"""
@@ -238,6 +261,16 @@ class ShallowEditionSerializer(FlexFieldsModelSerializer):
     Keeps legacy keys: 'editor' and 'edition_date'.
     If you want to serialize the full Edition model, use the EditionSerializer"""
     edition_date = serializers.SerializerMethodField()
+    external_ids = serializers.SerializerMethodField()
+
+    def get_external_ids(self, instance):
+        qs = (ExternalIDLink.objects
+              .filter(edition=instance)
+              .select_related("identifier")
+        )
+        ids = [link.identifier for link in qs]
+        return ExternalIDSerializer(ids, many=True, context=self.context).data
+
 
     def get_edition_date(self, obj):
         dates = list(
@@ -246,25 +279,24 @@ class ShallowEditionSerializer(FlexFieldsModelSerializer):
         )
         return ";".join(dates)
         
-    class Meta:
-        model = Edition
-        fields = (
-            "id",
-            "editor",
-            "edition_place",
-            "publisher",
-            "edition_date",
-            "ed_info",
-            "pdf_url",
-            # BUILDUP: UNCOMMENT:
-            # "worldcat_url",
-        )
+    # class Meta:
+    #     model = Edition
+    #     fields = (
+    #         "id",
+    #         "editor",
+    #         "edition_place",
+    #         "publisher",
+    #         "edition_date",
+    #         "ed_info",
+    #         "pdf_url",
+    #         "external_ids"
+    #     )
 
     class Meta:
         model = Edition
         # BUILDUP: UNCOMMENT:
         fields = ("id", "editor", "edition_place", "publisher", 
-                  "edition_date", "ed_info", "pdf_url")#, "worldcat_url")
+                  "edition_date", "ed_info", "pdf_url", "external_ids")
         depth = 1
 
 # BUILDUP: UNCOMMENT:
@@ -539,6 +571,15 @@ class TextSerializer(FlexFieldsModelSerializer):
     include_related_persons = True
     include_related_places = True
     versions = ShallowVersionSerializer(many=True, read_only=True)
+    external_ids = serializers.SerializerMethodField()
+
+    def get_external_ids(self, text_instance):
+        qs = (ExternalIDLink.objects
+              .filter(text=text_instance)
+              .select_related("identifier")
+        )
+        ids = [link.identifier for link in qs]
+        return ExternalIDSerializer(ids, many=True, context=self.context).data
 
     def serialize_titles(self, text_instance):
         """
@@ -723,7 +764,7 @@ class TextSerializer(FlexFieldsModelSerializer):
     class Meta:
         model = Text
         # TODO: add text types
-        fields = ("text_uri", "tags", "bibliography", "versions")
+        fields = ("text_uri", "tags", "bibliography", "versions", "external_ids")
         depth = 1
 
 class ShallowTextSerializer(TextSerializer):
@@ -802,6 +843,16 @@ class ManuscriptHoldingSerializer(FlexFieldsModelSerializer):
     city = ShallowPlaceSerializer(read_only=True)
     names = PreferredNamesByLanguageField(source="object_name_links", read_only=True)
     manuscripts = ShallowManuscriptSerializer(many=True, read_only=True)
+    external_ids = serializers.SerializerMethodField()
+
+    def get_external_ids(self, instance):
+        qs = (ExternalIDLink.objects
+              .filter(manuscript_holding=instance)
+              .select_related("identifier")
+        )
+        ids = [link.identifier for link in qs]
+        return ExternalIDSerializer(ids, many=True, context=self.context).data
+
 
     # def serialize_names(self, instance):
     #     """
@@ -839,7 +890,8 @@ class ManuscriptHoldingSerializer(FlexFieldsModelSerializer):
             "country",
             "city",
             "notes",
-            "manuscripts"
+            "manuscripts", 
+            "external_ids"
         )
 
 class ManuscriptSerializer(FlexFieldsModelSerializer):
@@ -850,6 +902,16 @@ class ManuscriptSerializer(FlexFieldsModelSerializer):
     include_related_editions = True
     transcriptions = ShallowVersionSerializer(many=True, read_only=True)
     manuscript_holding = ShallowManuscriptHoldingSerializer()
+    external_ids = serializers.SerializerMethodField()
+
+    def get_external_ids(self, instance):
+        qs = (ExternalIDLink.objects
+              .filter(manuscript=instance)
+              .select_related("identifier")
+        )
+        ids = [link.identifier for link in qs]
+        return ExternalIDSerializer(ids, many=True, context=self.context).data
+
 
     def serialize_titles(self, ms_instance):
         """
@@ -1036,7 +1098,7 @@ class ManuscriptSerializer(FlexFieldsModelSerializer):
     class Meta:
         model = Manuscript
         fields = ("manuscript_uri", "manuscript_holding", 
-                  "tags", "bibliography", "notes", "transcriptions")
+                  "tags", "bibliography", "notes", "transcriptions", "external_ids")
         depth = 1
 
 
@@ -1049,6 +1111,16 @@ class VersionSerializer(FlexFieldsModelSerializer):
     # BUILDUP: UNCOMMENT:
     edition = ShallowEditionSerializer(read_only=True)
     release_versions = ShallowReleaseVersionSerializer(read_only=True, many=True)
+    external_ids = serializers.SerializerMethodField()
+
+    def get_external_ids(self, instance):
+        qs = (ExternalIDLink.objects
+              .filter(version=instance)
+              .select_related("identifier")
+        )
+        ids = [link.identifier for link in qs]
+        return ExternalIDSerializer(ids, many=True, context=self.context).data
+
 
     def serialize_relations(self, version_instance):
         """serialize a version's parts 
@@ -1105,7 +1177,7 @@ class VersionSerializer(FlexFieldsModelSerializer):
         #fields = ("id", "version_code", "version_uri", "language", "text", "edition", 
         #          "release_versions", "part_of", "github_issues")
         fields = ("id", "version_code", "version_uri", "language", "text", "manuscript", "edition", 
-                  "release_versions", "part_of",)
+                  "release_versions", "part_of", "external_ids")
         depth = 3  # expand text and author metadata
 
 
@@ -1119,7 +1191,16 @@ class AuthorSerializer(FlexFieldsModelSerializer):
     include_related_texts = True
     include_related_persons = True
     include_related_places = True
-    
+    external_ids = serializers.SerializerMethodField()
+
+    def get_external_ids(self, person_instance):
+        qs = (ExternalIDLink.objects
+              .filter(author=person_instance)
+              .select_related("identifier")
+        )
+        ids = [link.identifier for link in qs]
+        return ExternalIDSerializer(ids, many=True, context=self.context).data
+
     def serialize_names(self, person_instance):
         """
         Create key-value pairs for the author's name and name elements;
@@ -1394,7 +1475,7 @@ class AuthorSerializer(FlexFieldsModelSerializer):
         #           "author_lat", "author_lat_prefered", "name_elements", 
         #           "texts", "date", "date_AH", "date_CE", "date_str", 
         #           "tags", "bibliography", "notes")
-        fields = ("id", "author_uri", "tags", "bibliography", "notes")
+        fields = ("id", "author_uri", "tags", "bibliography", "notes", "external_ids")
         # BUILDUP: UNCOMMENT:
         # depth = 3
 
@@ -1665,6 +1746,7 @@ class SourceCollectionDetailsSerializer(serializers.ModelSerializer):
         fields = ("__all__")
 
 class EditionSerializer(serializers.ModelSerializer):
+    
     class Meta:
         model = Edition
         depth = 4

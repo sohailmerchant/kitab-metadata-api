@@ -26,7 +26,8 @@ from api.models import Author, Text, Version, Edition, \
     Date, DateType, Calendar, DateLink,\
     ObjectName, ObjectNameLink, A2BRelation, RelationType, \
     TextType, TextTypeLink, ReleaseInfo, \
-    ManuscriptHolding, Place, Manuscript
+    ManuscriptHolding, Place, Manuscript, \
+    ExternalID, ExternalIDLink, IdentifierProvider
 from django.core.management.base import BaseCommand
 import re
 import datetime
@@ -638,6 +639,32 @@ def get_or_create_date(date_type_slug, calendar_slug, date_str,
         return None
     return obj
 
+def add_worldcat_id(edition_obj, record, worldcat_obj):
+    if "worldcat_links" not in record:
+        return
+    if record['worldcat_links'] == []:
+        return
+    for link in record['worldcat_links']:
+        try:
+            # get the numerical worldcat ID from the URL:
+            worldcat_id = re.findall(r"\d+", link)[-1]
+        except:
+            print("NO WORLDCAT ID FOUND in", link)
+            input("CONTINUE?")
+            return
+        
+        # create the external ID
+        id_obj, created = ExternalID.objects.get_or_create(
+            provider=worldcat_obj,
+            external_id=worldcat_id
+        )
+
+        # link the edition to the external ID:
+        rel, created = ExternalIDLink.objects.get_or_create(
+            identifier=id_obj,
+            edition=edition_obj
+        )
+
 
 
 def attach_dates_to_author(author, date_objs):
@@ -733,6 +760,16 @@ def format_fields(data, base_url):
     record['title_lat_prefered'] = titles_lat[0]
 
     record['ed_info'] = clean(data['ed_info'])
+    if "worldcat.org" in record['ed_info']:
+        ed_info = []
+        worldcat_links = []
+        for el in record['ed_info'].split(" :: "):
+            if "worldcat.org" in el:
+                worldcat_links.append(el)
+            elif el.strip():
+                ed_info.append(el)
+        record['ed_info'] = " :: ".join(ed_info)
+        record["worldcat_links"] = worldcat_links
     record['version_code'] = data['id']
 
     # check if the version is part of a text file that was split because of its size:
@@ -860,7 +897,7 @@ def get_or_create_author(record, failed_dates):
 
     return am
 
-def upload_book_corpus_meta(record, authorship_obj, book_type_obj, release_obj, failed_dates):
+def upload_book_corpus_meta(record, authorship_obj, book_type_obj, release_obj, worldcat_obj, failed_dates):
     # check if the version uri is already in the database:
 
     #if True:  # TO DO replace with the try... except... block when folding in Versions:
@@ -961,12 +998,12 @@ def upload_book_corpus_meta(record, authorship_obj, book_type_obj, release_obj, 
             if VERBOSE:
                 print("Neither does the edition exist")
 
-
-
             em, em_created = Edition.objects.update_or_create(
                 text=tm,
                 ed_info=record["ed_info"],
             )
+            # add worldcat link to external_ids:
+            add_worldcat_id(em, record, worldcat_obj)
             if em_created and VERBOSE:
                 print("-> Created Edition object")
 
@@ -1014,7 +1051,7 @@ def upload_book_corpus_meta(record, authorship_obj, book_type_obj, release_obj, 
     if rvm_created and VERBOSE:
         print("NEW RELEASE VERSION OBJECT CREATED:", rvm)
 
-def upload_ms_corpus_meta(record, authorship_obj, release_obj, part_of_obj, failed_dates):
+def upload_ms_corpus_meta(record, authorship_obj, release_obj, part_of_obj, worldcat_obj, failed_dates):
     # check if the version uri is already in the database:
     #print(record)
 
@@ -1144,6 +1181,8 @@ def upload_ms_corpus_meta(record, authorship_obj, release_obj, part_of_obj, fail
         #         text=tm,
         #         ed_info=record["ed_info"],
         #     )
+        #     # add worldcat link to external_ids:
+        #     add_worldcat_id(em, record, worldcat_obj)
         #     if em_created and VERBOSE:
         #         print("-> Created Edition object")
 
@@ -1234,6 +1273,13 @@ def upload_release_meta(meta_fp, base_url, release_info, meta_upload=True, test=
         entities=""
     )
 
+    # Create/get the ID for Worldcat:
+    worldcat_obj, created = IdentifierProvider.objects.get_or_create(
+        slug="worldcat",
+        name="Worldcat",
+        base_url="https://search.worldcat.org/title/"
+    )
+
     version_codes_d = dict()
     fieldnames = ['versionUri', 'date', 
                   'author_ar', 'author_lat', 'book', 'title_ar', 'title_lat', 
@@ -1286,9 +1332,9 @@ def upload_release_meta(meta_fp, base_url, release_info, meta_upload=True, test=
             print(version_data["versionUri"])
 
             if version_data["versionUri"].startswith("MS"):
-                upload_ms_corpus_meta(record, authorship_obj, release_obj, part_of_obj, failed_dates)
+                upload_ms_corpus_meta(record, authorship_obj, release_obj, part_of_obj, worldcat_obj, failed_dates)
             else:
-                upload_book_corpus_meta(record, authorship_obj, book_type_obj, release_obj, failed_dates)
+                upload_book_corpus_meta(record, authorship_obj, book_type_obj, release_obj, worldcat_obj, failed_dates)
             # # check if the version uri is already in the database:
 
             # #if True:  # TO DO replace with the try... except... block when folding in Versions:
@@ -1393,6 +1439,8 @@ def upload_release_meta(meta_fp, base_url, release_info, meta_upload=True, test=
             #             text=tm,
             #             ed_info=record["ed_info"],
             #         )
+            #         # add worldcat link to external_ids:
+            #         add_worldcat_id(em, record, worldcat_obj)
             #         if em_created and VERBOSE:
             #             print("-> Created Edition object")
 
