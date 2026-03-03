@@ -568,13 +568,13 @@ class VersionListView(CustomListView):
     Filter, sort and search are enabled, and fields can be selected.
 
     Examples: 
-        /version/all/
-        /version/all/?fields=version_uri
-        /version/all/?search=JK000001
-        /version/all/?ordering=version_uri
-        /version/all/?page=2
-        /version/all/?page_size=100     # default: 10, max: 200
-        /version/all/?fields=book_id&search=JK000001&page=2
+        all-releases/version/all/
+        all-releases/version/all/?fields=version_uri
+        all-releases/version/all/?search=JK000001
+        all-releases/version/all/?ordering=version_uri
+        all-releases/version/all/?page=2
+        all-releases/version/all/?page_size=100     # default: 10, max: 200
+        all-releases/version/all/?fields=book_id&search=JK000001&page=2
     
     """
 
@@ -620,6 +620,8 @@ class VersionListView(CustomListView):
     def get_queryset(self):
         """Get the queryset, based on whether or not
         the version_code is defined in the URL"""
+
+        print("THIS IS THE VERSIONLISTVIEW")
 
         # Create a list of all valid filters to validate the request:
         # 1. get all filters defined in the body of the filter class: 
@@ -929,13 +931,13 @@ class ReleaseVersionListView(CustomListView):
     Filter, sort and search are enabled, and fields can be selected.
 
     Examples: 
-        /version/all/
-        /version/all/?fields=version_uri
-        /version/all/?search=JK000001
-        /version/all/?ordering=version_uri
-        /version/all/?page=2
-        /version/all/?page_size=100     # default: 10, max: 200
-        /version/all/?fields=book_id&search=JK000001&page=2
+        <str:release_code>/version/all/
+        <str:release_code>/version/all/?fields=version_uri
+        <str:release_code>/version/all/?search=JK000001
+        <str:release_code>/version/all/?ordering=version_uri
+        <str:release_code>/version/all/?page=2
+        <str:release_code>/version/all/?page_size=100     # default: 10, max: 200
+        <str:release_code>/version/all/?fields=book_id&search=JK000001&page=2
     """
 
     search_fields = [
@@ -982,6 +984,7 @@ class ReleaseVersionListView(CustomListView):
         # # 4. add the default allowed parameters (like search, page, fields, ...):
         # all_allowed_parameters = allowed_parameters + declared_filters + declared_filters_in
         
+        print("THIS IS THE RELEASEVERSIONLISTVIEW")
 
         # Now check all elements in the query URL to check if they are valid:
         for p in self.request.GET:

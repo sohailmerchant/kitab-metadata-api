@@ -448,7 +448,7 @@ def link_manuscript_to_dates(ms_obj, record, source=""):
     for date, page_range in record["dates"]:
         date_obj = get_or_create_date(
             date_type_slug="date_written",
-            calendar_slug="hijri",
+            calendar_slug="AH",
             date_str=date,
             year=yyyy,
             month=mm,
@@ -883,7 +883,7 @@ def get_or_create_author(record, failed_dates):
     # first, create the date itself: 
     date_obj = get_or_create_date(
         date_type_slug="death_date",
-        calendar_slug="hijri",
+        calendar_slug="AH",
         date_str=record['author_uri'][:4],
         year=record['date'],
         precision="year",

@@ -103,7 +103,7 @@ class ObjectNameLink(models.Model):
 ###############################
 
 class Calendar(models.Model):
-    slug = models.SlugField(unique=True)  # "gregorian", "hijri", "julian", ...
+    slug = models.SlugField(unique=True)  # "AH", "CE", ...
     name = models.CharField(max_length=100)
 
     def __str__(self):

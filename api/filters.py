@@ -112,6 +112,8 @@ class CustomSearchFilter(filters.SearchFilter):
         """
         # get the search string in the standard Django way:
         params = request.query_params.get(self.search_param, '')
+
+        print("search params, in CustomSearchFilter:", params)
         
         # normalize the search string:
         # (if the query string does not contain "&normalize=False")
@@ -137,28 +139,70 @@ class VersionSearchFilter(CustomSearchFilter):
 
         # get the default search fields:
         search_fields = super().get_search_fields(view, request)
+        print("VersionSearchFilter: default search fields", search_fields)
 
         related_search_fields = search_fields + [ 
-        # BUILDUP: UNCOMMENT:
-        #     "text__related_texts__text_uri", "text__related_texts__titles_ar", "text__related_texts__titles_lat",
-        #     "text__related_texts__author__author_ar", "text__related_texts__author__author_lat", 
-        #     "text__related_persons__author_uri", "text__related_persons__author_ar", "text__related_persons__author_lat",
-        #     "text__text_related__text_uri", "text__text_related__titles_ar", "text__text_related__titles_lat",
-        #     "text__text_related__author__author_ar", "text__text_related__author__author_lat", 
-        #     "text__related_persons__author_uri", "text__related_persons__author_ar", "text__related_persons__author_lat",
-        #     "text__author__related_persons__author_uri", 
-        #     "text__author__related_persons__author_ar", "text__author__related_persons__author_lat",
-        #     ## TO DO: add through fields: A2BRelation.relation_type.code, 
-        #     ## A2BRelation.relation_type.name, A2BRelation.relation_type.name_inverted, 
-        #     ## A2BRelation.relation_type.descr
+            # ALSO SEARCH URI, TITLE AND AUTHOR NAMES OF RELATED TEXTS:
+            
+            "text__related_texts__text_uri", 
+            "text__related_texts__titles__name", 
+                # this covers the old title search fields:
+                # - "text__related_texts__titles_ar", 
+                # - "text__related_texts__titles_lat", 
+            "text__text_related__text_uri", 
+            "text__text_related__titles__name", 
+                # this covers the old title search fields:
+                # - "text__text_related__titles_ar", 
+                # - "text__text_related__titles_lat",
+            "text__related_texts__authors__names__name",
+                # this covers the old title search fields:
+                # - "text__related_texts__author__author_ar", 
+                # - "text__related_texts__author__author_lat",
+            "text__text_related__authors__names__name",
+                # this covers the old title search fields:
+                # - "text__text_related__author__author_ar", 
+                # - "text__text_related__author__author_lat", 
+           
+            # ALSO SEARCH URI AND NAMES OF PERSONS RELATED TO THE TEXT:
+           
+            "text__related_persons__author_uri", 
+            "text__related_persons__names__name",
+                # this covers the old title search fields:
+                # - "text__related_persons__author_ar", 
+                # - "text__related_persons__author_lat",
+
+            # ALSO SEARCH URI AND NAMES OF PERSONS RELATED TO THE AUTHOR:
+
+            "text__authors__related_persons__author_uri", # "text__author__related_persons__author_uri", 
+            "text__authors__related_persons__names__name",
+                # this covers the old title search fields:
+                # - "text__author__related_persons__author_ar", 
+                # - "text__author__related_persons__author_lat",
+            
+            # ALSO SEARCH THROUGH FIELDS:
+            
+            "text__related_text_a__relation_type__code",
+            "text__related_text_b__relation_type__code",
+            "text__related_text_a__relation_type__subtype_code",
+            "text__related_text_b__relation_type__subtype_code",
+            "text__related_text_a__relation_type__name",
+            "text__related_text_b__relation_type__name",
+            "text__related_text_a__relation_type__name_inverted",
+            "text__related_text_b__relation_type__name_inverted",
+            "text__related_text_a__relation_type__descr",
+            "text__related_text_b__relation_type__descr",
             ]
 
         extended_search_fields = search_fields + [
-            ## BUILDUP: UNCOMMENT RELEVANT FIELDS:
-            # "release_version__notes", "release_version__tags", 
-            # "edition__ed_info",   # includes all edition fields in a single string
-            # "source_coll__name",  "source_coll__description", 
-            # "text__text_type", "text__tags", "text__notes"
+            "release_version__notes", 
+            "release_version__tags", 
+            "edition__ed_info",   # includes all edition fields in a single string
+            "source_coll__name",  
+            "source_coll__description", 
+            "text__text_types__slug",# "text__text_type", 
+            "text__text_types__label",# "text__text_type",
+            "text__tags", 
+            "text__notes"
             ]
 
         # check whether the user wants to use other search fields than the basic search fields:
@@ -188,48 +232,74 @@ class ReleaseVersionSearchFilter(CustomSearchFilter):
 
         # get the default search fields:
         search_fields = super().get_search_fields(view, request)
+        print("ReleaseVersionSearchFilter default search fields:", search_fields)
 
         related_search_fields = search_fields + [ 
-            # BUILDUP: UNCOMMENT:
-            # "version__text__related_texts__text_uri", 
-            # "version__text__related_texts__titles_ar", 
-            # "version__text__related_texts__titles_lat", 
-            # "version__text__related_texts__author__author_ar", 
-            # "version__text__related_texts__author__author_lat", 
-            # "version__text__related_persons__author_uri", 
-            # "version__text__related_persons__author_ar", 
-            # "version__text__related_persons__author_lat",
-            # "version__text__text_related__text_uri", 
-            # "version__text__text_related__titles_ar", 
-            # "version__text__text_related__titles_lat",
-            # "version__text__text_related__author__author_ar", 
-            # "version__text__text_related__author__author_lat", 
-            # "version__text__related_persons__author_uri", 
-            # "version__text__related_persons__author_ar", 
-            # "version__text__related_persons__author_lat",
-            # "version__text__author__related_persons__author_uri", 
-            # "version__text__author__related_persons__author_ar", 
-            # "version__text__author__related_persons__author_lat",
-            # ##"version__text__author__related_places__relation_type__code"
-            # ## TO DO: add through fields: A2BRelation.relation_type.code, 
-            # ## A2BRelation.relation_type.name, A2BRelation.relation_type.name_inverted, 
-            # ## A2BRelation.relation_type.descr
-            ]
+            "version__text__related_texts__text_uri", 
+            "version__text__related_texts__titles__name", 
+                # this covers the old title search fields:
+                # - "version__text__related_texts__titles_ar", 
+                # - "version__text__related_texts__titles_lat", 
+            "version__text__text_related__text_uri", 
+            "version__text__text_related__titles__name", 
+                # this covers the old title search fields:
+                # - "version__text__text_related__titles_ar", 
+                # - "version__text__text_related__titles_lat",
+            "version__text__related_texts__authors__names__name",
+                # this covers the old title search fields:
+                # - "version__text__related_texts__author__author_ar", 
+                # - "version__text__related_texts__author__author_lat", 
+            "version__text__text_related__authors__names__name",
+                # this covers the old title search fields:
+                # - "version__text__text_related__author__author_ar", 
+                # - "version__text__text_related__author__author_lat",
+           
+            # ALSO SEARCH URI AND NAMES OF PERSONS RELATED TO THE TEXT:
+           
+            "version__text__related_persons__author_uri",
+            "version__text__related_persons__names__name",
+                # this covers the old title search fields:
+                # - "version__text__related_persons__author_ar", 
+                # - "version__text__related_persons__author_lat",
+
+            # ALSO SEARCH URI AND NAMES OF PERSONS RELATED TO THE AUTHOR:
+ 
+            "version__text__authors__related_persons__author_uri", # "version__text__author__related_persons__author_uri", 
+            "version__text__authors__related_persons__names__name",
+                # this covers the old title search fields:
+                # - "version__text__author__related_persons__author_ar", 
+                # - "version__text__author__related_persons__author_lat",
+            # ALSO SEARCH THROUGH FIELDS:
+            
+            "version__text__related_text_a__relation_type__code",
+            "version__text__related_text_b__relation_type__code",
+            "version__text__related_text_a__relation_type__subtype_code",
+            "version__text__related_text_b__relation_type__subtype_code",
+            "version__text__related_text_a__relation_type__name",
+            "version__text__related_text_b__relation_type__name",
+            "version__text__related_text_a__relation_type__name_inverted",
+            "version__text__related_text_b__relation_type__name_inverted",
+            "version__text__related_text_a__relation_type__descr",
+            "version__text__related_text_b__relation_type__descr",
+            ##"version__text__authors__related_places__relation_type__code"
+        ]
 
         extended_search_fields = search_fields + [
-            # BUILDUP: UNCOMMENT:
-            # "notes", "tags", 
-            # "version__edition__ed_info",   # includes all edition fields in a single string
-            # "version__source_coll__name",  
-            # "version__source_coll__description", 
-            # "version__text__text_type", 
-            # "version__text__tags", 
-            # "version__text__notes"
+            "notes", 
+            "tags", 
+            "version__edition__ed_info",   # includes all edition fields in a single string
+            "version__source_coll__name",  
+            "version__source_coll__description", 
+            "version__text__text_types__slug", # "version__text__text_type", 
+            "version__text__text_types__label", # "version__text__text_type", 
+            "version__text__tags", 
+            "version__text__notes"
             ]
 
         # check whether the user wants to use other search fields than the basic search fields:
         search_fields_q = request.query_params.get('search_fields', "")
         if not search_fields_q:
+            print("SEARCHING IN BASIC SEARCH FIELDS!")
             return search_fields
         elif search_fields_q == "extended":
             search_fields = extended_search_fields
@@ -272,108 +342,259 @@ class VersionFilter(django_filters.FilterSet):
     http://127.0.0.1:8000/2022.2.7/version/?analysis_priority=pri
 
     """
-    # BUILDUP: UNCOMMENT:
-
-    # version_uri_contains = django_filters.CharFilter(
-    #     field_name="version_uri", lookup_expr='icontains', label="Version URI")  # "exact" is default
+    def filter_name_type(self, queryset, name, value):
+        # here `name` is the key in the query string 
+        # (will be "nisba" / "nasab" / "kunya" /...)
+        return (
+            queryset.filter(
+                text__authors__names__name_type=name,
+                text__authors__names__name__icontains=value,
+            )
+            .distinct()
+        )
     
-    # author_uri = django_filters.CharFilter(
-    #     field_name="text__author__author_uri", lookup_expr='icontains',
-    #     label="Author URI")
-    # author_ar = django_filters.CharFilter(
-    #     field_name="text__author__author_ar", lookup_expr='icontains',
-    #     label="Author name (Arabic script)")
-    # author_lat = django_filters.CharFilter(
-    #     field_name="text__author__author_lat", lookup_expr='icontains',
-    #     label="Author name (Latin script)")
-    # shuhra = django_filters.CharFilter(
-    #     field_name="text__author__name_element__shuhra", lookup_expr='icontains',
-    #     label="Author's shuhra (Arabic or Latin script)")
-    # ism = django_filters.CharFilter(
-    #     field_name="text__author__name_element__ism", lookup_expr='icontains',
-    #     label="Author's ism (Arabic or Latin script)")
-    # nasab = django_filters.CharFilter(
-    #     field_name="text__author__name_element__nasab", lookup_expr='icontains',
-    #     label="Author's nasab (Arabic or Latin script)")
-    # kunya = django_filters.CharFilter(
-    #     field_name="text__author__name_element__kunya", lookup_expr='icontains',
-    #     label="Author's kunya (Arabic or Latin script)")
-    # laqab = django_filters.CharFilter(
-    #     field_name="text__author__name_element__laqab", lookup_expr='icontains',
-    #     label="Author's laqab (Arabic or Latin script)")
-    # nisba = django_filters.CharFilter(
-    #     field_name="text__author__name_element__nisba", lookup_expr='icontains',
-    #     label="Author's nisba (Arabic or Latin script)")
-    # died_after_AH = django_filters.NumberFilter(
-    #     field_name="text__author__date_AH", lookup_expr="gt",
-    #     label="Author died after")
-    # died_before_AH = django_filters.NumberFilter(
-    #     field_name="text__author__date_AH", lookup_expr="lt",
-    #     label="Author died before")
-    # died_between_AH = NumberRangeFilter(
-    #     field_name="text__author__date_AH", lookup_expr="range",
-    #     label="Author died between")  # /?died_between_AH=309,311
+    def filter_name_by_language(self, queryset, name, value):
+        # here `name` is the key in the query string 
+        # (will be "author_ar", "author_lat")
+        name_or_title, language = name.split("_")
+        if name_or_title == "author":
+            return (
+                queryset.filter(
+                    text__authors__names__language=language,
+                    text__authors__names__name__icontains=value,
+                )
+                .distinct()
+            )
+        elif name_or_title == "title":
+            return (
+                queryset.filter(
+                    text__titles__language=language,
+                    text__titles__name__icontains=value,
+                )
+                .distinct()
+            )
 
-    # title_ar = django_filters.CharFilter(
-    #     field_name="text__titles_ar", lookup_expr='icontains',
-    #     label="Title (Arabic script)")
-    # title_lat = django_filters.CharFilter(
-    #     field_name="text__titles_lat", lookup_expr='icontains',
-    #     label="Title (Latin script)")
 
-    # tok_count_lte = django_filters.NumberFilter(
-    #     field_name="release_version__tok_length", lookup_expr="lte", 
-    #     label="Token (word) count is less than or equal to")
-    # tok_count_gte = django_filters.NumberFilter(
-    #     field_name="release_version__tok_length", lookup_expr="gte", 
-    #     label="Token (word) count is greater than or equal to")
-    # char_count_lte = django_filters.NumberFilter(
-    #     field_name="release_version__char_length", lookup_expr="lte", 
-    #     label="Character count is less than or equal to")
-    # char_count_gte = django_filters.NumberFilter(
-    #     field_name="release_version__char_length", lookup_expr="gte", 
-    #     label="Character count is greater than or equal to")
+    def filter_by_date(self, queryset, name, value):
+        # here `name` is the key in the query string 
+        # (will be "died_before_AH", "died_after_CE", ...)
+        date_type, condition, calendar = name.split("_")
+        if date_type in ("born", "died"):
+            if date_type == "died":
+                code = "death_date"
+            elif date_type == "born":
+                code = "birth_date"
+            path = "text__authors__dates"
+        elif date_type == "edited":
+            code = "edited"
+            path = "edition__dates"
 
-    # editor = django_filters.CharFilter(
-    #     field_name="edition__editor", lookup_expr='icontains',
-    #     label="Editor")
-    # publisher = django_filters.CharFilter(
-    #     field_name="edition__publisher", lookup_expr='icontains',
-    #     label="Publisher")
-    # edition_place = django_filters.CharFilter(
-    #     field_name="edition__edition_place", lookup_expr='icontains',
-    #     label="Place of Edition")
-    # edition_date = django_filters.CharFilter(
-    #     field_name="edition__edition_date", lookup_expr='icontains',
-    #     label="Date of Edition")
-    # edition = django_filters.CharFilter(
-    #     field_name="edition__ed_info", lookup_expr='icontains',
-    #     label="All edition-related metadata")
+        base = queryset.filter(**{
+            f"{path}__calendar__slug": calendar,
+             f"{path}__date_type__code": code,
+        })
+        # base = queryset.filter(   
+        #     text__authors__dates__calendar__slug=calendar,
+        #     text__authors__dates__date_type__code=code,
+        # )
+        
+        if condition == "after":
+            #return base.filter(text__authors__dates__year__gte=value).distinct()
+            return base.filter(**{f"{path}__year__gte": value}).distinct()
+        elif condition == "before":
+            #return base.filter(text__authors__dates__year__lte=value).distinct()
+            return base.filter(**{f"{path}__year__lte": value}).distinct()
+        elif condition == "between":
+            return base.filter(**{f"{path}__year__range": value}).distinct()
+            #return base.filter(text__authors__dates__year__range=value).distinct()
+            # #start = value.start
+            # #stop = value.stop
+            # start, stop = value
+            # filters = {}
+            # if start is not None:
+            #     filters["text__authors__dates__year__gte"] = start
+            # if stop is not None:
+            #     filters["text__authors__dates__year__lte"] = stop
+            # return base.filter(**filters).distinct()
 
-    # # language = django_filters.CharFilter(
-    # #     field_name="language", lookup_expr='icontains',
-    # #     label="Language of the text")
-    # # analysis_priority = django_filters.CharFilter(lookup_expr='icontains',
-    # #     field_name="release_version__analysis_priority",
-    # #     label="Analysis priority (pri/sec)")
-    # # annotation_status = django_filters.CharFilter(
-    # #     field_name="release_version__annotation_status", lookup_expr='icontains',
-    # #     label="Annotation status (mARkdown/completed)")
+    version_uri_contains = django_filters.CharFilter(
+        field_name="version_uri", lookup_expr='icontains', label="Version URI")  # "exact" is default
     
-    # language = CharInFilter(lookup_expr='iin',    # case insensitive version of "in"
-    #     field_name="language", label="Language (three-letter code, separate multiple options with comma)")
-    # analysis_priority = CharInFilter(lookup_expr='iin',    # case insensitive version of "in"
-    #     field_name="release_version__analysis_priority", label="Analysis priority (pri/sec)")
-    # annotation_status = CharInFilter(lookup_expr='iin',  # case insensitive version of "in"
-    #     field_name="release_version__annotation_status", label="Annotation status (inProgress/completed/mARkdown/(not yet annotated))")
+    author_uri = django_filters.CharFilter(
+        field_name="text__authors__author_uri", lookup_expr='icontains',
+        label="Author URI")
+    author = django_filters.CharFilter(
+        field_name="text__authors__names__name", lookup_expr='icontains',
+        label="Author name (Arabic/Latin script)")
+    author_ar = django_filters.CharFilter(
+        method="filter_name_by_language",
+        label="Author name (Arabic script)"
+    )
+    author_lat = django_filters.CharFilter(
+        method="filter_name_by_language",
+        label="Author name (Latin script)"
+    )
+    shuhra = django_filters.CharFilter(
+        method="filter_name_type",
+        label="Author's shuhra (Arabic or Latin script)"
+    )
+    ism = django_filters.CharFilter(
+        method="filter_name_type",
+        label="Author's ism (Arabic or Latin script)"
+    )
+    nasab = django_filters.CharFilter(
+        method="filter_name_type",
+        label="Author's nasab (Arabic or Latin script)"
+    )
+    kunya = django_filters.CharFilter(
+        method="filter_name_type",
+        label="Author's kunya (Arabic or Latin script)"
+    )
+    laqab = django_filters.CharFilter(
+        method="filter_name_type",
+        label="Author's laqab (Arabic or Latin script)"
+    )
+    nisba = django_filters.CharFilter(
+        method="filter_name_type",
+        label="Author's nisba (Arabic or Latin script)"
+    )
+
+    died_after_AH = django_filters.NumberFilter(
+        method="filter_by_date",
+        label="Author died after (AH)",
+    )
+    died_before_AH = django_filters.NumberFilter(
+        method="filter_by_date",
+        label="Author died before (AH)",
+    )
+    died_between_AH = NumberRangeFilter(
+        method="filter_by_date",
+        label="Author died between (AH)",
+    ) # /?died_between_AH=309,311
+
+    born_after_AH = django_filters.NumberFilter(
+        method="filter_by_date",
+        label="Author died after (AH)",
+    )
+    born_before_AH = django_filters.NumberFilter(
+        method="filter_by_date",
+        label="Author died before (AH)",
+    )
+    born_between_AH = NumberRangeFilter(
+        method="filter_by_date",
+        label="Author died between (AH)",
+    ) # /?died_between_AH=309,311
+
+    
+    died_after_CE = django_filters.NumberFilter(
+        method="filter_by_date",
+        label="Author died after (CE)",
+    )
+    died_before_CE = django_filters.NumberFilter(
+        method="filter_by_date",
+        label="Author died before (CE)",
+    )
+    died_between_CE = NumberRangeFilter(
+        method="filter_by_date",
+        label="Author died between (CE)",
+    ) # /?died_between_CE=890,892
+
+    born_after_CE = django_filters.NumberFilter(
+        method="filter_by_date",
+        label="Author died after (CE)",
+    )
+    born_before_CE = django_filters.NumberFilter(
+        method="filter_by_date",
+        label="Author died before (CE)",
+    )
+    born_between_CE = NumberRangeFilter(
+        method="filter_by_date",
+        label="Author died between (CE)",
+    ) # /?died_between_CE=890,892
 
 
-    # release_tags = django_filters.CharFilter(
-    #     field_name="release_version__tags", lookup_expr='icontains',
-    #     label="Tags related to the digital version")
-    # text_tags = django_filters.CharFilter(
-    #     field_name="text__tags", lookup_expr='icontains',
-    #     label="Tags related to the text")  # /?tags=_SHICR
+    title = django_filters.CharFilter(
+        field_name="text__titles__name", lookup_expr='icontains',
+        label="Title (Arabic/Latin script)"
+    )
+    title_ar = django_filters.CharFilter(
+        method="filter_name_by_language",
+        label="Title (Arabic script)"
+    )
+    title_lat = django_filters.CharFilter(
+        method="filter_name_by_language",
+        label="Title (Latin script)"
+    )
+
+    tok_count_lte = django_filters.NumberFilter(
+        field_name="release_version__tok_length", lookup_expr="lte", 
+        label="Token (word) count is less than or equal to")
+    tok_count_gte = django_filters.NumberFilter(
+        field_name="release_version__tok_length", lookup_expr="gte", 
+        label="Token (word) count is greater than or equal to")
+    char_count_lte = django_filters.NumberFilter(
+        field_name="release_version__char_length", lookup_expr="lte", 
+        label="Character count is less than or equal to")
+    char_count_gte = django_filters.NumberFilter(
+        field_name="release_version__char_length", lookup_expr="gte", 
+        label="Character count is greater than or equal to")
+
+    editor = django_filters.CharFilter(
+        field_name="edition__editor", lookup_expr='icontains',
+        label="Editor")
+    publisher = django_filters.CharFilter(
+        field_name="edition__publisher", lookup_expr='icontains',
+        label="Publisher")
+    edition_place = django_filters.CharFilter(
+        field_name="edition__edition_place", lookup_expr='icontains',
+        label="Place of Edition")
+    
+    edition = django_filters.CharFilter(
+        field_name="edition__ed_info", lookup_expr='icontains',
+        label="All edition-related metadata")
+    edition_date = django_filters.CharFilter(
+        field_name="edition__dates__date_str", lookup_expr='icontains',
+        label="Date of Edition")
+    edited_before_AH = django_filters.NumberFilter(
+        method="filter_by_date",
+        label="Date of edition before (AH)",
+    )
+    edited_after_AH = django_filters.NumberFilter(
+        method="filter_by_date",
+        label="Date of edition after (AH)",
+    )
+    edited_between_AH = NumberRangeFilter(
+        method="filter_by_date",
+        label="Date of edition between (AH)",
+    )
+    edited_before_CE = django_filters.NumberFilter(
+        method="filter_by_date",
+        label="Date of edition before (CE)",
+    )
+    edited_after_CE = django_filters.NumberFilter(
+        method="filter_by_date",
+        label="Date of edition after (CE)",
+    )
+    edited_between_CE = NumberRangeFilter(
+        method="filter_by_date",
+        label="Date of edition between (CE)",
+    )
+
+    
+    language = CharInFilter(lookup_expr='iin',    # case insensitive version of "in"
+        field_name="language", label="Language (three-letter code, separate multiple options with comma)")
+    analysis_priority = CharInFilter(lookup_expr='iin',    # case insensitive version of "in"
+        field_name="release_version__analysis_priority", label="Analysis priority (pri/sec)")
+    annotation_status = CharInFilter(lookup_expr='iin',  # case insensitive version of "in"
+        field_name="release_version__annotation_status", label="Annotation status (inProgress/completed/mARkdown/(not yet annotated))")
+
+
+    release_tags = django_filters.CharFilter(
+        field_name="release_version__tags", lookup_expr='icontains',
+        label="Tags related to the digital version")
+    text_tags = django_filters.CharFilter(
+        field_name="text__tags", lookup_expr='icontains',
+        label="Tags related to the text")  # /?tags=_SHICR
     
     class Meta:
         model = Version
@@ -398,43 +619,184 @@ class AuthorFilter(django_filters.FilterSet):
     http://127.0.0.1:8000/author/all/?author_uri=0310Tabari
 
     """
+    def filter_name_type(self, queryset, name, value):
+        # here `name` is the key in the query string 
+        # (will be "nisba" / "nasab" / "kunya" /...)
+        return (
+            queryset.filter(
+                names__name_type=name,
+                names__name__icontains=value,
+            )
+            .distinct()
+        )
+    
+    def filter_name_by_language(self, queryset, name, value):
+        # here `name` is the key in the query string 
+        # (will be "author_ar", "author_lat")
+        try:
+            name_or_title, language = name.split("_")
+        except:
+            _, name_or_title, language = name.split("_")
+        if name_or_title == "author":
+            return (
+                queryset.filter(
+                    names__language=language,
+                    names__name__icontains=value,
+                )
+                .distinct()
+            )
+        elif name_or_title == "title":  
+            return (
+                queryset.filter(
+                    texts__titles__language=language,
+                    texts__titles__name__icontains=value,
+                )
+                .distinct()
+            )
+
+
+    def filter_by_date(self, queryset, name, value):
+        # here `name` is the key in the query string 
+        # (will be "died_before_AH", "died_after_CE", ...)
+        date_type, condition, calendar = name.split("_")
+        if date_type in ("born", "died"):
+            if date_type == "died":
+                code = "death_date"
+            elif date_type == "born":
+                code = "birth_date"
+            path = "dates"
+        elif date_type == "edited": # TODO
+            code = "edited"
+            path = "edition__dates"
+
+        base = queryset.filter(**{
+            f"{path}__calendar__slug": calendar,
+            f"{path}__date_type__code": code,
+        })
+        
+        if condition == "after":
+            return base.filter(**{f"{path}__year__gte": value}).distinct()
+        elif condition == "before":
+            return base.filter(**{f"{path}__year__lte": value}).distinct()
+        elif condition == "between":
+            return base.filter(**{f"{path}__year__range": value}).distinct()
+            
+
+
+
+
     author_uri = django_filters.CharFilter(lookup_expr='icontains', 
-        field_name="author_uri", label="Author URI") 
+        field_name="author_uri", label="Author URI"
+    ) 
+    author = django_filters.CharFilter(
+        field_name="names__name", lookup_expr='icontains',
+        label="Author name (Arabic/Latin script)"
+    )
+    author_ar = django_filters.CharFilter(
+        method="filter_name_by_language",
+        label="Author name (Arabic script)"
+    )
+    author_lat = django_filters.CharFilter(
+        method="filter_name_by_language",
+        label="Author name (Latin script)"
+    )
+    shuhra = django_filters.CharFilter(
+        method="filter_name_type",
+        label="Author's shuhra (Arabic or Latin script)"
+    )
+    ism = django_filters.CharFilter(
+        method="filter_name_type",
+        label="Author's ism (Arabic or Latin script)"
+    )
+    nasab = django_filters.CharFilter(
+        method="filter_name_type",
+        label="Author's nasab (Arabic or Latin script)"
+    )
+    kunya = django_filters.CharFilter(
+        method="filter_name_type",
+        label="Author's kunya (Arabic or Latin script)"
+    )
+    laqab = django_filters.CharFilter(
+        method="filter_name_type",
+        label="Author's laqab (Arabic or Latin script)"
+    )
+    nisba = django_filters.CharFilter(
+        method="filter_name_type",
+        label="Author's nisba (Arabic or Latin script)"
+    )
+    
+
+    died_after_AH = django_filters.NumberFilter(
+        method="filter_by_date",
+        label="Author died after (AH)",
+    )
+    died_before_AH = django_filters.NumberFilter(
+        method="filter_by_date",
+        label="Author died before (AH)",
+    )
+    died_between_AH = NumberRangeFilter(
+        method="filter_by_date",
+        label="Author died between (AH)",
+    ) # /?died_between_AH=309,311
+
+    born_after_AH = django_filters.NumberFilter(
+        method="filter_by_date",
+        label="Author died after (AH)",
+    )
+    born_before_AH = django_filters.NumberFilter(
+        method="filter_by_date",
+        label="Author died before (AH)",
+    )
+    born_between_AH = NumberRangeFilter(
+        method="filter_by_date",
+        label="Author died between (AH)",
+    ) # /?died_between_AH=309,311
+
+    
+    died_after_CE = django_filters.NumberFilter(
+        method="filter_by_date",
+        label="Author died after (CE)",
+    )
+    died_before_CE = django_filters.NumberFilter(
+        method="filter_by_date",
+        label="Author died before (CE)",
+    )
+    died_between_CE = NumberRangeFilter(
+        method="filter_by_date",
+        label="Author died between (CE)",
+    ) # /?died_between_CE=890,892
+
+    born_after_CE = django_filters.NumberFilter(
+        method="filter_by_date",
+        label="Author died after (CE)",
+    )
+    born_before_CE = django_filters.NumberFilter(
+        method="filter_by_date",
+        label="Author died before (CE)",
+    )
+    born_between_CE = NumberRangeFilter(
+        method="filter_by_date",
+        label="Author died between (CE)",
+    ) # /?died_between_CE=890,892
+
     # BUILDUP: UNCOMMENT:
-    # author_ar = django_filters.CharFilter(lookup_expr='icontains', 
-    #     field_name="author_ar", label="Author name (Arabic script)")
-    # author_lat = django_filters.CharFilter(lookup_expr='icontains',
-    #     field_name="author_lat",  label="Author name (Latin script)")
-    # died_after_AH = django_filters.NumberFilter(lookup_expr="gt", 
-    #     field_name="date_AH", label="Author died after (AH)")  # /?died_after_AH=309
-    # died_before_AH = django_filters.NumberFilter(lookup_expr="lt", 
-    #     field_name="date_AH", label="Author died before (AH)")  # /?died_before_AH=311
-    # died_between_AH = NumberRangeFilter(lookup_expr="range", 
-    #     field_name="date_AH", label="Author died between (AH, comma-separated)")       # /?died_between_AH=309,311
+    text_title = django_filters.CharFilter(
+        field_name="texts__titles__name", lookup_expr='icontains',
+        label="Title of work (Arabic/Latin script)"
+    )
+    text_title_ar = django_filters.CharFilter(
+        method="filter_name_by_language",
+        label="Title of work (Arabic script)"
+    )
+    text_title_lat = django_filters.CharFilter(
+        method="filter_name_by_language",
+        label="Title of work (Latin script)"
+    )
 
-    # shuhra = django_filters.CharFilter(lookup_expr='icontains', 
-    #     field_name="name_element__shuhra", label="Author's shuhra")
-    # ism = django_filters.CharFilter(lookup_expr='icontains', 
-    #     field_name="name_element__ism", label="Author's ism")
-    # nasab = django_filters.CharFilter(lookup_expr='icontains', 
-    #     field_name="name_element__nasab", label="Author's nasab")
-    # kunya = django_filters.CharFilter(lookup_expr='icontains', 
-    #     field_name="name_element__kunya", label="Author's kunya")
-    # laqab = django_filters.CharFilter(lookup_expr='icontains', 
-    #     field_name="name_element__laqab", label="Author's laqab")
-    # nisba = django_filters.CharFilter(lookup_expr='icontains', 
-    #     field_name="name_element__nisba", label="Author's nisba")
-
-    # text_title_ar = django_filters.CharFilter(lookup_expr='icontains', 
-    #     field_name="text__titles_ar", label="Title of text (Arabic script)")
-    # text_title_lat = django_filters.CharFilter(lookup_expr='icontains', 
-    #     field_name="text__titles_lat", label="Title of text (Latin script)")
-
+   
     class Meta:
         model = Author
         # additional fields with the default lookup ("exact"):
-        # BUILDUP: UNCOMMENT:
-        #fields = ["date_AH", "id"]
         fields = ["id"]
 
 
