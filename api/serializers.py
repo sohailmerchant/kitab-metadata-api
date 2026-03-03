@@ -60,7 +60,6 @@ def preferred_names_by_language(links):
     """
     preferred = {}
     for link in links:
-        print("preferred names link:", link)
         lang = (link.object_name.language or "und").strip() or "und"
         if lang not in preferred:
             preferred[lang] = link.object_name.name
@@ -77,7 +76,6 @@ class PreferredNamesByLanguageField(serializers.Field):
     def to_representation(self, value):
         # value might be: instance.object_name_links (RelatedManager)
         links = value.all() if hasattr(value, "all") else value
-        print(links)
 
         return preferred_names_by_language(links)
 
@@ -153,7 +151,7 @@ class ShallowPlaceSerializer(serializers.ModelSerializer):
 class ShallowCountrySerializer(ShallowPlaceSerializer):
     """Serialize only one name per language"""
     class Meta (ShallowPlaceSerializer.Meta):
-        fields = ("id", "display_names", "country_code")  # add loc_uri if you have one
+        fields = ("id", "display_names", "external_ids", "country_code")  # add loc_uri if you have one
 
 
 class DateSerializer(FlexFieldsModelSerializer):
@@ -1107,7 +1105,7 @@ class VersionSerializer(FlexFieldsModelSerializer):
     """This serializer is used to serialize the version metadata in version queries,
     and includes the text and author metadata"""
     text = TextSerializer(read_only=True)
-    manuscript = ShallowManuscriptSerializer(read_only=True)
+    manuscript = ManuscriptSerializer(read_only=True)
     # BUILDUP: UNCOMMENT:
     edition = ShallowEditionSerializer(read_only=True)
     release_versions = ShallowReleaseVersionSerializer(read_only=True, many=True)
@@ -1150,7 +1148,10 @@ class VersionSerializer(FlexFieldsModelSerializer):
 
         try:
             # remove the nested list of all versions of the text:
-            del json_rep["text"]["versions"]
+            if "text" in json_rep and json_rep["text"] and "versions" in json_rep["text"]:
+                del json_rep["text"]["versions"]
+            elif "manuscript" in  json_rep and json_rep["manuscript"] and "transcriptions" in json_rep["manuscript"]:
+                del json_rep["manuscript"]["transcriptions"]
             # remove the release_versions dictionary if a specific release was requested:
             release_code = self.context.get('release_code')
             if release_code:
