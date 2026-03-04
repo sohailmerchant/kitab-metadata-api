@@ -204,7 +204,8 @@ class Command(BaseCommand):
         qs = Author.objects.all()
 
         LOOKUPS =  [
-            "texts__titles__name"
+            "texts__titles__name",
+            "texts__version__edition__dates"
         ]
         self.test_lookups(LOOKUPS, qs)
 
@@ -250,9 +251,11 @@ class Command(BaseCommand):
             "titles__name", 
             "authors__names__language",
             "related_texts__titles__name",
+            "authors__dates__date_type__slug"
         ]
 
         self.test_lookups(LOOKUPS, qs)
+        
 
         print("6. ReleaseVersionFilter")
 

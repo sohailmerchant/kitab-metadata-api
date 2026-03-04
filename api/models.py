@@ -937,14 +937,23 @@ class Manuscript(models.Model):
         through_fields=("manuscript", "text_type"), 
         related_name="manuscripts", blank=True
     )
-    related_persons = models.ManyToManyField("Author", through="A2BRelation",
-        through_fields=("manuscript_b", "person_a"), related_name="manuscripts", blank=True
+    related_persons = models.ManyToManyField("Author", 
+        through="A2BRelation",
+        through_fields=("manuscript_b", "person_a"), 
+        related_name="manuscripts", 
+        blank=True
     )
     titles = models.ManyToManyField(ObjectName, through=ObjectNameLink,
-        through_fields=("manuscript", "object_name"), related_name="manuscripts", blank=True
+        through_fields=("manuscript", "object_name"), 
+        related_name="manuscripts", 
+        blank=True
     )
-    related_texts = models.ManyToManyField("Text", through="A2BRelation",
-        through_fields=("manuscript_a", "text_b"), related_name="manuscripts", blank=True
+    related_texts = models.ManyToManyField("Text", 
+        through="A2BRelation",
+        through_fields=("manuscript_a", "text_b"), 
+        related_name="manuscripts", 
+        #related_query_name="manuscript_related", 
+        blank=True
     )
     related_manuscripts = models.ManyToManyField("self", through="A2BRelation",
         through_fields=("manuscript_a", "manuscript_b"), 

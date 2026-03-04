@@ -469,7 +469,7 @@ class ShallowManuscriptSerializer(FlexFieldsModelSerializer):
 
     class Meta:
         model = Manuscript
-        fields = ("manuscript_uri", 
+        fields = ("manuscript_uri", "shelfmark",
                   "tags", "bibliography", "notes", "transcriptions")
         depth = 1
 
@@ -1095,7 +1095,7 @@ class ManuscriptSerializer(FlexFieldsModelSerializer):
 
     class Meta:
         model = Manuscript
-        fields = ("manuscript_uri", "manuscript_holding", 
+        fields = ("manuscript_uri", "manuscript_holding", "shelfmark",
                   "tags", "bibliography", "notes", "transcriptions", "external_ids")
         depth = 1
 

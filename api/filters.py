@@ -6,6 +6,7 @@ only results that match will be displayed.
 Documentation: https://www.django-rest-framework.org/api-guide/filtering/
 """
 
+import datetime
 import regex
 # NB: use regex for regular expressions instead of re here,
 #     because re does not consider Arabic vowels word characters (\w):
@@ -329,17 +330,17 @@ class VersionFilter(django_filters.FilterSet):
 
     Examples: 
 
-    http://127.0.0.1:8000/2022.2.7/version/all/?died_after_AH=309&died_before_AH=311
-    http://127.0.0.1:8000/2022.2.7/version/all/?title_ar=تاريخ
-    http://127.0.0.1:8000/2022.2.7/version/all/?date_AH=310
-    http://127.0.0.1:8000/2022.2.7/version/all/?author_uri=0310Tabari
-    http://127.0.0.1:8000/2022.2.7/version/?tok_count_gte=800000&tok_count_lte=1000000
-    http://127.0.0.1:8000/2022.2.7/version/?release_tags=NO_MAJOR_ISSUES
-    http://127.0.0.1:8000/2022.2.7/version/?text_tags=SHICR
-    http://127.0.0.1:8000/2022.2.7/version/?editor=العاني
-    http://127.0.0.1:8000/2022.2.7/version/?edition=العاني&edition=الفلاح
-    http://127.0.0.1:8000/2022.2.7/version/?language=per
-    http://127.0.0.1:8000/2022.2.7/version/?analysis_priority=pri
+    http://127.0.0.1:8000/all-releases/version/all/?died_after_AH=309&died_before_AH=311
+    http://127.0.0.1:8000/all-releases/version/all/?title_ar=تاريخ
+    http://127.0.0.1:8000/all-releases/version/all/?date_AH=310
+    http://127.0.0.1:8000/all-releases/version/all/?author_uri=0310Tabari
+    http://127.0.0.1:8000/all-releases/version/?tok_count_gte=800000&tok_count_lte=1000000
+    http://127.0.0.1:8000/all-releases/version/?release_tags=NO_MAJOR_ISSUES
+    http://127.0.0.1:8000/all-releases/version/?text_tags=SHICR
+    http://127.0.0.1:8000/all-releases/version/?editor=العاني
+    http://127.0.0.1:8000/all-releases/version/?edition=العاني&edition=الفلاح
+    http://127.0.0.1:8000/all-releases/version/?language=per
+    http://127.0.0.1:8000/all-releases/version/?analysis_priority=pri
 
     """
     def filter_name_type(self, queryset, name, value):
@@ -377,45 +378,92 @@ class VersionFilter(django_filters.FilterSet):
 
     def filter_by_date(self, queryset, name, value):
         # here `name` is the key in the query string 
-        # (will be "died_before_AH", "died_after_CE", ...)
-        date_type, condition, calendar = name.split("_")
+        # (will be "author_died_before_AH", "author_died_after_CE", ...)
+        
+        try:
+            _, date_type, condition, calendar = name.split("_")
+        except:
+            date_type, condition, calendar = name.split("_")
+        
+        author_prefix = "text__authors__"
+        ed_prefix = "edition__"
         if date_type in ("born", "died"):
             if date_type == "died":
                 code = "death_date"
             elif date_type == "born":
                 code = "birth_date"
-            path = "text__authors__dates"
+            path = f"{author_prefix}dates"
         elif date_type == "edited":
             code = "edited"
-            path = "edition__dates"
+            path = f"{ed_prefix}dates"
 
-        base = queryset.filter(**{
-            f"{path}__calendar__slug": calendar,
-             f"{path}__date_type__code": code,
-        })
-        # base = queryset.filter(   
-        #     text__authors__dates__calendar__slug=calendar,
-        #     text__authors__dates__date_type__code=code,
-        # )
+        if calendar == "CE":
+            if condition == "before":
+                value = datetime.date(int(value),12,31)
+                year = "ce_end"
+            elif condition == "after":
+                value = datetime.date(int(value),1,1)
+                year = "ce_start"
+            if condition == "between":
+                v1 = datetime.date(int(value[0]),1,1)
+                v2 = datetime.date(int(value[1]),1,1)
+                value = (v1, v2)
+                year = "ce_start"
+            base = queryset
+            
+        else:
+            year = "year"
+            base = queryset.filter(**{
+                f"{path}__calendar__slug": calendar,
+                f"{path}__date_type__slug": code,
+            })
         
         if condition == "after":
-            #return base.filter(text__authors__dates__year__gte=value).distinct()
-            return base.filter(**{f"{path}__year__gte": value}).distinct()
+            return base.filter(**{f"{path}__{year}__gte": value}).distinct()
         elif condition == "before":
-            #return base.filter(text__authors__dates__year__lte=value).distinct()
-            return base.filter(**{f"{path}__year__lte": value}).distinct()
+            return base.filter(**{f"{path}__{year}__lte": value}).distinct()
         elif condition == "between":
-            return base.filter(**{f"{path}__year__range": value}).distinct()
-            #return base.filter(text__authors__dates__year__range=value).distinct()
-            # #start = value.start
-            # #stop = value.stop
-            # start, stop = value
-            # filters = {}
-            # if start is not None:
-            #     filters["text__authors__dates__year__gte"] = start
-            # if stop is not None:
-            #     filters["text__authors__dates__year__lte"] = stop
-            # return base.filter(**filters).distinct()
+            return base.filter(**{f"{path}__{year}__range": value}).distinct()
+
+        
+        # date_type, condition, calendar = name.split("_")
+        # if date_type in ("born", "died"):
+        #     if date_type == "died":
+        #         code = "death_date"
+        #     elif date_type == "born":
+        #         code = "birth_date"
+        #     path = "text__authors__dates"
+        # elif date_type == "edited":
+        #     code = "edited"
+        #     path = "edition__dates"
+
+        # base = queryset.filter(**{
+        #     f"{path}__calendar__slug": calendar,
+        #      f"{path}__date_type__slug": code,
+        # })
+        # # base = queryset.filter(   
+        # #     text__authors__dates__calendar__slug=calendar,
+        # #     text__authors__dates__date_type__slug=code,
+        # # )
+        
+        # if condition == "after":
+        #     #return base.filter(text__authors__dates__year__gte=value).distinct()
+        #     return base.filter(**{f"{path}__year__gte": value}).distinct()
+        # elif condition == "before":
+        #     #return base.filter(text__authors__dates__year__lte=value).distinct()
+        #     return base.filter(**{f"{path}__year__lte": value}).distinct()
+        # elif condition == "between":
+        #     return base.filter(**{f"{path}__year__range": value}).distinct()
+        #     #return base.filter(text__authors__dates__year__range=value).distinct()
+        #     # #start = value.start
+        #     # #stop = value.stop
+        #     # start, stop = value
+        #     # filters = {}
+        #     # if start is not None:
+        #     #     filters["text__authors__dates__year__gte"] = start
+        #     # if stop is not None:
+        #     #     filters["text__authors__dates__year__lte"] = stop
+        #     # return base.filter(**filters).distinct()
 
     version_uri_contains = django_filters.CharFilter(
         field_name="version_uri", lookup_expr='icontains', label="Version URI")  # "exact" is default
@@ -459,55 +507,55 @@ class VersionFilter(django_filters.FilterSet):
         label="Author's nisba (Arabic or Latin script)"
     )
 
-    died_after_AH = django_filters.NumberFilter(
+    author_died_after_AH = django_filters.NumberFilter(
         method="filter_by_date",
         label="Author died after (AH)",
     )
-    died_before_AH = django_filters.NumberFilter(
+    author_died_before_AH = django_filters.NumberFilter(
         method="filter_by_date",
         label="Author died before (AH)",
     )
-    died_between_AH = NumberRangeFilter(
+    author_died_between_AH = NumberRangeFilter(
         method="filter_by_date",
         label="Author died between (AH)",
     ) # /?died_between_AH=309,311
 
-    born_after_AH = django_filters.NumberFilter(
+    author_born_after_AH = django_filters.NumberFilter(
         method="filter_by_date",
         label="Author died after (AH)",
     )
-    born_before_AH = django_filters.NumberFilter(
+    author_born_before_AH = django_filters.NumberFilter(
         method="filter_by_date",
         label="Author died before (AH)",
     )
-    born_between_AH = NumberRangeFilter(
+    author_born_between_AH = NumberRangeFilter(
         method="filter_by_date",
         label="Author died between (AH)",
     ) # /?died_between_AH=309,311
 
     
-    died_after_CE = django_filters.NumberFilter(
+    author_died_after_CE = django_filters.NumberFilter(
         method="filter_by_date",
         label="Author died after (CE)",
     )
-    died_before_CE = django_filters.NumberFilter(
+    author_died_before_CE = django_filters.NumberFilter(
         method="filter_by_date",
         label="Author died before (CE)",
     )
-    died_between_CE = NumberRangeFilter(
+    author_died_between_CE = NumberRangeFilter(
         method="filter_by_date",
         label="Author died between (CE)",
     ) # /?died_between_CE=890,892
 
-    born_after_CE = django_filters.NumberFilter(
+    author_born_after_CE = django_filters.NumberFilter(
         method="filter_by_date",
         label="Author died after (CE)",
     )
-    born_before_CE = django_filters.NumberFilter(
+    author_born_before_CE = django_filters.NumberFilter(
         method="filter_by_date",
         label="Author died before (CE)",
     )
-    born_between_CE = NumberRangeFilter(
+    author_born_between_CE = NumberRangeFilter(
         method="filter_by_date",
         label="Author died between (CE)",
     ) # /?died_between_CE=890,892
@@ -596,6 +644,18 @@ class VersionFilter(django_filters.FilterSet):
         field_name="text__tags", lookup_expr='icontains',
         label="Tags related to the text")  # /?tags=_SHICR
     
+    manuscript_uri = django_filters.CharFilter(lookup_expr='icontains',
+        field_name="manuscript__manuscript_uri", label="Manuscript URI")
+    shelfmark = django_filters.CharFilter(lookup_expr='icontains',
+        field_name="manuscript__shelfmark", label="Shelfmark")
+    manuscript_type = django_filters.CharFilter(lookup_expr='icontains',
+        field_name="manuscript__manuscript_types__label", label="Manuscript type")
+    script = django_filters.CharFilter(lookup_expr='icontains',
+        field_name="script", label="Script")
+    manuscript_title = django_filters.CharFilter(lookup_expr='icontains',
+        field_name="manuscript__titles__name", label="Title of the manuscript")
+
+
     class Meta:
         model = Version
         # additional fields with the default lookup ("exact"):
@@ -654,32 +714,51 @@ class AuthorFilter(django_filters.FilterSet):
                 .distinct()
             )
 
-
     def filter_by_date(self, queryset, name, value):
         # here `name` is the key in the query string 
         # (will be "died_before_AH", "died_after_CE", ...)
         date_type, condition, calendar = name.split("_")
+        
+        author_prefix = ""
+        ed_prefix = "texts__version__edition__"
+        
         if date_type in ("born", "died"):
             if date_type == "died":
                 code = "death_date"
             elif date_type == "born":
                 code = "birth_date"
-            path = "dates"
+            path = f"{author_prefix}dates"
         elif date_type == "edited": # TODO
             code = "edited"
-            path = "edition__dates"
+            path = f"{ed_prefix}dates"
 
-        base = queryset.filter(**{
-            f"{path}__calendar__slug": calendar,
-            f"{path}__date_type__code": code,
-        })
+        if calendar == "CE":
+            if condition == "before":
+                value = datetime.date(int(value),12,31)
+                year = "ce_end"
+            elif condition == "after":
+                value = datetime.date(int(value),1,1)
+                year = "ce_start"
+            if condition == "between":
+                v1 = datetime.date(int(value[0]),1,1)
+                v2 = datetime.date(int(value[1]),1,1)
+                value = (v1, v2)
+                year = "ce_start"
+            base = queryset
+            
+        else:
+            year = "year"
+            base = queryset.filter(**{
+                f"{path}__calendar__slug": calendar,
+                f"{path}__date_type__slug": code,
+            })
         
         if condition == "after":
-            return base.filter(**{f"{path}__year__gte": value}).distinct()
+            return base.filter(**{f"{path}__{year}__gte": value}).distinct()
         elif condition == "before":
-            return base.filter(**{f"{path}__year__lte": value}).distinct()
+            return base.filter(**{f"{path}__{year}__lte": value}).distinct()
         elif condition == "between":
-            return base.filter(**{f"{path}__year__range": value}).distinct()
+            return base.filter(**{f"{path}__{year}__range": value}).distinct()
 
 
     author_uri = django_filters.CharFilter(lookup_expr='icontains', 
@@ -829,6 +908,11 @@ class ManuscriptHoldingFilter(django_filters.FilterSet):
         field_name="manuscript__related_texts__titles__name", label="Text title")
     author = django_filters.CharFilter(lookup_expr='icontains', 
         field_name="manuscript__related_persons__names__name", label="Text author")
+    text_uri = django_filters.CharFilter(lookup_expr='icontains', 
+        field_name="manuscript__related_texts__text_uri", label="Text URI")
+    author_uri = django_filters.CharFilter(lookup_expr='icontains', 
+        field_name="manuscript__related_persons__author_uri", label="Author URI")
+    
     # TODO: writing_place, writing_date_AH, writing_date_CE, ...
 
 
@@ -876,16 +960,33 @@ class ManuscriptFilter(django_filters.FilterSet):
         if date_type == "copied": # TODO
             code = "COPY"
             path = "dates"
-        base = queryset.filter(**{
-            f"{path}__calendar__slug": calendar,
-            f"{path}__date_type__code": code,
-        })
+        
+        if calendar == "CE":
+            if condition == "before":
+                value = datetime.date(int(value),12,31)
+                year = "ce_end"
+            elif condition == "after":
+                value = datetime.date(int(value),1,1)
+                year = "ce_start"
+            if condition == "between":
+                v1 = datetime.date(int(value[0]),1,1)
+                v2 = datetime.date(int(value[1]),1,1)
+                value = (v1, v2)
+                year = "ce_start"
+            base = queryset
+        else:
+            base = queryset.filter(**{
+                f"{path}__calendar__slug": calendar,
+                f"{path}__date_type__slug": code,
+            })
+            year = "year"
         if condition == "after":
-            return base.filter(**{f"{path}__year__gte": value}).distinct()
+            return base.filter(**{f"{path}__{year}__gte": value}).distinct()
         elif condition == "before":
-            return base.filter(**{f"{path}__year__lte": value}).distinct()
+            return base.filter(**{f"{path}__{year}__lte": value}).distinct()
         elif condition == "between":
-            return base.filter(**{f"{path}__year__range": value}).distinct()
+            return base.filter(**{f"{path}__{year}__range": value}).distinct()
+
 
     manuscript_uri = django_filters.CharFilter(lookup_expr='icontains',
         field_name="manuscript_uri", label="Manuscript URI")
@@ -978,8 +1079,8 @@ class TextFilter(django_filters.FilterSet):
         _, name_type = name.split("_")
         return (
             queryset.filter(
-                names__name_type=name,
-                names__name__icontains=value,
+                authors__names__name_type=name_type,
+                authors__names__name__icontains=value,
             )
             .distinct()
         )
@@ -1011,28 +1112,45 @@ class TextFilter(django_filters.FilterSet):
         # here `name` is the key in the query string 
         # (will be "died_before_AH", "died_after_CE", ...)
         _, date_type, condition, calendar = name.split("_")
+        author_prefix = "authors__"
+        ed_prefix = "version__edition__"
+        
         if date_type in ("born", "died"):
             if date_type == "died":
                 code = "death_date"
             elif date_type == "born":
                 code = "birth_date"
-            path = "authors__dates"
+            path = f"{author_prefix}dates"
         elif date_type == "edited": # TODO
             code = "edited"
-            path = "edition__dates"
+            path = f"{ed_prefix}dates"
 
-        base = queryset.filter(**{
-            f"{path}__calendar__slug": calendar,
-            f"{path}__date_type__code": code,
-        })
+        if calendar == "CE":
+            if condition == "before":
+                value = datetime.date(int(value),12,31)
+                year = "ce_end"
+            elif condition == "after":
+                value = datetime.date(int(value),1,1)
+                year = "ce_start"
+            if condition == "between":
+                v1 = datetime.date(int(value[0]),1,1)
+                v2 = datetime.date(int(value[1]),1,1)
+                value = (v1, v2)
+                year = "ce_start"
+            base = queryset
+        else:
+            year = "year"
+            base = queryset.filter(**{
+                f"{path}__calendar__slug": calendar,
+                f"{path}__date_type__slug": code,
+            })
         
         if condition == "after":
-            return base.filter(**{f"{path}__year__gte": value}).distinct()
+            return base.filter(**{f"{path}__{year}__gte": value}).distinct()
         elif condition == "before":
-            return base.filter(**{f"{path}__year__lte": value}).distinct()
+            return base.filter(**{f"{path}__{year}__lte": value}).distinct()
         elif condition == "between":
-            return base.filter(**{f"{path}__year__range": value}).distinct()
-
+            return base.filter(**{f"{path}__{year}__range": value}).distinct()
 
     text_uri = django_filters.CharFilter(lookup_expr='icontains',
         field_name="text_uri", label="Text URI")
@@ -1077,22 +1195,22 @@ class TextFilter(django_filters.FilterSet):
     author_lat = django_filters.CharFilter(
         method="filter_name_by_language",
         label="Author name (Latin script)")
-    shuhra = django_filters.CharFilter(
+    author_shuhra = django_filters.CharFilter(
         method="filter_name_type",
         label="Author's shuhra (Arabic or Latin script)")
-    ism = django_filters.CharFilter(
+    author_ism = django_filters.CharFilter(
         method="filter_name_type",
         label="Author's ism (Arabic or Latin script)")
-    nasab = django_filters.CharFilter(
+    author_nasab = django_filters.CharFilter(
         method="filter_name_type",
         label="Author's nasab (Arabic or Latin script)")
-    kunya = django_filters.CharFilter(
+    author_kunya = django_filters.CharFilter(
         method="filter_name_type",
         label="Author's kunya (Arabic or Latin script)")
-    laqab = django_filters.CharFilter(
+    author_laqab = django_filters.CharFilter(
         method="filter_name_type",
         label="Author's laqab (Arabic or Latin script)")
-    nisba = django_filters.CharFilter(
+    author_nisba = django_filters.CharFilter(
         method="filter_name_type",
         label="Author's nisba (Arabic or Latin script)")
 
@@ -1245,34 +1363,49 @@ class ReleaseVersionFilter(django_filters.FilterSet):
             _, date_type, condition, calendar = name.split("_")
         except:
             date_type, condition, calendar = name.split("_")
+        
+        author_prefix = "version__text__authors__"
+        ed_prefix = "version__edition__"
         if date_type in ("born", "died"):
             if date_type == "died":
                 code = "death_date"
             elif date_type == "born":
                 code = "birth_date"
-            path = "version__text__authors__dates"
+            path = f"{author_prefix}dates"
         elif date_type == "edited":
             code = "edited"
-            path = "version__edition__dates"
+            path = f"{ed_prefix}dates"
 
-        base = queryset.filter(**{
-            f"{path}__calendar__slug": calendar,
-             f"{path}__date_type__code": code,
-        })
+        if calendar == "CE":
+            if condition == "before":
+                value = datetime.date(int(value),12,31)
+                year = "ce_end"
+            elif condition == "after":
+                value = datetime.date(int(value),1,1)
+                year = "ce_start"
+            if condition == "between":
+                v1 = datetime.date(int(value[0]),1,1)
+                v2 = datetime.date(int(value[1]),1,1)
+                value = (v1, v2)
+                year = "ce_start"
+            base = queryset
+            
+        else:
+            year = "year"
+            base = queryset.filter(**{
+                f"{path}__calendar__slug": calendar,
+                f"{path}__date_type__slug": code,
+            })
         
         if condition == "after":
-            return base.filter(**{f"{path}__year__gte": value}).distinct()
+            return base.filter(**{f"{path}__{year}__gte": value}).distinct()
         elif condition == "before":
-            return base.filter(**{f"{path}__year__lte": value}).distinct()
+            return base.filter(**{f"{path}__{year}__lte": value}).distinct()
         elif condition == "between":
-            return base.filter(**{f"{path}__year__range": value}).distinct()
-            
+            return base.filter(**{f"{path}__{year}__range": value}).distinct()
 
-    release_code = django_filters.CharFilter(lookup_expr='exact',
-        field_name="release_info__release_code", label="Release code")
-    release_code_contains = django_filters.CharFilter(lookup_expr='icontains',
-        field_name="release_info__release_code", label="Release code contains")
-    
+    version_code = django_filters.CharFilter(lookup_expr='icontains',
+        field_name="version__version_code", label="Version URI contains")  # "exact" is default
     version_uri = django_filters.CharFilter(lookup_expr='icontains',
         field_name="version__version_uri", label="Version URI contains")  # "exact" is default
     char_count_lte = django_filters.NumberFilter(lookup_expr="lte",
@@ -1351,6 +1484,15 @@ class ReleaseVersionFilter(django_filters.FilterSet):
     author_died_between_AH = NumberRangeFilter(
         method="filter_by_date",
         label="Author died between (AH)") 
+    author_died_after_CE = django_filters.NumberFilter(
+        method="filter_by_date",
+        label="Author died after (CE)")  
+    author_died_before_CE = django_filters.NumberFilter(
+        method="filter_by_date",
+        label="Author died before (CE)")  
+    author_died_between_CE = NumberRangeFilter(
+        method="filter_by_date",
+        label="Author died between (CE)") 
     
     title = django_filters.CharFilter(
         field_name="version__text__titles__name", lookup_expr='icontains',
@@ -1405,7 +1547,17 @@ class ReleaseVersionFilter(django_filters.FilterSet):
         label="Date of edition between (CE)",
     )
 
-    
+    manuscript_uri = django_filters.CharFilter(lookup_expr='icontains',
+        field_name="version__manuscript__manuscript_uri", label="Manuscript URI")
+    shelfmark = django_filters.CharFilter(lookup_expr='icontains',
+        field_name="version__manuscript__shelfmark", label="Shelfmark")
+    manuscript_type = django_filters.CharFilter(lookup_expr='icontains',
+        field_name="version__manuscript__manuscript_types__label", label="Manuscript type")
+    script = django_filters.CharFilter(lookup_expr='icontains',
+        field_name="script", label="Script")
+    manuscript_title = django_filters.CharFilter(lookup_expr='icontains',
+        field_name="version__manuscript__titles__name", label="Title of the manuscript")
+
     
     
     class Meta:

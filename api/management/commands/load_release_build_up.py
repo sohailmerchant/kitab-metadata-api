@@ -275,7 +275,7 @@ def get_or_create_place_obj(place_code, part_of_obj, thurayya_uri=False):
         
         # add the preferred Arabic name:
         name_ar_prefered = d["toponym_arabic"]
-        nm = get_or_create_name_obj(name_ar_prefered, "AR", "toponym")
+        nm = get_or_create_name_obj(name_ar_prefered, "ar", "toponym")
         link_name_to_obj(nm, place_obj=pm, is_preferred=True)
         
         # add alternative Arabic names:
@@ -283,12 +283,12 @@ def get_or_create_place_obj(place_code, part_of_obj, thurayya_uri=False):
             # do not duplicate the prefered name:
             if name == name_ar_prefered:
                 continue
-            nm = get_or_create_name_obj(name, "AR", "toponym")
+            nm = get_or_create_name_obj(name, "ar", "toponym")
             link_name_to_obj(nm, place_obj=pm, is_preferred=False)
         
         # add the preferred Latin name:
         name_lat_prefered = d["toponym_translit"]
-        nm = get_or_create_name_obj(name_lat_prefered, "LAT", "toponym")
+        nm = get_or_create_name_obj(name_lat_prefered, "lat", "toponym")
         link_name_to_obj(nm, place_obj=pm, is_preferred=True)
         
         # add alternative Latin names:
@@ -296,7 +296,7 @@ def get_or_create_place_obj(place_code, part_of_obj, thurayya_uri=False):
             # do not duplicate the prefered name:
             if name == name_lat_prefered:
                 continue
-            nm = get_or_create_name_obj(name, "LAT", "toponym")
+            nm = get_or_create_name_obj(name, "lat", "toponym")
             link_name_to_obj(nm, place_obj=pm, is_preferred=False)
         
         # create the region name if it does not exist yet:
@@ -307,12 +307,12 @@ def get_or_create_place_obj(place_code, part_of_obj, thurayya_uri=False):
         if region_created:
             # Add the Latin region name:
             region_lat = betacodeToSearch(d["region_spelled"])
-            nm = get_or_create_name_obj(region_lat, "LAT", "toponym")
+            nm = get_or_create_name_obj(region_lat, "lat", "toponym")
             link_name_to_obj(nm, place_obj=rm, is_preferred=True)
 
             # Add the Arabic region name:
             region_ar = betacodeToArabic(d["region_spelled"])
-            nm = get_or_create_name_obj(region_ar, "AR", "toponym")
+            nm = get_or_create_name_obj(region_ar, "ar", "toponym")
             link_name_to_obj(nm, place_obj=rm, is_preferred=True)
 
         # link the place to the region:
@@ -489,31 +489,31 @@ def link_places(place_a, place_b, rel_type_obj, authority=""):
 def link_manuscript_to_titles(mm, record):
     """Add various titles to a manuscript object"""
     for name in record['titles_ar'].split(" :: "):
-        nm = get_or_create_name_obj(name, "AR", "title")
+        nm = get_or_create_name_obj(name, "ar", "title")
         link_name_to_obj(nm, manuscr_obj=mm, is_preferred=False)
     for name in record['titles_lat'].split(" :: "):
-        nm = get_or_create_name_obj(name, "LAT", "title")
+        nm = get_or_create_name_obj(name, "lat", "title")
         link_name_to_obj(nm, manuscr_obj=mm, is_preferred=False)
     name = record['title_ar_prefered']
-    nm = get_or_create_name_obj(name, "AR", "title")
+    nm = get_or_create_name_obj(name, "ar", "title")
     link_name_to_obj(nm, manuscr_obj=mm, is_preferred=True)
     name = record['title_lat_prefered']
-    nm = get_or_create_name_obj(name, "LAT", "title")
+    nm = get_or_create_name_obj(name, "lat", "title")
     link_name_to_obj(nm, manuscr_obj=mm, is_preferred=True)
 
 def link_book_to_titles(tm, record):
     """Add various titles to a book/text object"""
     for name in record['titles_ar'].split(" :: "):
-        nm = get_or_create_name_obj(name, "AR", "title")
+        nm = get_or_create_name_obj(name, "ar", "title")
         link_name_to_obj(nm, text_obj=tm, is_preferred=False)
     for name in record['titles_lat'].split(" :: "):
-        nm = get_or_create_name_obj(name, "LAT", "title")
+        nm = get_or_create_name_obj(name, "lat", "title")
         link_name_to_obj(nm, text_obj=tm, is_preferred=False)
     name = record['title_ar_prefered']
-    nm = get_or_create_name_obj(name, "AR", "title")
+    nm = get_or_create_name_obj(name, "ar", "title")
     link_name_to_obj(nm, text_obj=tm, is_preferred=True)
     name = record['title_lat_prefered']
-    nm = get_or_create_name_obj(name, "LAT", "title")
+    nm = get_or_create_name_obj(name, "lat", "title")
     link_name_to_obj(nm, text_obj=tm, is_preferred=True)
     
 def add_book_type(text_obj, text_type_obj, is_preferred=False,
@@ -535,47 +535,47 @@ def add_book_type(text_obj, text_type_obj, is_preferred=False,
 def add_holding_names(hm, record):
     """Add various names to a manuscript holding object"""
     for name in record['institution_ar'].split(" :: "):
-        nm = get_or_create_name_obj(name, "AR", "institution_name")
+        nm = get_or_create_name_obj(name, "ar", "institution_name")
         link_name_to_obj(nm, loc_obj=hm, is_preferred=False)
     for name in record['institution_lat'].split(" :: "):
-        nm = get_or_create_name_obj(name, "LAT", "institution_name")
+        nm = get_or_create_name_obj(name, "lat", "institution_name")
         link_name_to_obj(nm, loc_obj=hm, is_preferred=False)
 
 def add_city_names(city_obj, record):
     """Add various names to a manuscript holding object"""
     for name in record['city_ar'].split(" :: "):
-        nm = get_or_create_name_obj(name, "AR", "city_name")
+        nm = get_or_create_name_obj(name, "ar", "city_name")
         link_name_to_obj(nm, place_obj=city_obj, is_preferred=False)
     for name in record['city_lat'].split(" :: "):
-        nm = get_or_create_name_obj(name, "LAT", "city_name")
+        nm = get_or_create_name_obj(name, "lat", "city_name")
         link_name_to_obj(nm, place_obj=city_obj, is_preferred=False)
 
 def add_author_names(am, record):
     """Add various names to an author object"""
     for name in record['author_ar'].split(" :: "):
-        nm = get_or_create_name_obj(name, "AR", "full_name")
+        nm = get_or_create_name_obj(name, "ar", "full_name")
         #link_author_name(am, nm, is_preferred=False)
         link_name_to_obj(nm, author_obj=am, is_preferred=False)
     for name in record['author_lat'].split(" :: "):
-        nm = get_or_create_name_obj(name, "LAT", "full_name")
+        nm = get_or_create_name_obj(name, "lat", "full_name")
         #link_author_name(am, nm, is_preferred=False)
         link_name_to_obj(nm, author_obj=am, is_preferred=False)
     for name in record['author_ar_prefered'].split(" :: "):
-        nm = get_or_create_name_obj(name, "AR", "full_name")
+        nm = get_or_create_name_obj(name, "ar", "full_name")
         #link_author_name(am, nm, is_preferred=True)
         link_name_to_obj(nm, author_obj=am, is_preferred=True)
     for name in record['author_lat_prefered'].split(" :: "):
-        nm = get_or_create_name_obj(name, "LAT", "full_name")
+        nm = get_or_create_name_obj(name, "lat", "full_name")
         #link_author_name(am, nm, is_preferred=True)
         link_name_to_obj(nm, author_obj=am, is_preferred=True)
     
     name = record['author_lat_shuhra']
-    nm = get_or_create_name_obj(name, "LAT", "shuhra")
+    nm = get_or_create_name_obj(name, "lat", "shuhra")
     #link_author_name(am, nm, is_preferred=False)
     link_name_to_obj(nm, author_obj=am, is_preferred=False)
     
     name = record['author_from_uri']
-    nm = get_or_create_name_obj(name, "LAT", "full_name")
+    nm = get_or_create_name_obj(name, "lat", "full_name")
     #link_author_name(am, nm, is_preferred=False, source="URI")
     link_name_to_obj(nm, author_obj=am, is_preferred=True, source="URI")
 
@@ -1144,6 +1144,7 @@ def upload_ms_corpus_meta(record, authorship_obj, release_obj, part_of_obj, worl
                 manuscript_uri=record["manuscript_uri"],
                 defaults=dict(
                     tags=record["text_tags"],
+                    shelfmark=record["shelfmark"],
                     manuscript_holding=hm
                 )
             )
