@@ -8,7 +8,8 @@ then test the lookup paths using the test_lookups method.
 
 from django.core.management.base import BaseCommand
 from django.core.exceptions import FieldError
-from api.models import Version, ReleaseVersion, Author, Text
+from api.models import Version, ReleaseVersion, Author, Text, \
+    ManuscriptHolding, Manuscript
 
 class Command(BaseCommand):
 
@@ -205,6 +206,69 @@ class Command(BaseCommand):
         LOOKUPS =  [
             "texts__titles__name"
         ]
+        self.test_lookups(LOOKUPS, qs)
+
+        print("4. ManuscriptHoldingFilter")
+
+        qs = ManuscriptHolding.objects.all()
+
+        LOOKUPS =  [
+            "loc_uri", 
+            "names__name",
+            "country__names__name",
+            "manuscript__manuscript_uri",
+            "manuscript__titles__name",
+            "manuscript__related_texts__titles__name",
+            "manuscript__related_persons__names__name",
+        ]
+        self.test_lookups(LOOKUPS, qs)
+
+        print("5. ManuscriptFilter")
+
+        qs = Manuscript.objects.all()
+
+        LOOKUPS = [
+            "related_persons__relation_type__code",
+            "related_manuscript_b__relation_type__code",
+            "related_manuscript_b__person_a__names__name",
+            "related_manuscript_a__text_b__text_uri",
+            "related_manuscript_a__text_b__titles__name",
+            "manuscript_holding__names__name",
+            "manuscript_holding__country__names__name", 
+            "manuscript_types__label",
+            "titles__name",
+            "related_places__names__name", 
+        ]
+
+        self.test_lookups(LOOKUPS, qs)
+
+        print("6. TextFilter")
+
+        qs = Text.objects.all()
+
+        LOOKUPS = [
+            "titles__name", 
+            "authors__names__language",
+            "related_texts__titles__name",
+        ]
+
+        self.test_lookups(LOOKUPS, qs)
+
+        print("6. ReleaseVersionFilter")
+
+        qs = ReleaseVersion.objects.all()
+
+        LOOKUPS = [
+            "release_info__release_code", 
+            "version__version_uri",
+            "char_length",
+            "version__edition__editor",
+            "version__edition__edition_place",
+            "version__edition__publisher",
+            "version__language", 
+            "analysis_priority",
+        ]
+
         self.test_lookups(LOOKUPS, qs)
 
 
