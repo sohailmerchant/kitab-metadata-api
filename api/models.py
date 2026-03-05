@@ -1155,9 +1155,8 @@ class ReleaseVersion(models.Model):
     char_length = models.IntegerField(null=True, blank=True)
     tok_length = models.IntegerField(null=True, blank=True)
     url = models.CharField(max_length=255, null=False, blank=True)
-    subcorpus = models.ForeignKey(SubCorpus, null=True, blank=True,
-        related_name="release_versions",
-        on_delete=models.DO_NOTHING)
+    subcorpus = models.CharField(max_length=25, blank=True,
+        help_text="Subcorpus (ara, per, mss)")
     analysis_priority = models.CharField(max_length=3, null=False, blank=True,
         help_text="Primary or secondary text? Use 'pri' or 'sec'")
     annotation_status = models.CharField(max_length=50, null=False, blank=True,

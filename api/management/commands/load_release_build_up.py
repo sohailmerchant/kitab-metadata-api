@@ -831,9 +831,9 @@ def format_fields(data, base_url):
             record["uncorrected_OCR"] = None            
 
     if "subcorpus" in data:
-        record["subcorpus"] = data["subcorpus"]
+        record["subcorpus"] = data["subcorpus"].lower()
     else:
-        record["subcorpus"] = record['version_lang']
+        record["subcorpus"] = record['version_lang'].lower()
 
     # deal with manuscripts that contain one or more specific texts:
     record["text_uris"] = []
@@ -1041,6 +1041,7 @@ def upload_book_corpus_meta(record, authorship_obj, book_type_obj, release_obj, 
         version=vm,
         defaults=dict(
             url=record["url"],
+            subcorpus=record["subcorpus"],
             char_length=record["char_length"],
             tok_length=record["tok_length"],
             analysis_priority=record["analysis_priority"],
@@ -1216,6 +1217,7 @@ def upload_ms_corpus_meta(record, authorship_obj, release_obj, part_of_obj, worl
         version=vm,
         defaults=dict(
             url=record["url"],
+            subcorpus=record["subcorpus"],
             char_length=record["char_length"],
             tok_length=record["tok_length"],
             analysis_priority=record["analysis_priority"],

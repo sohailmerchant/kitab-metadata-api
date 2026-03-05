@@ -425,48 +425,31 @@ class VersionFilter(django_filters.FilterSet):
         elif condition == "between":
             return base.filter(**{f"{path}__{year}__range": value}).distinct()
 
-        
-        # date_type, condition, calendar = name.split("_")
-        # if date_type in ("born", "died"):
-        #     if date_type == "died":
-        #         code = "death_date"
-        #     elif date_type == "born":
-        #         code = "birth_date"
-        #     path = "text__authors__dates"
-        # elif date_type == "edited":
-        #     code = "edited"
-        #     path = "edition__dates"
-
-        # base = queryset.filter(**{
-        #     f"{path}__calendar__slug": calendar,
-        #      f"{path}__date_type__slug": code,
-        # })
-        # # base = queryset.filter(   
-        # #     text__authors__dates__calendar__slug=calendar,
-        # #     text__authors__dates__date_type__slug=code,
-        # # )
-        
-        # if condition == "after":
-        #     #return base.filter(text__authors__dates__year__gte=value).distinct()
-        #     return base.filter(**{f"{path}__year__gte": value}).distinct()
-        # elif condition == "before":
-        #     #return base.filter(text__authors__dates__year__lte=value).distinct()
-        #     return base.filter(**{f"{path}__year__lte": value}).distinct()
-        # elif condition == "between":
-        #     return base.filter(**{f"{path}__year__range": value}).distinct()
-        #     #return base.filter(text__authors__dates__year__range=value).distinct()
-        #     # #start = value.start
-        #     # #stop = value.stop
-        #     # start, stop = value
-        #     # filters = {}
-        #     # if start is not None:
-        #     #     filters["text__authors__dates__year__gte"] = start
-        #     # if stop is not None:
-        #     #     filters["text__authors__dates__year__lte"] = stop
-        #     # return base.filter(**filters).distinct()
-
     version_uri_contains = django_filters.CharFilter(
-        field_name="version_uri", lookup_expr='icontains', label="Version URI")  # "exact" is default
+        field_name="version_uri", lookup_expr='icontains', label="Version URI") 
+    version_uri = django_filters.CharFilter(
+        field_name="version_uri", lookup_expr='icontains', label="Version URI")  
+    version_code = django_filters.CharFilter(
+        field_name="version_code", lookup_expr='icontains', label="Version code") 
+    
+    subcorpus = django_filters.CharFilter(lookup_expr='icontains',
+        field_name="release_version__subcorpus", label="Subcorpus (ara, per, mss, ...)") 
+    language = CharInFilter(lookup_expr='iin',    # case insensitive version of "in"
+        field_name="language", label="Language (three-letter code, separate multiple options with comma)")
+    analysis_priority = CharInFilter(lookup_expr='iin',    # case insensitive version of "in"
+        field_name="release_version__analysis_priority", label="Analysis priority (pri/sec)")
+    annotation_status = CharInFilter(lookup_expr='iin',  # case insensitive version of "in"
+        field_name="release_version__annotation_status", label="Annotation status (inProgress/completed/mARkdown/(not yet annotated))")
+
+
+    release_tags = django_filters.CharFilter(
+        field_name="release_version__tags", lookup_expr='icontains',
+        label="Tags related to the digital version")
+    text_tags = django_filters.CharFilter(
+        field_name="text__tags", lookup_expr='icontains',
+        label="Tags related to the text")  # /?tags=_SHICR
+    
+    
     
     author_uri = django_filters.CharFilter(
         field_name="text__authors__author_uri", lookup_expr='icontains',
@@ -627,22 +610,6 @@ class VersionFilter(django_filters.FilterSet):
         method="filter_by_date",
         label="Date of edition between (CE)",
     )
-
-    
-    language = CharInFilter(lookup_expr='iin',    # case insensitive version of "in"
-        field_name="language", label="Language (three-letter code, separate multiple options with comma)")
-    analysis_priority = CharInFilter(lookup_expr='iin',    # case insensitive version of "in"
-        field_name="release_version__analysis_priority", label="Analysis priority (pri/sec)")
-    annotation_status = CharInFilter(lookup_expr='iin',  # case insensitive version of "in"
-        field_name="release_version__annotation_status", label="Annotation status (inProgress/completed/mARkdown/(not yet annotated))")
-
-
-    release_tags = django_filters.CharFilter(
-        field_name="release_version__tags", lookup_expr='icontains',
-        label="Tags related to the digital version")
-    text_tags = django_filters.CharFilter(
-        field_name="text__tags", lookup_expr='icontains',
-        label="Tags related to the text")  # /?tags=_SHICR
     
     manuscript_uri = django_filters.CharFilter(lookup_expr='icontains',
         field_name="manuscript__manuscript_uri", label="Manuscript URI")
@@ -855,6 +822,12 @@ class AuthorFilter(django_filters.FilterSet):
         label="Author died between (CE)",
     ) # /?died_between_CE=890,892
 
+    subcorpus = django_filters.CharFilter(lookup_expr='icontains',
+        field_name="texts__version__release_version__subcorpus", label="Subcorpus (ara, per, mss, ...)") 
+    language = django_filters.CharFilter(lookup_expr='icontains',
+        field_name="texts__version__language", label="Language code of the text (are, per, ...)")
+    
+
     text_title = django_filters.CharFilter(
         field_name="texts__titles__name", lookup_expr='icontains',
         label="Title of work (Arabic/Latin script)"
@@ -999,6 +972,9 @@ class ManuscriptFilter(django_filters.FilterSet):
     tag = django_filters.CharFilter(field_name="tags", lookup_expr='icontains')
     title = django_filters.CharFilter(lookup_expr='icontains',
         field_name="titles__name", label="Title of the manuscript")
+    
+    language = django_filters.CharFilter(lookup_expr='icontains',
+        field_name="transcription__language", label="Language code of the text (are, per, ...)")
 
     text_uri = django_filters.CharFilter(lookup_expr='icontains',
         field_name="related_manuscript_a__text_b__text_uri", label="Text URI")
@@ -1166,6 +1142,10 @@ class TextFilter(django_filters.FilterSet):
         field_name="text_types__slug", label="Text type (book/document)")
     tag = django_filters.CharFilter(field_name="tags", lookup_expr='icontains')
 
+    subcorpus = django_filters.CharFilter(lookup_expr='icontains',
+        field_name="version__release_version__subcorpus", label="Subcorpus (ara, per, mss, ...)") 
+    language = django_filters.CharFilter(lookup_expr='icontains',
+        field_name="version__language", label="Language code of the text (are, per, ...)")
     
     author_died_after_AH = django_filters.NumberFilter(
         method="filter_by_date",
@@ -1315,10 +1295,10 @@ class ReleaseVersionFilter(django_filters.FilterSet):
         icontains = case insensitive substring)
 
     E.g., 
-    http://127.0.0.1:8000/version/all/?died_after_AH=309&died_before_AH=310
-    http://127.0.0.1:8000/version/all/?book_title_ar=تاريخ
-    http://127.0.0.1:8000/version/all/?date_AH=310
-    http://127.0.0.1:8000/version/all/?author_uri=0310Tabari
+    http://127.0.0.1:8000/2025.1.9/version/all/?died_after_AH=309&died_before_AH=310
+    http://127.0.0.1:8000/2025.1.9/version/all/?book_title_ar=تاريخ
+    http://127.0.0.1:8000/2025.1.9/version/all/?date_AH=310
+    http://127.0.0.1:8000/2025.1.9/version/all/?author_uri=0310Tabari
 
     """
 
@@ -1428,10 +1408,12 @@ class ReleaseVersionFilter(django_filters.FilterSet):
     edition = django_filters.CharFilter(lookup_expr='icontains',
         field_name="version__edition__ed_info", label="Any information on the edition of the paper version")
 
-    language = CharInFilter(lookup_expr='iin',    # case insensitive version of "in"
+    subcorpus = django_filters.CharFilter(lookup_expr='icontains',
+        field_name="subcorpus", label="Subcorpus (ara, per, mss, ...)") 
+    language = django_filters.CharFilter(lookup_expr='icontains',    # case insensitive version of "in"
         field_name="version__language", label="Language (three-letter code, separate multiple options with comma)")
     tags = django_filters.CharFilter(lookup_expr='icontains',
-        field_name="version__release_version__tags", label="Version tags contain")  # /?tags=_SHICR
+        field_name="tags", label="Version tags contain")  # /?tags=_SHICR
     text_tags = django_filters.CharFilter(
         field_name="version__text__tags", lookup_expr='icontains',
         label="Tags related to the text")  # /?text_tags=_SHICR

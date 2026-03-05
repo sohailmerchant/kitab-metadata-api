@@ -205,9 +205,13 @@ class Command(BaseCommand):
 
         LOOKUPS =  [
             "texts__titles__name",
-            "texts__version__edition__dates"
+            "texts__version__edition__dates",
+            
+            "texts__version__release_version",
+            "texts__version__language",
         ]
         self.test_lookups(LOOKUPS, qs)
+        
 
         print("4. ManuscriptHoldingFilter")
 
@@ -239,6 +243,8 @@ class Command(BaseCommand):
             "manuscript_types__label",
             "titles__name",
             "related_places__names__name", 
+            "transcription__release_version__release_info", 
+            "transcription__language"
         ]
 
         self.test_lookups(LOOKUPS, qs)
@@ -251,10 +257,14 @@ class Command(BaseCommand):
             "titles__name", 
             "authors__names__language",
             "related_texts__titles__name",
-            "authors__dates__date_type__slug"
+            "authors__dates__date_type__slug",
+            "version__release_version",
+            "version__language",
+            
         ]
 
         self.test_lookups(LOOKUPS, qs)
+        
         
 
         print("6. ReleaseVersionFilter")
