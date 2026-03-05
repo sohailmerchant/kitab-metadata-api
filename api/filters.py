@@ -436,11 +436,12 @@ class VersionFilter(django_filters.FilterSet):
         field_name="release_version__subcorpus", label="Subcorpus (ara, per, mss, ...)") 
     language = CharInFilter(lookup_expr='iin',    # case insensitive version of "in"
         field_name="language", label="Language (three-letter code, separate multiple options with comma)")
+    uncorrected_ocr = django_filters.BooleanFilter(field_name="release_version__uncorrected_ocr", 
+        label="Was this text created using OCR, without manual correction?")
     analysis_priority = CharInFilter(lookup_expr='iin',    # case insensitive version of "in"
         field_name="release_version__analysis_priority", label="Analysis priority (pri/sec)")
     annotation_status = CharInFilter(lookup_expr='iin',  # case insensitive version of "in"
         field_name="release_version__annotation_status", label="Annotation status (inProgress/completed/mARkdown/(not yet annotated))")
-
 
     release_tags = django_filters.CharFilter(
         field_name="release_version__tags", lookup_expr='icontains',
@@ -1412,6 +1413,8 @@ class ReleaseVersionFilter(django_filters.FilterSet):
         field_name="subcorpus", label="Subcorpus (ara, per, mss, ...)") 
     language = django_filters.CharFilter(lookup_expr='icontains',    # case insensitive version of "in"
         field_name="version__language", label="Language (three-letter code, separate multiple options with comma)")
+    uncorrected_ocr = django_filters.BooleanFilter(field_name="uncorrected_ocr", 
+        label="Was this text created using OCR, without manual correction?")
     tags = django_filters.CharFilter(lookup_expr='icontains',
         field_name="tags", label="Version tags contain")  # /?tags=_SHICR
     text_tags = django_filters.CharFilter(

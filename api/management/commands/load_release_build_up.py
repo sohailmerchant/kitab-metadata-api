@@ -1042,6 +1042,7 @@ def upload_book_corpus_meta(record, authorship_obj, book_type_obj, release_obj, 
         defaults=dict(
             url=record["url"],
             subcorpus=record["subcorpus"],
+            uncorrected_ocr=record["uncorrected_OCR"],
             char_length=record["char_length"],
             tok_length=record["tok_length"],
             analysis_priority=record["analysis_priority"],
@@ -1218,6 +1219,7 @@ def upload_ms_corpus_meta(record, authorship_obj, release_obj, part_of_obj, worl
         defaults=dict(
             url=record["url"],
             subcorpus=record["subcorpus"],
+            uncorrected_ocr=record["uncorrected_OCR"],
             char_length=record["char_length"],
             tok_length=record["tok_length"],
             analysis_priority=record["analysis_priority"],
