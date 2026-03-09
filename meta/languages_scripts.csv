@@ -1,0 +1,15 @@
+﻿code,OpenITI_language_code,OpenITI_script_code,ISO639-1_language_code,ISO639-3_language_code,ISO15924_script_code,name,description
+ara,ara,ar,ar,ara,Arab,Arabic,Arabic language written in Arabic script
+bac,bac,gr,,,Grek,Bactrian,Bactrian language written in Greek script
+jup,per,he,,jpr,Hebr,Judaeo-Persian,Persian language written in Hebrew script
+jua,ara,he,,jrb,Hebr,Judaeo-Arabic,Arabic language written in Hebrew script
+mpp,per,ar,fa,per,Phlv,Middle Persian,Middle Persian written in Pahlavi script
+ota,tur,ar,tr,tur,Arab,Turkish in Arabic script,Turkish language written in Arabic script (incl. Ottoman Turkish)
+per,per,ar,fa,per,Arab,Farsi,Persian language written in Arabic script
+ugo,oug,uy,,,Ougr,Old Uyghur,Old Uyghur language written in Old Uyghur script
+uga,oug,ar,,,Arab,Old Uyghur in Arabic script,Old Uyghur language written in Arabic script
+urd,urd,ar,ur,urd,Arab,Urdu,Urdu language written in Arabic script
+en,en,lat,en,eng,Latn,English,English language written in Latin script
+fr,fr,lat,fr,fre,Latn,French,French language written in Latin script
+de,de,lat,de,ger,Latn,German,German language written in Latin script
+heb,heb,he,he,heb,Hebr,Hebrew,Hebrew Language written in Hebrew script

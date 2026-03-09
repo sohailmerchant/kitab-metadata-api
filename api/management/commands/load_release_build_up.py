@@ -27,7 +27,8 @@ from api.models import Author, Text, Version, Edition, \
     ObjectName, ObjectNameLink, A2BRelation, RelationType, \
     TextType, TextTypeLink, ReleaseInfo, \
     ManuscriptHolding, Place, Manuscript, \
-    ExternalID, ExternalIDLink, IdentifierProvider
+    ExternalID, ExternalIDLink, IdentifierProvider, \
+    Language, Script, LanguageScriptCombo
 from django.core.management.base import BaseCommand
 import re
 import datetime
@@ -150,10 +151,27 @@ class Command(BaseCommand):
             release_notes=release_notes,
         )
 
-        main(meta_fp, base_url, release_info, reuse_data_fp, reuse_data_base_url, test=test, meta_upload=meta_upload)
+        relations_definitions_fp = "meta/relations_definitions.tsv"
+        source_collections_fp = "meta/source_collections.tsv"
+
+        main(meta_fp, base_url, release_info, relations_definitions_fp, source_collections_fp, 
+             reuse_data_fp, reuse_data_base_url, test=test, meta_upload=meta_upload)
 
 
-def main(meta_fp, base_url, release_info, reuse_data_fp, reuse_data_base_url, test=False, meta_upload=True):
+def main(meta_fp, base_url, release_info, relations_definitions_fp, source_collections_fp, 
+         reuse_data_fp, reuse_data_base_url, test=False, meta_upload=True):
+    # load the language and script metadata:
+    upload_language_codes()
+    # load the relation types into the database:
+    load_relations_definitions(relations_definitions_fp)
+
+    # load the (main) source collections into the database:
+    load_source_collections(source_collections_fp)
+
+    # load Maxim's tags into a dictionary
+    #text_tags = tags2dic(tags_fp)
+    #print("tags loaded for", len(text_tags), "files")
+
     # load the release metadata:
     release_obj, version_codes_d = upload_release_meta(meta_fp, base_url, release_info, meta_upload=meta_upload, test=test)
     
@@ -176,7 +194,133 @@ def main(meta_fp, base_url, release_info, reuse_data_fp, reuse_data_base_url, te
     
     # # create the corpus insights data:
     # # TO DO
-    
+
+def upload_language_codes():
+    # create a dictionary of all ISO 639 language codes
+    all_language_codes = dict()
+    fp = r"meta/ISO639_language_codes.csv"
+    with open(fp, encoding="utf-8-sig") as file:
+        for row in csv.DictReader(file):
+            d = dict()
+            code3 = row["alpha3-b"]
+            d["ISO639-3"] = code3
+            d["ISO639-1"] = row["alpha2"]
+            d["name"] = row["English"]
+            all_language_codes[code3] = d
+    # add languages that are not in ISO 639:
+    fp = r"meta/additional_language_codes.csv"
+    with open(fp, encoding="utf-8") as file:
+        for row in csv.DictReader(file):
+            d = dict()
+            code3 = row["code"]
+            d["ISO639-3"] = ""
+            d["ISO639-1"] = ""
+            d["name"] = row["name"]
+            all_language_codes[code3] = d
+
+    # create a dictionary of selected ISO 15924 script codes:
+    selected_script_codes = dict()
+    fp = r"meta/ISO15924_script_codes.csv"
+    with open(fp, encoding="utf-8") as file:
+        for row in csv.DictReader(file):
+            iso_code = row["ISO15924_script_code"]
+            selected_script_codes[iso_code] = row
+
+    # upload the relevant language, script and combo codes:
+    fp = r"meta/languages_scripts.csv"
+    with open(fp, encoding="utf-8-sig") as file:
+        for row in csv.DictReader(file):
+            # get or create the language metadata item:
+            lang_code = row ["OpenITI_language_code"]
+            iso_lang = row["ISO639-3_language_code"]
+            if iso_lang not in all_language_codes:
+                if lang_code in all_language_codes:
+                    print("UNKNOWN ISO CODE; TRYING LANG_CODE:", lang_code)
+                    lang_name = all_language_codes[lang_code]["name"]
+                else:
+                    print("UNKNOWN LANGUAGE CODES:", [iso_lang, lang_code])
+                    lang_name = ""
+                iso_lang_2 = ""
+            else:
+                lang_name = all_language_codes[iso_lang]["name"]
+                iso_lang_2 = all_language_codes[iso_lang]["ISO639-1"]
+                
+            lm, created = Language.objects.get_or_create(
+                code=lang_code,
+                iso_639_3=iso_lang,
+                iso_639_1=iso_lang_2,
+                name=lang_name
+            )
+            # get or create the script metadata item:
+            script_code = row ["OpenITI_script_code"]
+            iso_script = row["ISO15924_script_code"]
+            if iso_script not in selected_script_codes:
+                print("UNKNOWN SCRIPT CODE:", iso_script)
+                script_name = ""
+                url = ""
+            else:
+                script_name = selected_script_codes[iso_script]["name"]
+                url = selected_script_codes[iso_script]["url"]
+            
+            sm, created = Script.objects.get_or_create(
+                code=script_code,
+                iso_15924=iso_script,
+                name=script_name
+            )
+            # get or create the language-script combo item:
+            combo_code = row["code"]
+            name = row["name"]
+            descr = row["description"]
+            cm, created = LanguageScriptCombo.objects.get_or_create(
+                code=combo_code,
+                language=lm,
+                script=sm,
+                defaults=dict(
+                    name=name,
+                    description=descr
+                )
+            )
+
+
+def load_relations_definitions(relations_definitions_fp):
+    """Load the definitions of the relation types into the database from a tsv file"""
+    with open(relations_definitions_fp, mode="r", encoding="utf-8") as file:
+        reader = csv.DictReader(file, delimiter='\t')
+        for row in reader:
+            if "descr" in row:
+                descr = row["descr"]
+            else:
+                descr = ""
+            reltype, created = RelationType.objects.update_or_create(
+                # selection keys:
+                code=row["code"],
+                subtype_code=row["subtype_code"],
+                # update keys:
+                defaults = dict(
+                   name=row["name"],
+                   name_inverted=row["name_inverted"],
+                   descr=descr
+                )
+            )
+            print(reltype, created)
+
+def load_source_collections(source_collections_fp):
+    """Load the descriptions of the OpenITI corpus's source collections and contributors to the database"""
+    with open(source_collections_fp, mode="r", encoding="utf-8") as file:
+        reader = csv.DictReader(file, delimiter='\t')
+        for row in reader:
+            coll, created = SourceCollectionDetails.objects.update_or_create(
+                # selection keys:
+                code=row["code"],
+                # update keys:
+                defaults = dict(
+                   name=row["name"],
+                   url=row["url"],
+                   description=row["description"],
+                   affiliation=row["affiliation"]
+                )
+            )
+            print(coll, created)   
 
 def get_version_lang(version_uri):
     try:

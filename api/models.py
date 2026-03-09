@@ -780,6 +780,8 @@ class Script(models.Model):
         blank=False, null=False)
     name = models.CharField(max_length=100, 
         blank=True, null=False)
+    iso_15924 = models.CharField(max_length=4, 
+        blank=True, null=False)
     description = models.TextField(
         blank=True, null=False)
 
@@ -788,6 +790,10 @@ class Language(models.Model):
         blank=False, null=False)
     name = models.CharField(max_length=100, 
         blank=True, null=False)
+    iso_639_3 = models.CharField(max_length=3, 
+        blank=True, null=False, help_text="3-letter language code")
+    iso_639_1 = models.CharField(max_length=2, 
+        blank=True, null=False, help_text="2-letter language code")
     description = models.TextField(
         blank=True, null=False)
     

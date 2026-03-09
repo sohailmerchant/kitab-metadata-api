@@ -6,47 +6,62 @@ Django REST API documentation: https://www.django-rest-framework.org/tutorial/1-
 
 ```
 kitab-metadata-api
-  |- README.md: this document
-  |- db.sqlite3: the database that contains the API's data
-  |- manage.py: the top-level script that must be called
-       for all API actions (see below)
-  |- api
-      |- management
-          |- commands:
-              |- load_data.py: this script loads all data
-                   from the metadata csv file to the database
-              |- create_dummy_aggregate_data.py: this scripts loads
-                   some dummy data to the AggregatedStats model
-      |- migrations:
-          |- ...: the migrations folder contains a file
-               for each of the migrations (= changes to the database model) made
-      |- admin.py: the models are registered in this file
-           so they can be accessed from the admin panel (?)
-      |- apps.py: a two-line class is created here for the configuration of the app,
-           which is given the name "api"
-      |- models.py: in this file, the models (~ tables) are created.
-      |- models-v2.py: older version of models.py?
-      |- serializers.py: define serializers (which create JSON representations
-           of the data in the database):
-           PersonNameSerializer, VersionSerializer,
-           TextSerializer, AuthorSerializer, AggregatedStatsSerializer
-      |- tests.py: (empty file)
-      |- urls.py: creates endpoint URLs, each connected with a specific view
-           (see views.py)
-      |- utility.py: contains utility functions for loading the data:
-           read_json(), bulk_load()
-      |- views.py: a class is created per page view (endpoint),
-           each of which get their own url in urls.py;
-           each view uses a serializer defined in serializers.py
-  |- kitab
-      |- asgi.py: settings for deployment using ASGI
-           (see https://docs.djangoproject.com/en/3.2/howto/deployment/asgi/)
-      |- settings.py: contains settings for Django
-           (incl. pagination, throttle, ...)
-      |- urls.py: contains urls for all apps in the application;
-           partly duplicates api/urls.py.
-      |- wsgi.py: settings for deployment using WSGI
-           (see https://docs.djangoproject.com/en/3.2/howto/deployment/wsgi/)
+     |- README.md: this document
+     |- db.sqlite3: the database that contains the API's data
+     |- manage.py: the top-level script that must be called
+          for all API actions (see below)
+     |- api/
+          |- management
+               |- commands:
+                    |- load_data.py: this script loads all data
+                         from the metadata csv file to the database
+                    |- create_dummy_aggregate_data.py: this scripts loads
+                         some dummy data to the AggregatedStats model
+          |- migrations:
+               |- ...: the migrations folder contains a file
+                    for each of the migrations (= changes to the database model) made
+          |- admin.py: the models are registered in this file
+               so they can be accessed from the admin panel (?)
+          |- apps.py: a two-line class is created here for the configuration of the app,
+               which is given the name "api"
+          |- models.py: in this file, the models (~ tables) are created.
+          |- serializers.py: define serializers (which create JSON representations
+               of the data in the database):
+               PersonNameSerializer, VersionSerializer,
+               TextSerializer, AuthorSerializer, AggregatedStatsSerializer
+          |- tests.py: (empty file)
+          |- urls.py: creates endpoint URLs, each connected with a specific view
+               (see views.py)
+          |- utility.py: contains utility functions for loading the data:
+               read_json(), bulk_load()
+          |- views.py: a class is created per page view (endpoint),
+               each of which get their own url in urls.py;
+               each view uses a serializer defined in serializers.py
+     |- kitab/
+          |- asgi.py: settings for deployment using ASGI
+               (see https://docs.djangoproject.com/en/3.2/howto/deployment/asgi/)
+          |- settings.py: contains settings for Django
+               (incl. pagination, throttle, ...)
+          |- urls.py: contains urls for all apps in the application;
+               partly duplicates api/urls.py.
+          |- wsgi.py: settings for deployment using WSGI
+               (see https://docs.djangoproject.com/en/3.2/howto/deployment/wsgi/)
+     |- meta/
+          |- OpenITI_metadata_<RELEASE_CODE>_wNoor.csv: OpenITI release metadata in csv format
+          |- release_notes_<RELEASE_CODE>.txt: OpenITI release notes
+          |- release-<RELEASE_CODE>.json: all yml files in a release, in json format
+          |- alThurayya_places.json: metadata of all places in alThurayya
+          |- CountryCodes.json: metadata of all country codes
+          |- ISO639_language_codes.csv : metadata of all ISO 639 language codes
+          |- ISO15924_script_codes.csv : metadata of all relevant ISO 15924 script codes
+          |- additional_language_codes.csv: metadata of language codes that are not in ISO 639
+          |- languages_scripts.csv: manually generated metadata of all OpenITI language-script 
+              combination codes, connected to ISO language and script codes
+          |- relations_definitions.csv: metadata for book relations
+          |- source_collections.tsv: metadata of the source collections for all releases
+
+          
+
 ```
 
 # Useful commands:
