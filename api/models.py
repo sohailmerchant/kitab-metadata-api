@@ -28,6 +28,7 @@ class ObjectName(models.Model):
         indexes = [
             models.Index(fields=["language", "name"]),
             models.Index(fields=["name"]),
+            models.Index(fields=["normalized_name"]),
         ]
 
     def __str__(self):
@@ -77,24 +78,21 @@ class ObjectNameLink(models.Model):
             models.Index(fields=["manuscript_holding"]),
             models.Index(fields=["manuscript"]),
         ]
-        # BUILDUP: UNCOMMENT:
-        # constraints = [
-        #     # Enforce exactly one FK is non-null
-        #     models.CheckConstraint(
-        #         name="exactly_one_target_object",
-        #         condition=(
-        #             (Q(author__isnull=False) & Q(text__isnull=True) & Q(manuscript__isnull=True) & Q(manuscript_holding__isnull=True) & Q(country__isnull=True) & Q(place__isnull=True))
-        #             | (Q(author__isnull=True) & Q(text__isnull=False) & Q(manuscript__isnull=True) & Q(manuscript_holding__isnull=True) & Q(country__isnull=True) & Q(place__isnull=True))
-        #             | (Q(author__isnull=True) & Q(text__isnull=True) & Q(manuscript__isnull=False) & Q(manuscript_holding__isnull=True) & Q(country__isnull=True) & Q(place__isnull=True))
-        #             | (Q(author__isnull=True) & Q(text__isnull=True) & Q(manuscript__isnull=True) & Q(manuscript_holding__isnull=False) & Q(country__isnull=True) & Q(place__isnull=True))
-        #             | (Q(author__isnull=True) & Q(text__isnull=True) & Q(manuscript__isnull=True) & Q(manuscript_holding__isnull=True) & Q(country__isnull=False) & Q(place__isnull=True))
-        #             | (Q(author__isnull=True) & Q(text__isnull=True) & Q(manuscript__isnull=True) & Q(manuscript_holding__isnull=True) & Q(country__isnull=True) & Q(place__isnull=False))
-        #         )
-        #     )
-        # ]
+        constraints = [
+            # Enforce exactly one FK is non-null
+            models.CheckConstraint(
+                name="exactly_one_target_object",
+                condition=(
+                    (Q(author__isnull=False) & Q(text__isnull=True) & Q(manuscript__isnull=True) & Q(manuscript_holding__isnull=True) & Q(place__isnull=True))
+                    | (Q(author__isnull=True) & Q(text__isnull=False) & Q(manuscript__isnull=True) & Q(manuscript_holding__isnull=True) & Q(place__isnull=True))
+                    | (Q(author__isnull=True) & Q(text__isnull=True) & Q(manuscript__isnull=False) & Q(manuscript_holding__isnull=True) & Q(place__isnull=True))
+                    | (Q(author__isnull=True) & Q(text__isnull=True) & Q(manuscript__isnull=True) & Q(manuscript_holding__isnull=False) & Q(place__isnull=True))
+                    | (Q(author__isnull=True) & Q(text__isnull=True) & Q(manuscript__isnull=True) & Q(manuscript_holding__isnull=True)  & Q(place__isnull=False))
+                )
+            )
+        ]
 
     def __str__(self):
-        # BUILDUP: UNCOMMENT:
         target = self.author or self.text or self.manuscript_holding or self.manuscript or self.place
         return f"{target} ↔ {self.object_name}"
 
@@ -314,12 +312,10 @@ class DateLink(models.Model):
             models.CheckConstraint(
                 name="date_exactly_one_target_author_text_edition",
                 condition=( 
-                    Q(author__isnull=False)
-                    # BUILDUP: UNCOMMENT:
-                    # (Q(author__isnull=False) & Q(text__isnull=True) & Q(edition__isnull=True) & Q(manuscript__isnull=True))
-                    # | (Q(author__isnull=True) & Q(text__isnull=False) & Q(edition__isnull=True) & Q(manuscript__isnull=True))
-                    # | (Q(author__isnull=True) & Q(text__isnull=True) & Q(edition__isnull=False) & Q(manuscript__isnull=True))
-                    # | (Q(author__isnull=True) & Q(text__isnull=True) & Q(edition__isnull=True) & Q(manuscript__isnull=False))
+                    (Q(author__isnull=False) & Q(text__isnull=True) & Q(edition__isnull=True) & Q(manuscript__isnull=True))
+                    | (Q(author__isnull=True) & Q(text__isnull=False) & Q(edition__isnull=True) & Q(manuscript__isnull=True))
+                    | (Q(author__isnull=True) & Q(text__isnull=True) & Q(edition__isnull=False) & Q(manuscript__isnull=True))
+                    | (Q(author__isnull=True) & Q(text__isnull=True) & Q(edition__isnull=True) & Q(manuscript__isnull=False))
 
                 ),
             )
@@ -396,6 +392,9 @@ class ExternalIDLink(models.Model):
                                 null=True, blank=True, related_name="external_id_links")
     version = models.ForeignKey("Version", on_delete=models.CASCADE, 
                                 null=True, blank=True, related_name="external_id_links")
+    script_type = models.ForeignKey("ScriptType", on_delete=models.CASCADE, 
+                                    null=True, blank=True, related_name="external_id_links")
+    
     
 
     #is_preferred = models.BooleanField(default=False)
@@ -411,6 +410,7 @@ class ExternalIDLink(models.Model):
             models.Index(fields=["edition"]),
             models.Index(fields=["version"]),
             models.Index(fields=["manuscript"]),
+            models.Index(fields=["script_type"]),
         ]
         constraints = [
             # Enforce exactly one target object
@@ -431,31 +431,35 @@ class ExternalIDLink(models.Model):
                 condition=(
                     # author only
                     (Q(author__isnull=False) & Q(text__isnull=True) & Q(manuscript_holding__isnull=True) & Q(place__isnull=True)
-                     & Q(edition__isnull=True) & Q(version__isnull=True) & Q(manuscript__isnull=True))
+                     & Q(edition__isnull=True) & Q(version__isnull=True) & Q(manuscript__isnull=True) & Q(script_type__isnull=True))
                     |
                     # text only
                     (Q(author__isnull=True) & Q(text__isnull=False) & Q(manuscript_holding__isnull=True) & Q(place__isnull=True)
-                     & Q(edition__isnull=True) & Q(version__isnull=True) & Q(manuscript__isnull=True))
+                     & Q(edition__isnull=True) & Q(version__isnull=True) & Q(manuscript__isnull=True) & Q(script_type__isnull=True))
                     |
                     # manuscript_holding only
                     (Q(author__isnull=True) & Q(text__isnull=True) & Q(manuscript_holding__isnull=False) & Q(place__isnull=True)
-                     & Q(edition__isnull=True) & Q(version__isnull=True) & Q(manuscript__isnull=True))
+                     & Q(edition__isnull=True) & Q(version__isnull=True) & Q(manuscript__isnull=True) & Q(script_type__isnull=True))
                     |
                     # place only
                     (Q(author__isnull=True) & Q(text__isnull=True) & Q(manuscript_holding__isnull=True) & Q(place__isnull=False)
-                     & Q(edition__isnull=True) & Q(version__isnull=True) & Q(manuscript__isnull=True))
+                     & Q(edition__isnull=True) & Q(version__isnull=True) & Q(manuscript__isnull=True) & Q(script_type__isnull=True))
                     |
                     # edition only
                     (Q(author__isnull=True) & Q(text__isnull=True) & Q(manuscript_holding__isnull=True) & Q(place__isnull=True)
-                     & Q(edition__isnull=False) & Q(version__isnull=True) & Q(manuscript__isnull=True))
+                     & Q(edition__isnull=False) & Q(version__isnull=True) & Q(manuscript__isnull=True) & Q(script_type__isnull=True))
                     |
                     # version only
                     (Q(author__isnull=True) & Q(text__isnull=True) & Q(manuscript_holding__isnull=True) & Q(place__isnull=True)
-                     & Q(edition__isnull=True) & Q(version__isnull=False) & Q(manuscript__isnull=True))
+                     & Q(edition__isnull=True) & Q(version__isnull=False) & Q(manuscript__isnull=True) & Q(script_type__isnull=True))
                     |
-                    # country only
+                    # manuscript only
                     (Q(author__isnull=True) & Q(text__isnull=True) & Q(manuscript_holding__isnull=True) & Q(place__isnull=True)
-                     & Q(edition__isnull=True) & Q(version__isnull=True) & Q(manuscript__isnull=False))
+                     & Q(edition__isnull=True) & Q(version__isnull=True) & Q(manuscript__isnull=False) & Q(script_type__isnull=True))
+                    |
+                     # script_type only
+                    (Q(author__isnull=True) & Q(text__isnull=True) & Q(manuscript_holding__isnull=True) & Q(place__isnull=True)
+                     & Q(edition__isnull=True) & Q(version__isnull=True) & Q(manuscript__isnull=True) & Q(script_type__isnull=False))
                 ),
             ),
         ]
@@ -463,7 +467,7 @@ class ExternalIDLink(models.Model):
     def __str__(self):
         target = (
             self.author or self.text or self.manuscript_holding or
-            self.place or self.edition or self.version or self.country
+            self.place or self.edition or self.version or self.manuscript or self.script_type
         )
         return f"{target} <-> {self.identifier}"
 
@@ -775,6 +779,24 @@ class Text(models.Model):
     def __str__(self):
         return self.text_uri
 
+class ScriptType(models.Model):
+    code = models.CharField(max_length=50, 
+        blank=False, null=False)
+    name = models.CharField(max_length=100, 
+        blank=True, null=False)
+    description = models.TextField(
+        blank=True, null=False)
+    script = models.ForeignKey("Script", blank=True, null=True,
+        related_name="script_type", 
+        on_delete=models.DO_NOTHING)
+    external_ids = models.ManyToManyField(ExternalID, through=ExternalIDLink,
+        through_fields=("script_type", "identifier"),  
+        related_name="script_types", blank=True)
+    
+    def __str__(self):
+        return self.code
+    
+
 class Script(models.Model):
     code = models.CharField(max_length=50, 
         blank=False, null=False)
@@ -877,13 +899,13 @@ class Edition(models.Model):
         through_fields=("edition", "date"), related_name="editions", blank=True
     )
     ed_info = models.CharField(max_length=255, blank=True)
-    pdf_url = models.CharField(max_length=255, blank=True)
-    text = models.ForeignKey(Text, 
+    pdf_url = models.TextField(blank=True)
+    text = models.ForeignKey(Text, blank=True, null=True,
         related_name='editions',
         related_query_name="edition", on_delete=models.CASCADE)
-    # manuscript = models.ForeignKey("Manuscript",  blank=True, null=True,
-    #     related_name='editions',
-    #     related_query_name="edition", on_delete=models.CASCADE)
+    manuscript = models.ForeignKey("Manuscript",  blank=True, null=True,
+        related_name='editions',
+        related_query_name="edition", on_delete=models.CASCADE)
     
     external_ids = models.ManyToManyField(ExternalID, through=ExternalIDLink,
                     through_fields=("edition", "identifier"),  
@@ -906,6 +928,8 @@ class ManuscriptHolding(models.Model):
     external_ids = models.ManyToManyField(ExternalID, through=ExternalIDLink,
                     through_fields=("manuscript_holding", "identifier"),
                     related_name="manuscript_holdings", blank=True)
+    links = models.TextField(null=False, blank=True)
+    catalogs = models.TextField(null=False, blank=True)
     notes = models.TextField(null=False, blank=True)
 
     def __str__(self):
@@ -976,21 +1000,6 @@ class Manuscript(models.Model):
     tags =  models.CharField(max_length=255, blank=True)
     bibliography = models.TextField(null=False, blank=True)
     notes = models.TextField(null=False, blank=True)
-
-# BUILDUP: UNCOMMENT:
-# class Country(models.Model):
-#     """Describes a country/state"""
-#     country_code = models.CharField(max_length=4, blank=True)
-#     # multilingual names:
-#     names =  models.ManyToManyField(ObjectName, through=ObjectNameLink,
-#         through_fields=("object_name", "country"), related_name="countries", blank=True
-#     )
-#     external_ids = models.ManyToManyField(ExternalID, through=ExternalIDLink,
-#                     through_fields=("identifier", "country"),  
-#                     related_name="countries", blank=True)
-
-#     def __str__(self):
-#         return self.country_code
 
 class Place(models.Model):
     """Describes a place in the database."""

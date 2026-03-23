@@ -26,6 +26,8 @@ DATE_CONVERTERS  = {
     "hebrew": convertdate.hebrew
 }
 
+ARABIC_SCRIPT_CODES = ["AR", "FA", "PE", "UR", "ARA", "PER", "FAR", "URD"]
+
 # Create a lookup dictionary for the country codes:
 # source: https://gist.githubusercontent.com/anubhavshrimal/75f6183458db8c453306f93521e93d37/raw/f77e7598a8503f1f70528ae1cbf9f66755698a16/CountryCodes.json
 with open("meta/CountryCodes.json", encoding="utf-8") as file:
@@ -294,10 +296,15 @@ def compute_ce_range_from_other_calendar(calendar, year, month=None, day=None, p
 
 def insert_spaces(s):
     """Split the camel-case string s and insert a space before each capital."""
-    return re.sub(r"([A-Z])", r" \1", s).strip()
+    s = re.sub(r"([A-Z])", r" \1", s).strip()
+    s = re.sub(" Wa ", " wa-", s)
+    return s
 
 def replace_c_with_cayn(s):
     """Replace the c in an OpenITI URI string with ʿAyn"""
+    # first, make sure Cs are not replaced in English words:
+    if re.findall("comp|comm|anonym", s.lower()):
+        return s
     # lower-case: simply replace c with ʿayn
     s = s.replace("c", "ʿ") 
     # upper-case: make the next letter upper case!
@@ -438,30 +445,31 @@ def extract_metadata_from_header(fp, VERBOSE=False):
 
 
 
-def collect_version_yml_data(version_yml_fp, version_uri, corpus_folder, base_url):
+def collect_version_yml_data(vers_d, base_url, corpus_folder=None, 
+                             version_yml_fp=None, recalculate=False):
     """Collect all metadata from an OpenITI version yml file
     
     Args:
-        version_yml_fp (str): path to a (local) OpenITI version yml file
-        version_uri (str): OpenITI version URI
+        vers_d (dict): version yml dictionary
         corpus_folder (str): path to the (local) folder containing the 25AH year OpenITI corpus folders
         base_url (str): URL on raw.githubusercontents that serves the raw files 
             for the relevant release/current state of the corpus
 
     Returns:
-        tuple (version_fp: str, version_meta: dict)
+        version_meta: dict
     """
-
+    # - version URI and derived variables:
+    version_uri = vers_d["00#VERS#URI######:"]
     version_code = version_uri.split("-")[0].split(".")[-1]
-    language = version_uri.split("-")[1][:3]
+    languages = re.findall(r"[a-z]{3}", version_uri.split("-")[1])
+    language = ",".join(languages)
     try:
-        collection_code = re.findall(r"^([A-Za-z]+?\d*[A-Za-z]+)\d+(?:BK\d+)?(?:Vols)?[A-Z]?$", version_code)[0]
+        #collection_code = re.findall(r"^([A-Za-z]+?\d*[A-Za-z]+)\d+(?:BK\d+)?(?:Vols)?[A-Z]?$", version_code)[0]
+        collection_code = re.findall(r"^[A-Za-z]+?\d{,2}[A-Za-z]+", version_code)[0]
     except:
-        print("no collection code found in", version_code)
+        print("no collection code found in", [version_code])
         collection_code = None
         input("CONTINUE?")
-
-    vers_d = readYML(version_yml_fp)
 
     # - explicit primary version:
 
@@ -473,19 +481,32 @@ def collect_version_yml_data(version_yml_fp, version_uri, corpus_folder, base_ur
 
     # - most developed text version:
 
-    pth = version_yml_fp.strip(".yml")
+    if "path" in vers_d:
+        pth = vers_d["path"]
+    else:
+        pth = version_yml_fp[:-4]
     extensions = [".mARkdown", ".completed", ".inProgress", ""]
-    for ext in [".mARkdown", ".completed", ".inProgress", ""]:
-        version_fp = pth + ext
-        if os.path.exists(version_fp):
-            break
-        elif ext == "":
+    for ext in extensions:
+        if "extensions" in vers_d:
+            if ext in vers_d["extensions"]:
+                version_fp = pth + ext
+                break
+        else:
+            version_fp = pth + ext
+            if os.path.exists(version_fp):
+                break
+        # if even the path with no extension does not exist:
+        if ext == "":
+            version_fp = ""
             print("NO TEXT VERSION FOUND FOR THIS YML FILE:", version_yml_fp)
 
     # - url:
-
-    url = version_fp.replace(corpus_folder, base_url).replace("\\","/")
-    url = url.replace("AH/data", "AH/master/data")
+    if corpus_folder: # data in 25Y folders
+        url = version_fp.replace(corpus_folder, base_url).replace("\\","/")
+        url = url.replace("AH/data", "AH/master/data")
+    else:
+        url = base_url+version_fp
+        url = url.replace("/data/", "/master/data/")
 
     # annotation status:
 
@@ -498,8 +519,9 @@ def collect_version_yml_data(version_yml_fp, version_uri, corpus_folder, base_ur
 
     tok_length = vers_d["00#VERS#LENGTH###:"].strip()
     char_length = vers_d["00#VERS#CLENGTH##:"].strip()
+
     # recalculate the length if it is not present in the yml file:
-    if not (tok_length and char_length):
+    if recalculate and not (tok_length and char_length):
         if not char_length:
             char_length = ar_cnt_file(version_fp, mode="char")
             char_length = str(char_length)
@@ -514,22 +536,48 @@ def collect_version_yml_data(version_yml_fp, version_uri, corpus_folder, base_ur
             file.write(ymlS)
 
     # - edition_link:
-
-    worldcat_url = ""
-    if "80#VERS#BASED####:" in vers_d:
-        if vers_d["80#VERS#BASED####:"] and not vers_d["80#VERS#BASED####:"].strip().startswith("permalink"):
-            worldcat_url = vers_d["80#VERS#BASED####:"].strip()
-            worldcat_url = re.sub(r"[\s¶]*,[\s¶]", ",", worldcat_url)
-    else:
-        print("MISSING KEY: 80#VERS#BASED####: in", version_uri)
-        print(json.dumps(vers_d, indent=2, ensure_ascii=False))
-        input()
+    based_list = parse_val_as_list(vers_d, "80#VERS#BASED####:", 
+                                   default_start="permalink,")
+    external_ids = {}
+    for url in based_list:
+        org_regex = r"^(?:https?://)?(?:www\.)?(?:[a-z]{2}\.)?(\w+)"
+        org = re.findall(org_regex, url.strip())
+        if org:
+            org = org[0]
+        else:
+            org = "NA"
+        if org not in external_ids:
+            external_ids[org] = []
+        external_ids[org].append(url)
+    worldcat_links = [v for k, v in external_ids.items() if k.lower() == "worldcat"]
+    if "worldcat" in external_ids:
+        del external_ids["worldcat"]
+    elif "Worldcat" in external_ids:
+        del external_ids["Worldcat"]
+    # external_ids = {}
+    # if "80#VERS#BASED####:" in vers_d:
+    #     based_raw = vers_d["80#VERS#BASED####:"].strip()
+    #     if based_raw and not based_raw.startswith("permalink"):
+    #         for url in re.split(r"[\s¶]*[,;:]+[\s¶]", based_raw):
+    #             org_regex = r"^(?:https?://)?(?:www\.)?(?:[a-z]{2}\.)?(\w+)"
+    #             org = re.findall(org_regex, url.strip())
+    #             if org:
+    #                 org = org[0]
+    #             else:
+    #                 org = "NA"
+    #             if org not in external_ids:
+    #                 external_ids[org] = []
+    #             external_ids[org].append(url)
+    # else:
+    #     print("MISSING KEY: 80#VERS#BASED####: in", version_uri)
+    #     print(json.dumps(vers_d, indent=2, ensure_ascii=False))
+    #     input()
     
     pdf_url = ""
     if "80#VERS#LINKS####:" in vers_d:
-        if vers_d["80#VERS#LINKS####:"] and not vers_d["80#VERS#LINKS####:"].strip().startswith("all@id"):
-            pdf_url = vers_d["80#VERS#LINKS####:"].strip()
-            pdf_url = re.sub(r"[\s¶]*,[\s¶]", ",", pdf_url)
+        raw_links = vers_d["80#VERS#LINKS####:"].strip()
+        if raw_links and not raw_links.startswith("all@id"):
+            pdf_url = re.sub(r"[\s¶]*[,;:]+[\s¶]", ",", raw_links)
     else:
         print("MISSING KEY: 80#VERS#LINKS####: in", version_uri)
         print(json.dumps(vers_d, indent=2, ensure_ascii=False))
@@ -538,42 +586,54 @@ def collect_version_yml_data(version_yml_fp, version_uri, corpus_folder, base_ur
     # - notes:
     notes = ""
     if "90#VERS#COMMENT##:" in vers_d:
-        if vers_d["90#VERS#COMMENT##:"] and not vers_d["90#VERS#COMMENT##:"].strip().startswith("a free running comment"):
-            notes = vers_d["90#VERS#COMMENT##:"].strip()
-            notes = re.sub(r"    ", "", notes)
+        raw_notes = vers_d["90#VERS#COMMENT##:"].strip()
+        if raw_notes and not raw_notes.startswith("a free running comment"):
+            notes = re.sub(r" +", " ", raw_notes)
     else:
         print("MISSING KEY: 90#VERS#COMMENT##: in", version_uri)
         print(json.dumps(vers_d, indent=2, ensure_ascii=False))
         input()
 
     # - issues: 
-    version_tags = re.findall(r"[A-Z_]{5,}", vers_d["90#VERS#ISSUES###:"])
+    #version_tags = re.findall(r"[A-Z_]{5,}", vers_d["90#VERS#ISSUES###:"])
+    issues = parse_val_as_str(vers_d, "90#VERS#ISSUES###:",
+                              default_start="comma-separated list")
+    issues = re.findall(r"[A-Z_]{5,}", issues)
+
+    uncorrected_OCR = False
+    if "UNCORRECTED_OCR" in issues:
+        uncorrected_OCR=True
 
     version_meta = dict(
         # version_meta:
         version_code=version_code,
         version_uri=version_uri,
+        language=language,
         collection_code=collection_code,
         text_meta="",
-        language=language,
-        tags=" :: ".join(version_tags),
         edition_meta="",
         # release_version_meta:
         char_length=char_length,
         tok_length=tok_length,
+        path=version_fp,
         url=url,
         analysis_priority=primary_yml,
         annotation_status=annotation_status,
         notes=notes,
+        tags=" :: ".join(issues),
+        header_meta=vers_d.get("header_meta", {}),
+        subcorpus=language,
+        uncorrected_OCR=uncorrected_OCR,
         # edition_meta:
-        worldcat_url=worldcat_url,
-        pdf_url=pdf_url
+        external_ids=external_ids,
+        worldcat_links=worldcat_links,
+        pdf_url=pdf_url,
     )
 
-    return version_fp, version_meta
+    return version_meta
 
 
-def collect_text_yml_data(text_yml_fp, text_uri):
+def collect_text_yml_data(text_d, text_uri=None):
     """Collect all metadata from an OpenITI text yml file
     
     Args:
@@ -583,26 +643,54 @@ def collect_text_yml_data(text_yml_fp, text_uri):
     Returns:
         dict
     """
-    text_d = readYML(text_yml_fp)
+    if not text_uri:
+        text_uri = text_d["00#BOOK#URI######:"]
 
     # - title:
     title_lat = []
     title_ar = []
-    if text_d:
-        for c in ["10#BOOK#TITLEA#AR:", "10#BOOK#TITLEB#AR:"]:
-            if not ("al-Muʾallif" in text_d[c]\
-                    or "none" in text_d[c].lower()):
-                title_lat.append(text_d[c].strip())
-                title_ar.append(betacodeToArSimple(title_lat[-1]))
+    title_d = {"LAT": []}
+    for k in sorted(text_d.keys()): # TITLEA before TITLEB!
+        if "TITLE" in k:
+            v = text_d[k].strip()
+            if not v or "al-Muʾallif" in v or "none" in v.lower():
+                continue
+            lang = re.findall(r"([A-Z]+):", k)[0]
+            if not lang in title_d:
+                title_d[lang] = []
+            for title in re.split(r" *[,;:]+ *", v):
+                if title:
+                    if lang in ["AR", "FA", "UR", "PE", "ARA", "PER", "URD"]:
+                        ara_title = betacodeToArSimple(title)
+                        title_ar.append(ara_title)
+                        title_d[lang].append(ara_title)
+                        title_d["LAT"].append(title)
+                    else:
+                        title_d[lang].append(title)
+                    title_lat.append(title)
+
     title_from_uri = text_uri.split(".")[1]
     title_from_uri = insert_spaces(title_from_uri)
     title_from_uri = replace_c_with_cayn(title_from_uri)
-    #title_from_uri = re.sub(r"([A-Z])", r" \1", text_uri.split(".")[1]).strip()
-    #title_from_uri = title_from_uri.replace("c", "ʿ")
-    #title_from_uri = re.sub(r"C([a-z])", lambda match: "ʿ"+match.group(1).upper(), title_from_uri)
-    
     title_lat.append(title_from_uri)
+    
+    if "title_from_text_header" in text_d:
+        ttl = text_d["title_from_text_header"]
+        if type(ttl) == str:
+            ttl = re.split(r" *[,:;]+ *", ttl)
+        for t in ttl:
+            t = t.strip()
+            if not t:
+                continue
+            if re.findall("[ء-ي]", t):
+                if t not in title_ar:
+                    title_ar.append(t)
+            else:
+                if t not in title_lat:
+                    title_lat.append(t)
+
     normalized_title_lat = [betacodeToSearch(t) for t in title_lat if t]
+    
     title_lat_prefered = title_lat[0]
     if title_ar:
         title_ar_prefered = title_ar[0]
@@ -611,39 +699,63 @@ def collect_text_yml_data(text_yml_fp, text_uri):
 
     # - tags
     tags = []
-    if text_d["10#BOOK#GENRES###:"] and not text_d["10#BOOK#GENRES###:"].startswith("src"):
-        for genre in re.split(r"[\s¶]*[,:;]+[\s¶]*", text_d["10#BOOK#GENRES###:"]):
+    raw_tags = text_d["10#BOOK#GENRES###:"].strip()
+    if raw_tags and not raw_tags.startswith("src"):
+        for genre in re.split(r" *[,:;]+ *", raw_tags):
             tags.append(genre)
+    tags += text_d.get("genre_from_text_header", [])
 
-    # - text date:
-    place_relations = []
+    # - place of writing:
     places = []
-    if text_d["20#BOOK#WROTE####:"] and not text_d["20#BOOK#WROTE####:"].startswith("URIs from Althurayya"):
-        for place in re.split(r"[\s¶]*[:,;]+[\s¶]*", text_d["20#BOOK#WROTE####:"]):
+    raw_places = text_d["20#BOOK#WROTE####:"].strip()
+    if raw_places and not raw_places.startswith("URIs from Althurayya"):
+        for place in re.split(r" *[:,;]+ *", raw_places):
             places.append(place)
+    # - date of writing:
     dates = []
-    if text_d["30#BOOK#WROTE##AH:"] and not text_d["30#BOOK#WROTE##AH:"].startswith("YEAR-MON-DA"):
-        for date in re.split(r"[\s¶]*[:,;]+[\s¶]*", text_d["30#BOOK#WROTE##AH:"]):
-            dates.append(date)
+    for k in text_d:
+        if "WROTE" in k and "#WROTE####:" not in k:
+            #raw_dates = text_d["30#BOOK#WROTE##AH:"].strip()
+            calendar = re.findall(r"([A-Z]+):", k)[0]
+            raw_dates = text_d[k].strip()
+            if raw_dates and not raw_dates.startswith("YEAR-MON-DA"):
+                for date in re.split(r" *[:,;]+ *", raw_dates):
+                    dates.append((date, calendar))
+
+    # connect place and date of writing:
+    place_relations = []
     if places:
         if len(dates) <= len(places):
             for i, place in enumerate(places):
                 try:
-                    date = dates[i]
+                    date, calendar = dates[i]
                 except:
                     date = ""
+                    calendar = ""
                 start, end = date_from_string(date)
-                place_relations.append(dict(text_a=text_uri, code="WRITTEN", subtype_code="", 
-                                            place_b=place, start_date_AH=start, end_date_AH=end))
+                place_relations.append(dict(
+                    text_a=text_uri, 
+                    code="WRITTEN", 
+                    subtype_code="", 
+                    place_b=place, 
+                    date=date,
+                    calendar=calendar
+                ))
         else:
-            for i, date in enumerate(dates):
-                start, end = date_from_string(date)
+            for i, date_tup in enumerate(dates):
+                date, calendar = date_tup
                 try:
                     place = places[i]
                 except:
                     place = "UNDEFINED"
-                place_relations.append(dict(text_a=text_uri, code="WRITTEN", subtype_code="", 
-                                            place_b=place, start_date_AH=start, end_date_AH=end))
+                place_relations.append(dict(
+                    text_a=text_uri, 
+                    code="WRITTEN", 
+                    subtype_code="",
+                    place_b=place, 
+                    date=date,
+                    calendar=calendar
+                ))
 
 
     # - text relations:
@@ -652,10 +764,10 @@ def collect_text_yml_data(text_yml_fp, text_uri):
     if not "40#BOOK#RELATED##:" in text_d:
         print("MISSING KEY 40#BOOK#RELATED##: in", text_uri)
     else:
-        if text_d["40#BOOK#RELATED##:"].strip() and not text_d["40#BOOK#RELATED##:"].strip().startswith("URI of"):
+        raw_rels = text_d["40#BOOK#RELATED##:"].strip()
+        if raw_rels and not raw_rels.startswith("URI of"):
             # get the book relations string and split it into relations (rels):
-            rels = text_d["40#BOOK#RELATED##:"].strip()
-            rels = re.sub(r" *[\r\n¶]+ *", " ", rels)
+            rels = re.sub(r" *[\r\n¶]+ *", " ", raw_rels)
             rels = re.split(r" *[;:]+ *", rels)
 
             # add each relation to the relevant list:
@@ -694,14 +806,32 @@ def collect_text_yml_data(text_yml_fp, text_uri):
                     if rel_text.count(".") == 0:  # AUTHOR URI instead of text URI!
                         rel["person_b"] = rel_text
                         person_relations.append(rel)
-                    else:
+                    elif rel_text.count(".") == 1:
                         rel["text_b"] = rel_text
                         text_relations.append(rel)
-                    # store ther relation in both directions in the dictionary (not used later)
+                    else:
+                        print("Not an author or text URI:", rel_text)
+                    # store the relation in both directions in the dictionary
                     if not rel in  text_rel_d[text_uri]:
                         text_rel_d[text_uri].append(rel)
                     if not rel in text_rel_d[rel_text]:
                         text_rel_d[rel_text].append(rel)
+
+    # - external IDs:
+    external_ids = get_external_ids(text_d, "70#BOOK#EXTID####:")
+    # external_ids = dict()
+    # if "70#BOOK#EXTID####:" in text_d:
+    #     ext_ids = text_d["70#BOOK#EXTID####:"].strip().lower()
+    #     if ext_ids not in ["", "none", "viaf@id, wikidata@id, src@id"]:
+    #         for ext_id in re.split(r" *[;,:]+ *", ext_ids):
+    #             try:
+    #                 src, id_ = ext_id.split("@")
+    #             except:
+    #                 src = "NA"
+    #                 id_ = ext_id
+    #             if src not in external_ids:
+    #                 external_ids[src] = []
+    #             external_ids[src].append(id_)  
 
     # - bibliography:
     bibliography = ""
@@ -713,12 +843,14 @@ def collect_text_yml_data(text_yml_fp, text_uri):
             field_name = field_names[bib_fields.index(field)]
             bibliography += "{field_name}:\n{text_d[field]\n}"
 
+    # TODO: process EDITIONS, LINKS, MSS, STUDIES and TRANSLATIONS
+
     # - notes:
     notes = ""
     if "90#BOOK#COMMENT##:" in text_d:
-        if text_d["90#BOOK#COMMENT##:"] and not text_d["90#BOOK#COMMENT##:"].strip().startswith("a free running comment"):
-            notes = text_d["90#BOOK#COMMENT##:"].strip()
-            notes = re.sub(r"    ", "", notes)
+        raw_notes = text_d["90#BOOK#COMMENT##:"].strip()
+        if raw_notes and not raw_notes.startswith("a free running comment"):
+            notes = re.sub(r"\s+", " ", raw_notes)
     else:
         print("MISSING KEY: 90#BOOK#COMMENT##: in", text_uri)
         print(json.dumps(text_d, indent=2, ensure_ascii=False))
@@ -731,121 +863,1012 @@ def collect_text_yml_data(text_yml_fp, text_uri):
         titles_lat=" :: ".join(list(set(title_lat + normalized_title_lat))),
         title_ar_prefered=title_ar_prefered,
         title_lat_prefered=title_lat_prefered,
+        title_d=title_d,
         text_type="text",
         tags=tags,
-        bibliography=bibliography,
-        notes=notes,
         place_relations=place_relations,
         text_relations=text_relations,
-        person_relations=person_relations
+        person_relations=person_relations,
+        external_ids=external_ids,
+        bibliography=bibliography,
+        notes=notes
     )
 
     return text_meta
 
+def get_city_from_loc_uri(loc_uri):
+    if not re.findall(r"^MS\d{4}", loc_uri):
+        return ""
+    # build the city, character by character,
+    # starting from the character after the country code
+    city = loc_uri[6]
+    for char in loc_uri[7:]:
+        if char.isupper(): # start of a new word in the URI
+            if city not in ("Los", "St", "Saint", "New", "San", "Al", "El"):
+                return city
+            city += " "
+        city += char
+    return ""
+
+def collect_loc_yml_data(loc_d, loc_uri=None):
+    if not loc_uri:
+        loc_uri = loc_d["00#LOC#URI#######:"].strip()
+    
+    # process the city and institution names:
+    names_d = {"CITY": {}, "INST": {}}
+    for k in loc_d:
+        try:
+            name_type = re.findall("|".join(names_d.keys()), k)[0]
+        except: # not a city or institution name key!
+            continue
+        if "name of" in loc_d[k] or "none" in loc_d[k].lower():
+            continue
+        _, _, name_type, lang, _ = re.split("#+", k.strip(":"))
+        if lang not in names_d[name_type]:
+            names_d[name_type][lang] = []
+        if lang in ARABIC_SCRIPT_CODES:
+            names_d[name_type][lang].append(betacodeToArSimple(loc_d[k]))
+        else:
+            names_d[name_type][lang].append(loc_d[k])
+
+    # create more legacy name values:
+    city_ar = []
+    city_lat = []
+    for lang in names_d["CITY"]:
+        if lang in ARABIC_SCRIPT_CODES:
+            for name in names_d["CITY"][lang]:
+                city_ar.append(name)
+        else:
+            for name in names_d["CITY"][lang]:
+                city_lat.append(name)
+    inst_ar = []
+    inst_lat = []
+    for lang in names_d["INST"]:
+        if lang in ARABIC_SCRIPT_CODES:
+            for name in names_d["INST"][lang]:
+                inst_ar.append(name)
+        else:
+            for name in names_d["INST"][lang]:
+                inst_lat.append(name)
+
+    
+    # TODO: add data from header:
+    # if not author_ar and "name_from_text_header" in auth_d:
+    #     header_names = auth_d["name_from_text_header"]
+    #     for n in re.split(r" *[:;,]+ *", header_names):
+    #         if not n.strip():
+    #             continue
+    #         if re.findall("[ء-ي]", n):
+    #             author_ar.append(n.strip())
+    #             if not author_ar_prefered:
+    #                 author_ar_prefered = n.strip()
+    #         else:
+    #             author_lat.append(n.strip())
+    #             if not author_lat_prefered:
+    #                 author_lat_prefered = n.strip()
+
+    # collect external IDs:
+    external_ids = get_external_ids(loc_d, "70#LOC#EXTID#####:")
+                
+
+    # collect catalogs:
+    catalogs = ""
+    raw_cat = loc_d["80#LOC#CATALOGS##:"].strip()
+    if raw_cat and not raw_cat.startswith("permalink"):
+        catalogs = re.sub(r"[\s]+", " ", raw_cat)
+
+    # collect links:
+    links = ""
+    raw_links = loc_d["80#LOC#LINKS#####:"].strip()
+    if raw_links and not raw_links.startswith("WEBSITE@permalink"):
+        links = re.sub(r"[\s]+", " ", raw_links)
+
+    # collect notes:
+    notes = ""
+    if "90#LOC#COMMENT###:" in loc_d:
+        raw_notes = loc_d["90#LOC#COMMENT###:"].strip()
+        if raw_notes and not raw_notes.startswith("a free running comment"):
+            notes = re.sub(r"\s+", " ", raw_notes)
+    else:
+        print("MISSING KEY: 90#LOC#COMMENT###: in", loc_uri)
+        print(json.dumps(loc_d, indent=2, ensure_ascii=False))
+        input()
+
+    loc_meta = dict(
+        loc_uri=loc_uri,
+        city_names=names_d["CITY"],
+        inst_names=names_d["INST"],
+        city_ar=" :: ".join(city_ar),
+        city_lat=" :: ".join(city_lat),
+        institution_ar=" :: ".join(inst_ar),
+        institution_lat=" :: ".join(inst_lat),
+        external_ids=external_ids,
+        catalogs=catalogs,
+        links=links,
+        notes=notes,
+        tags="",
+        )
+    return loc_meta
+    
+def parse_val_as_str(d, k, default_start=None, default_return=""):
+    """parse the value of a dictionary key as a string. 
+
+    This is to be used when values are separated by a splitter (e.g., "al-Bakrī, al-Baġdādī")
+
+    Examples:
+    ```
+    >>> d = {"20#AUTH#BORN#####:": "AMUL_524E364N_S :: Daylam_RE"}
+    >>> parse_val_as_str(d, "20#AUTH#BORN#####:"}
+    "AMUL_524E364N_S :: Daylam_RE"
+    >>> d = {"20#AUTH#BORN#####:": "URIs from Althurayya, comma separated"}
+    >>> parse_val_as_str(d, "20#AUTH#BORN#####:", default_start="URIs from Althurayya"}
+    ''
+    ```
+    
+    Returns:
+       str
+    """
+    try:
+        val = d[k].strip()
+    except:
+        return default_return
+    if not val or val.lower() == "none" : 
+        return default_return
+    if default_start and val.startswith(default_start):
+        return default_return
+    return val
+
+def parse_val_as_int(d, k, default_start=None, default_return=0):
+    val = parse_val_as_str(d, k, default_start=default_start)
+    if not val: 
+        return default_return
+    try: 
+        return int(val)
+    except:
+        return default_return
 
 
-def collect_author_yml_data(author_yml_fp, author_uri):
+def parse_val_as_list(d, k, default_start=None, default_return=[], 
+                     split_regex=r" *[;,:]+ *"):
+    """parse the value of a dictionary key as a list. 
+
+    This is to be used when values are separated by a splitter (e.g., "al-Bakrī, al-Baġdādī")
+
+    Examples:
+    ```
+    >>> d = {"20#AUTH#BORN#####:": "AMUL_524E364N_S :: Daylam_RE"}
+    >>> parse_val_as_list(d, "20#AUTH#BORN#####:"}
+    ["AMUL_524E364N_S", "Daylam_RE"]
+    >>> d = {"20#AUTH#BORN#####:": "AMUL_524E364N_S, Daylam_RE"}
+    >>> parse_val_as_list(d, "20#AUTH#BORN#####:"}
+    ["AMUL_524E364N_S", "Daylam_RE"]
+    >>> d = {"20#AUTH#BORN#####:": "AMUL_524E364N_S; Daylam_RE"}
+    >>> parse_val_as_list(d, "20#AUTH#BORN#####:"}
+    ["AMUL_524E364N_S", "Daylam_RE"]
+    ```
+
+    Returns:
+        list
+    """
+    # first, get the value as a string:
+    val = parse_val_as_str(d, k, default_start=default_start, default_return=default_return)
+    if not val:
+        return default_return
+    
+    # then, create a list
+    vals = []
+    if type(val) == str:
+        val = re.split(split_regex, val)
+    for v in val:
+        v = v.strip()
+        if v and v not in vals:
+            vals.append(v)
+    return vals
+
+def parse_val_as_dict(d, k, default_start=None, default_return={}, 
+                     split_regex=r" *[;,:]+ *", key_value_splitter="@"):
+    """parse the value of a dictionary key as a dictionary. 
+
+    This is to be used when values can take key-value format (e.g., COPIED@Baghad)
+
+    Example:
+    ```
+    >>> d = {"30#MS#SCRIPT#####:": "ara@naskh, ara@nastacliq"}
+    >>> parse_val_as_dict(d, k}
+    {"ara": ["naskh", "nastacliq"]}
+    ```
+
+    Returns:
+        dict
+    """
+    vals = parse_val_as_list(d, k, default_start=default_start, 
+                            split_regex=split_regex, default_return=default_return)
+    if not vals:
+        return {}
+    val_d = {"NA": []}
+    prop = "NA"
+    for v in vals:
+        if v.count(key_value_splitter) == 1:
+            prop, v = re.split(key_value_splitter, v)
+        if not prop in val_d:
+            val_d[prop] = []
+        val_d[prop].append(v)
+    return val_d
+
+def parse_modifier_vals(d, key_component, default_start=None, default_return={}, 
+                        split_regex=r" *[;,:]+ *"):
+    """Parses values of keys that include a modifier (e.g,., AH or CE for dates )
+
+    Example: 
+    ```
+    >>> d = {
+        "30#MS#DATE#AH####:": "02-12-0932",
+        "30#MS#DATE#CE####:": "19-09-1526"
+    }
+    >>> parse_modifier_vals(d, "DATE", default_start="date of")
+    {"AH": "02-12-0932", "CE": "19-09-1526"}
+    >>> d = {
+        "40#MS#HEIGHT#MM##:": 110,
+        "40#MS#HEIGHT#INCH:": 4.33,
+    }
+    >>> parse_modifier_vals(d, "DATE", default_start="date of")
+    {"MM": 110, "INCH": 4.33}
+    ```
+
+    Returns: 
+       dict
+    """
+    val_d = dict()
+    for k in d:
+        if re.findall(key_component, k):
+            val = parse_val_as_str(d, k, default_start=default_start)
+            if not val:
+                return default_return
+            
+            # get the modifier (AH, CE, MM, CM, ...) from the key:
+            #_, _, _, mod = re.split(r"#+", k.strip(":"))
+            mod = re.findall("([A-Z]+)#*:", k)[0]
+            if mod not in val_d:
+                if split_regex:
+                    val_d[mod] = []
+                else:
+                    val_d[mod] = ""
+            
+            if split_regex:
+                for v in re.split(split_regex, val):
+                    v = v.strip()
+                    if v and v not in val_d[mod]:
+                        val_d[mod].append(v)
+            else:
+                val_d[mod] = val
+    return val_d
+
+def parse_language_vals(d, key_component, default_start=None, default_return=({},[],[]), 
+                        split_regex=r" *[;,:]+ *", incl_transcr_in_lat_list=False):
+    """Parses different language versions of a yml key
+    Returns a tuple with three components:
+        - dictionary (key: language code, value: list of values)
+        - list of arabic-script values
+        - list of latin-script values
+
+    Example: 
+    ```
+    >>> d = {
+        "10#LOC#INST#AR###:": "Maktabaŧ Barlīn al-ḥukūmiyyaŧ",
+        "10#LOC#INST#DE###:": "Staatsbibliothek zu Berlin",
+        "10#LOC#INST#EN###:": "State Library of Berlin",
+    }
+    >>> r = parse_language_vals(d, "INST", default_start="name of", incl_transcr_in_lat_list=False)
+    >>> inst_d, inst_ar, inst_lat = r
+    >>> print(inst_d)
+    {"AR": "مكتبة برلين الحكومية"}, "DE": "Staatsbibliothek zu Berlin", "EN": "State Library of Berlin"}
+    >>> print(inst_lat)
+    ["Staatsbibliothek zu Berlin", "State Library of Berlin"]
+    >>> r = parse_language_vals(d, "INST", default_start="name of", incl_transcr_in_lat_list=True)
+    >>> inst_d, inst_ar, inst_lat = r
+    >>> print(inst_lat)
+    ["Maktabaŧ Barlīn al-ḥukūmiyyaŧ", "Staatsbibliothek zu Berlin", "State Library of Berlin"]
+    ```
+
+    Returns: 
+        tuple (dict, list, list)
+    """
+    val_d = dict()
+    ara_script_list = []
+    lat_script_list = []
+    for k in d:
+        if re.findall(key_component, k):
+            val = parse_val_as_str(d, k, default_start=default_start)
+            if not val:
+                return default_return
+            
+            # get the language from the key:
+            #_, _, _, lang = re.split(r"#+", k.strip(":"))
+            lang = re.findall("([A-Z]+)#*:", k)[0]
+            if lang not in val_d:
+                if split_regex:
+                    val_d[lang] = []
+                else:
+                    val_d[lang] = ""
+            
+            if split_regex:
+                for v in re.split(split_regex, val):
+                    v = v.strip()
+                    if v and v not in val_d[lang]:
+                        if lang in ARABIC_SCRIPT_CODES:
+                            ar_v = betacodeToArSimple(v)
+                            val_d[lang].append(ar_v)
+                            ara_script_list.append(ar_v)
+                            if incl_transcr_in_lat_list:
+                                lat_script_list.append(v)
+                        else:
+                            val_d[lang].append(v)
+                            lat_script_list.append(v)
+            else:
+                if lang in ARABIC_SCRIPT_CODES:
+                    ar_v = betacodeToArSimple(val)
+                    val_d[lang] = ar_v
+                    ara_script_list.append(ar_v)
+                    if incl_transcr_in_lat_list:
+                        lat_script_list.append(val)
+                else:
+                    val_d[lang].append(val)
+                    lat_script_list.append(val)
+
+    return val_d, ara_script_list, lat_script_list
+    
+
+def collect_manuscr_yml_data(ms_d, ms_uri=None):
+    # - uri
+    if not ms_uri:
+        ms_uri = ms_d["00#MS#URI########:"]
+    
+    # - shelfmark
+    shelfmark = ms_d["10#MS#SHELFM#####:"]
+
+    # - tags
+    tags = parse_val_as_list(ms_d, "10#MS#GENRES####:", default_start="src")
+    # tags = []
+    # raw_tags = ms_d["10#MS#GENRES#####:"].strip()
+    # if raw_tags and not raw_tags.startswith("src"):
+    #     for genre in re.split(r" *[,:;]+ *", raw_tags):
+    #         if genre.strip():
+    #             tags.append(genre.strip())
+    tags += ms_d.get("genre_from_text_header", [])
+
+    # - author:
+    r = parse_language_vals(ms_d, "AUTHOR", default_start="author(s) on ",
+                            incl_transcr_in_lat_list=True)
+    author_d, author_ar, author_lat = r
+    # author_d = dict()
+    # author_ar = []
+    # author_lat = []
+    # for k in ms_d:
+    #     if not "AUTHOR" in k:
+    #         continue
+    #     if "author(s) on " in ms_d[k] or "none" in ms_d[k].lower():
+    #         continue
+    #     _, _, _, lang = re.split("#+", k.strip(":"))[-1]
+    #     if lang not in author_d:
+    #         author_d[lang] = []
+    #     if lang in ARABIC_SCRIPT_CODES:
+    #         for name in re.split(r" *; *", ms_d[k]):
+    #             if not name.strip():
+    #                 continue
+    #             ar_name = betacodeToArSimple(name.strip())
+    #             author_d[lang].append(ar_name)
+    #             author_ar.append(ar_name)
+    #             author_lat.append(name.strip())
+    #     else:
+    #         for name in re.split(r" *; *", ms_d[k]):
+    #             if not name.strip():
+    #                 continue
+    #             author_d[lang].append(name.strip())
+    #             author_lat.append(name.strip())
+    
+    # - title:
+    r = parse_language_vals(ms_d, "TITLE", default_start="title(s) on ",
+                            incl_transcr_in_lat_list=True)
+    title_d, title_ar, title_lat = r
+    # title_lat = []
+    # title_ar = []
+    # title_d = dict()
+    # for k in ms_d.keys():
+    #     if not "TITLE" in k:
+    #         continue
+    #     v = ms_d[k].strip()
+    #     if not v or "title(s) on" in v or "none" in v.lower():
+    #         continue
+    #     _, _, _, lang = re.split("#+", k.strip(":"))[-1]
+    #     if not lang in title_d:
+    #         title_d[lang] = []
+    #     for title in re.split(r" *; *", v):
+    #         title = title.strip()
+    #         if title:
+    #             if lang in ARABIC_SCRIPT_CODES:
+    #                 title_ar.append(betacodeToArSimple(title))
+    #                 title_d[lang].append(betacodeToArSimple(title))
+    #             else:
+    #                 title_d[lang].append(title)
+    #             title_lat.append(title)
+    
+    if "title_from_text_header" in ms_d:
+        ttl = ms_d["title_from_text_header"]
+        if type(ttl) == str:
+            ttl = re.split(r" *[,:;]+ *", ttl)
+        for t in ttl:
+            t = t.strip()
+            if not t:
+                continue
+            if re.findall("[ء-ي]", t):
+                if t not in title_ar:
+                    title_ar.append(t)
+            else:
+                if t not in title_lat:
+                    title_lat.append(t)
+
+    normalized_title_lat = [betacodeToSearch(t) for t in title_lat if t]
+    
+    if title_lat:
+        title_lat_prefered = title_lat[0]
+    else:
+        title_lat_prefered = ""
+    if title_ar:
+        title_ar_prefered = title_ar[0]
+    else: 
+        title_ar_prefered = ""
+
+    # - date of writing:
+    dates = parse_modifier_vals(ms_d, "DATE", default_start="date of")
+    # dates = []
+    # for k in ms_d:
+    #     if "DATE" in k:
+    #         calendar = re.findall(r"([A-Z]+)#*:", k)[0]
+    #         raw_dates = ms_d[k].strip()
+    #         if raw_dates and not raw_dates.startswith("date of"):
+    #             for date in re.split(r" *[:,;]+ *", raw_dates):
+    #                 dates.append((date, calendar))
+
+    # - place of writing:
+    places = parse_val_as_dict(ms_d, "30#MS#PLACE######:",  default_start="OPIED@ThurayaURI")
+    # places = {"NA": []}
+    # raw_places = ms_d["30#MS#PLACE######:"].strip()
+    # if raw_places and not raw_places.startswith("COPIED@ThurayaURI"):
+    #     for place in re.split(r" *[:,;]+ *", raw_places):
+    #         place_type = "NA"
+    #         if place.count("@") == 1:
+    #             place_type, place = re.split(" *@ *", place)
+    #             if place_type not in places:
+    #                 places[place_type] = []
+    #         if place not in places[place_type]:
+    #             places[place_type].append(place)
+
+    # - related persons:
+    persons = parse_val_as_dict(ms_d, "30#MS#PERSONS####:", default_start="COPYIST@URI")
+    # persons = {"NA": []}
+    # raw_persons = ms_d["30#MS#PERSONS####:"].strip()
+    # if raw_persons and not raw_persons.startswith("COPYIST@URI"):
+    #     for person in re.split(r" *[:,;]+ *", raw_persons):
+    #         rel_type = "NA"
+    #         if person.count("@") == 1:
+    #             rel_type, person = re.split(" *@ *", person)
+    #             if rel_type not in persons:
+    #                 persons[rel_type] = []
+    #         if person not in persons[rel_type]:
+    #             persons[rel_type].append(person)
+
+    # - institutions mentioned: 
+    institutions = parse_val_as_str(ms_d, "30#MS#INSTITUT###:")
+
+    # - script:
+    scripts = parse_val_as_dict(ms_d, "30#MS#SCRIPT#####:",
+                default_start="Maghribi/Naskh/Nastacliq")
+    # scripts = {"NA": []}   # e.g., "ara": "naskh"
+    # raw_scripts = ms_d["30#MS#SCRIPT#####:"].strip()
+    # if raw_scripts and not raw_scripts.startswith("Maghribi/Naskh/Nastacliq"):
+    #     for script in re.split(r" *[:,;]+ *", raw_scripts):
+    #         lang_script = "NA"
+    #         if script.count("@") == 1:
+    #             lang_script, script = re.split(" *@ *", script)
+    #             if lang_script not in scripts:
+    #                 scripts[lang_script] = []
+    #         if script not in scripts[lang_script]:
+    #             scripts[lang_script].append(script)
+
+    # - incipit: 
+    incipit = parse_val_as_str(ms_d, "40#MS#INCIPIT####:", 
+                               default_start="first 5 lines")
+    # incipit = ""
+    # raw_incipit = ms_d["40#MS#INCIPIT####:"].strip()
+    # if raw_incipit and not raw_incipit.startswith("first 5 lines"):
+    #     incipit = raw_incipit
+
+
+    # - explicit:
+    explicit = parse_val_as_str(ms_d, "40#MS#EXPLICIT###:", 
+                                default_start="last 5 lines")
+    # explicit = ""
+    # raw_explicit = ms_d[" 40#MS#EXPLICIT###:"].strip()
+    # if raw_explicit and not raw_explicit.startswith("last 5 lines"):
+    #     explicit = raw_explicit
+
+    # - colophon:
+    colophon = parse_val_as_str(ms_d, "40#MS#COLOPHON###:", 
+                                default_start="transcription of colophon")
+    
+    # - dimensions:
+    height = parse_modifier_vals(ms_d, "HEIGHT", default_start="height, ")
+    width = parse_modifier_vals(ms_d, "WIDTH", default_start="width, ")
+
+    # - ink
+    ink = parse_val_as_list(ms_d, "40#MS#INK########:",
+                            default_start="color, color")
+    
+    # - lines per page:
+    lines_per_page = parse_val_as_str(ms_d, "40#MS#LINESPP####:",
+                                      default_start="lines per page: n")
+    
+    # - Binding:
+    binding = parse_val_as_str(ms_d, "40#MS#BINDING####:",
+                                default_start="description of")
+    
+    # - stamps:
+    stamps = parse_val_as_dict(ms_d, "40#MS#STAMPS#####:",
+                               default_start="seals and stamps: URI")
+    
+    # - hands:
+    hands = parse_val_as_str(ms_d, "40#MS#HANDS######:",
+                                default_start="description of")
+    
+    # - decoration:
+    deco = parse_val_as_str(ms_d, "40#MS#DECO#######:",
+                                default_start="description of")
+    
+    # - columns: 
+    columns = parse_val_as_str(ms_d, "40#MS#COLUMNS####:",
+                               default_start="number of columns in the manuscript: n")
+    
+    # - parts:
+    parts = parse_val_as_dict(ms_d, "40#MS#PARTS######:",
+                              default_start="URI@page_range",
+                              split_regex=r" *[;:]+ *")
+    
+    # - volumes: 
+    vols = parse_val_as_str(ms_d, "40#MS#VOLS#######:",
+                            default_start="X of Y")
+    
+    # - external IDs:
+    external_ids = get_external_ids(ms_d, "70#MS#EXTID######:")
+
+    # - links
+    links = parse_val_as_dict(ms_d, "80#MS#LINKS######:",
+                              default_start="SOURCE@permalink")
+
+    # - manuscript catalogue reference:
+    catalog_ref = parse_val_as_str(ms_d, "80#MS#CATREF#####:",
+                            default_start="reference to a")
+    
+    # - comments:
+    notes = parse_val_as_str(ms_d, "90#MS#COMMENT####:",
+                            default_start="a free running comment")
+    
+    # - tags: 
+    tags = parse_val_as_list(ms_d, "90#MS#ISSUES#####:",
+                            default_start="comma-separated list")
+
+    ms_meta = dict(
+        manuscript_uri=ms_uri,
+        shelfmark=shelfmark,
+        tags=tags,
+        author_d=author_d,
+        author_ar=author_ar,
+        author_lat=author_lat,
+        title_d=title_d, 
+        title_ar=title_ar, 
+        title_lat=title_lat,
+        normalized_title_lat=normalized_title_lat,
+        title_lat_prefered=title_lat_prefered,
+        title_ar_prefered=title_ar_prefered,
+        dates=dates,
+        places=places,
+        persons=persons,
+        institutions=institutions,
+        scripts=scripts,
+        incipit=incipit,
+        explicit=explicit,
+        colophon=colophon,
+        height=height,
+        width=width,
+        ink=ink,
+        lines_per_page=lines_per_page,
+        binding=binding,
+        stamps=stamps,
+        hands=hands,
+        deco=deco,
+        columns=columns,
+        parts=parts,
+        vols=vols,
+        external_ids=external_ids,
+        links=links,
+        catalog_ref=catalog_ref,
+        notes=notes,
+    )
+
+    return ms_meta
+
+def collect_transcr_yml_data(transcr_d, base_url, corpus_folder=None, 
+                             transcr_yml_fp=None, transcr_uri=None, recalculate=False):
+    """Collect all metadata from an OpenITI transcription yml file
+    
+    Args:
+        transcr_d (dict): version yml dictionary
+        base_url (str): URL on raw.githubusercontents that serves the raw files 
+            for the relevant release/current state of the corpus
+        corpus_folder (str): path to the (local) folder containing 
+            the 25AH year OpenITI corpus folders / RELEASE folder
+        version_yml_fp (str): path to the the transcription yml file
+        transcr_uri (str): transcription URI
+        recalculate (bool): if True, character and token lengths will be recalculated
+
+    Returns:
+        version_meta: dict
+    """
+    # - URI-related variables:
+    if not transcr_uri:
+        transcr_uri = transcr_d["00#TRNS#URI######:"]
+    version_code = transcr_uri.split("-")[0].split(".")[-1]
+    languages = re.findall(r"[a-z]{3}", transcr_uri.split("-")[1])
+    language = ",".join(languages)
+    try:
+        #collection_code = re.findall(r"^([A-Za-z]+?\d*[A-Za-z]+)\d+(?:BK\d+)?(?:Vols)?[A-Z]?$", version_code)[0]
+        collection_code = re.findall(r"^[A-Za-z]+?\d{,2}[A-Za-z]+", version_code)[0]
+    except:
+        print("no collection code found in", [version_code])
+        collection_code = None
+        input("CONTINUE?")
+
+    # - most developed text version:
+
+    if "path" in transcr_d:
+        pth = transcr_d["path"]
+    else:
+        pth = transcr_yml_fp[:-4]
+    extensions = [".mARkdown", ".completed", ".inProgress", ""]
+    for ext in extensions:
+        if "extensions" in transcr_d:
+            if ext in transcr_d["extensions"]:
+                transcr_fp = pth + ext
+                break
+        else:
+            transcr_fp = pth + ext
+            if os.path.exists(transcr_fp):
+                break
+        # if even the path with no extension does not exist:
+        if ext == "":
+            transcr_fp = ""
+            print("NO TEXT VERSION FOUND FOR THIS YML FILE:", transcr_yml_fp)
+
+    # - url:
+    if corpus_folder: # data in 25Y folders
+        url = transcr_fp.replace(corpus_folder, base_url).replace("\\","/")
+        url = url.replace("AH/data", "AH/master/data")
+    else:
+        url = base_url+transcr_fp
+        url = url.replace("/data/", "/master/data/")
+
+    # - annotation status:
+    if not ext:
+        annotation_status = "(not yet annotated)"
+    else:
+        annotation_status = ext[1:]
+
+    # - LENGTH:
+    char_length = parse_val_as_int(transcr_d, "00#TRNS#CLENGTH##:",
+                                   default_start="number of")
+    tok_length = parse_val_as_int(transcr_d, "00#TRNS#LENGTH###:",
+                                  default_start="number of")
+    
+    # recalculate the length if it is not present in the yml file:
+    if recalculate and not (tok_length and char_length):
+        if not char_length:
+            char_length = ar_cnt_file(transcr_fp, mode="char")
+            transcr_d["00#TRNS#CLENGTH##:"] = str(char_length)
+        if not tok_length:
+            tok_length = ar_cnt_file(transcr_fp, mode="token")
+            transcr_d["00#TRNS#LENGTH###:"] = str(tok_length)
+
+    # - PAGES:
+    pages = parse_val_as_str(transcr_d, "40#TRNS#PAGES####:", 
+                             default_start="pages transcribed: page_range")
+    
+    # - EDITION THIS TRANSCRIPTION IS BASED ON:
+    based_list = parse_val_as_list(transcr_d, "80#TRNS#BASED####:", 
+                                   default_start="permalink,")
+    external_ids = {}
+    for url in based_list:
+        org_regex = r"^(?:https?://)?(?:www\.)?(?:[a-z]{2}\.)?(\w+)"
+        org = re.findall(org_regex, url.strip())
+        if org:
+            org = org[0]
+        else:
+            org = "NA"
+        if org not in external_ids:
+            external_ids[org] = []
+        external_ids[org].append(url)
+    worldcat_links = [v for k, v in external_ids.items() if k.lower() == "worldcat"]
+    if "worldcat" in external_ids:
+        del external_ids["worldcat"]
+    elif "Worldcat" in external_ids:
+        del external_ids["Worldcat"]
+
+    links = parse_val_as_str(transcr_d, "80#TRNS#LINKS####:", 
+                             default_start="SOURCE@permalink,")
+    
+    # - OCR MODELS:
+    line_model = parse_val_as_str(transcr_d, "80#TRNS#LINMODEL#:", 
+                             default_start="segmentation model")
+    region_model = parse_val_as_str(transcr_d, "80#TRNS#REGMODEL#:", 
+                             default_start="segmentation model")
+    recognition_model = parse_val_as_str(transcr_d, "80#TRNS#RECMODEL#:", 
+                             default_start=None)
+    
+    # - CONTRIBUTORS:
+    contributors = parse_val_as_dict(transcr_d, "90#TRNS#CONTRIB##:",
+                                     default_start="TRANSCRIPTION@name")    
+    # - COMMENTS:
+    notes = parse_val_as_str(transcr_d, "90#TRNS#COMMENT##:",
+                             default_start="a free running comment")
+    
+    # - ISSUES:
+    issues = parse_val_as_str(transcr_d, "90#TRNS#ISSUES###:",
+                              default_start="comma-separated list")
+    issues = re.findall(r"[A-Z_]{5,}", issues)
+
+    uncorrected_OCR = False
+    if "UNCORRECTED_OCR" in issues:
+        uncorrected_OCR=True
+
+    primary_yml = ""
+    if "PRIMARY_VERSION" in issues:
+        primary_yml = "pri"
+    else:
+        primary_yml = "sec"
+
+    transcr_meta = dict(
+        # version_meta:
+        version_uri=transcr_uri,
+        version_code=version_code,
+        language=language,
+        collection_code=collection_code,
+        text_meta="",
+        edition_meta="",
+        # release_version_meta:
+        char_length=char_length,
+        tok_length=tok_length, 
+        path=transcr_fp,
+        url=url,
+        pages=pages,                # not in version_record yet
+        analysis_priority=primary_yml,
+        annotation_status=annotation_status,
+        notes=notes,
+        tags=" :: ".join(issues),
+        header_meta=transcr_d.get("header_meta", {}),
+        line_model=line_model,      # not in version_record
+        region_model=region_model,  # not in version_record
+        recognition_model=recognition_model,  # not in version_record
+        contributors=contributors,  # not in version_record
+        subcorpus="MSS",
+        uncorrected_OCR=uncorrected_OCR,
+        # edition_meta:
+        external_ids=external_ids,  
+        worldcat_links=worldcat_links,  # not in version_record yet
+        pdf_url=links,
+    )
+    return transcr_meta
+
+def collect_author_yml_data(auth_d, author_uri=None):
     """Collect all metadata from an OpenITI author yml file"""
+
+    if not author_uri:
+        author_uri = auth_d["00#AUTH#URI######:"]
+    print(author_uri)
+
     # collect the author's dates from the URI:
     date_str = author_uri[:4]
     date = int(date_str)
     date_AH = date
     date_CE = ah2ce(date)
-    
-    # load the author yml file as a dictionary:
-    auth_d = readYML(author_yml_fp)
 
+    # process the name elements:
+    name_d = {"LAT": {}}
+    for k in auth_d:
+        if re.findall("^10#.+(?:LAQAB|KUNYA|ISM|NASAB|NISBA|SHUHRA)", k):
+            if "Fulān" in auth_d[k] or "none" in auth_d[k].lower():
+                continue
+            try:
+                _, _, name_el, lang = re.split("#+", k.strip(":"))
+            except Exception as e:
+                print(e)
+                print(k)
+                print(k.strip(":"))
+                print(re.split("#+", k.strip(":")))
+                input("CONTINUE?")
+            if lang not in name_d:
+                name_d[lang] = {}
+            if lang in ARABIC_SCRIPT_CODES:
+                name_d[lang][name_el.lower()] = betacodeToArSimple(auth_d[k])
+                name_d["LAT"][name_el.lower()] = auth_d[k]
+            else:
+                name_d[lang][name_el.lower()] = auth_d[k]
+    
     # create a full name from the name elements:
-    name_d = dict()
+    name_comps = "LAQAB|KUNYA|ISM|NASAB|NISBA".lower().split("|")
+    for lang in name_d:
+        d = name_d[lang]
+        full_name = [d[k] for k in name_comps if k in d and d[k].strip()]
+        full_name = " ".join(full_name)
+        if lang in ARABIC_SCRIPT_CODES:
+            name_d[lang]["full_name"] = betacodeToArSimple(full_name)
+        else:
+            name_d[lang]["full_name"] = full_name
+
+    # create the legacy shuhra variables:
     shuhra = ""
+    shuhra_ar = ""
+    shuhras = {}
+    for lang in name_d:
+        for k,v in name_d[lang].items():
+            if "shuhra" in k:
+                shuhras[lang] = v
+    if shuhras: 
+        for lang in ["LAT", "EN", "FR", "DE"]:
+            if lang in shuhras:
+                shuhra = shuhras[lang]
+                break
+        for lang in ARABIC_SCRIPT_CODES:
+            if lang in shuhras:
+                shuhra_ar = shuhras[lang]
+                break
+    
+    # create the legacy full_name variables:
     full_name = ""
-    english_name = ""
-    if not ("Fulān" in auth_d["10#AUTH#SHUHRA#AR:"]\
-            or "none" in auth_d["10#AUTH#SHUHRA#AR:"].lower()):
-        shuhra = auth_d["10#AUTH#SHUHRA#AR:"].strip()
-        shuhra_ar = betacodeToArSimple(shuhra)
-    name_comps = ["10#AUTH#LAQAB##AR:",
-                  "10#AUTH#KUNYA##AR:",
-                  "10#AUTH#ISM####AR:",
-                  "10#AUTH#NASAB##AR:",
-                  "10#AUTH#NISBA##AR:"]
-    full_name = [auth_d[x] for x in name_comps \
-                    if x in auth_d \
-                    and not ("Fulān" in auth_d[x] \
-                                or "none" in auth_d[x].lower())]
-    full_name = " ".join(full_name).strip()
-    full_name_ar = betacodeToArSimple(full_name)
+    full_name_ar = ""
+    full_names = {}
+    for lang in name_d:
+        for k,v in name_d[lang].items():
+            if "full_name" in k:
+                full_names[lang] = v
+    if full_names: 
+        for lang in ["LAT", "EN", "FR", "DE"]:
+            if lang in full_names and full_names[lang]:
+                full_name = full_names[lang]
+                break
+        for lang in ARABIC_SCRIPT_CODES:
+            if lang in full_names and full_names[lang]:
+                full_name_ar = full_names[lang]
+                break
     if not shuhra:
         shuhra = full_name
+    if not shuhra_ar:
         shuhra_ar = full_name_ar
-    name_comps_en = [x.replace("#AR:", "#EN:") for x in name_comps]
-    english_name = [auth_d[x] for x in name_comps_en \
-                    if x in auth_d and \
-                    not ("Fulān" in auth_d[x] \
-                            or "none" in auth_d[x].lower())]
-    english_name = " ".join(english_name).strip()
-
+    
+    english_name = ""
+    if "EN" in name_d:
+        if "SHUHRA" in name_d["EN"]:
+            english_name = name_d["EN"]["shuhra"]
+        elif "full_name" in name_d["EN"]:
+            english_name = name_d["EN"]["full_name"]
+    
     name_from_uri = author_uri[4:]
     name_from_uri = insert_spaces(name_from_uri)
     name_from_uri = replace_c_with_cayn(name_from_uri)
-    #name_from_uri = re.sub(r"([A-Z])", r" \1", author_uri[4:]).strip()
-    #name_from_uri = name_from_uri.replace("c", "ʿ").replace("C", "ʿ")
 
-    # collect author name elements:
-    present_languages = []
-    for key in auth_d:
-        lang = re.findall(r"#([A-Z]{2}):", key)
-        if lang and lang[0] not in present_languages and lang[0] not in ["AH", "CE"]:
-            present_languages.append(lang[0])
-    #print(present_languages)
-    #for lang in ["AR", "EN", "FA"]:
-    for lang in present_languages:
-        lang_d = dict()
-        add = False
-        for yml_k in ["10#AUTH#SHUHRA#AR:"]+name_comps:
-            yml_k = yml_k.replace("#AR:", "#{}:".format(lang))
-            k = re.findall(r"(?<=10#AUTH#)\w+", yml_k)[0].lower()
-            lang_d[k] = get_name_el(auth_d, yml_k)
-            if lang_d[k]:
-                add = True
-        if add:
-            if lang == "EN":
-                name_d[lang] = lang_d
+    # print(name_d)
+    # print("shuhra:", shuhra)
+    # print("shuhra_ar:", shuhra_ar)
+    # print("full_name_ar:", full_name_ar)
+    # print("full_name:", full_name)
+    # print("full_names:", full_names)
+    # print("============")
+
+    # create more legacy name values:
+    author_ar = []
+    author_lat = []
+    for lang in ["LAT", "EN", "FR", "DE"]:
+        if lang in shuhras:
+            author_lat.append(shuhras[lang])
+        if lang in full_names:
+            author_lat.append(full_names[lang])
+        if english_name:
+            author_lat.append(english_name)
+        author_lat.append(name_from_uri)
+    for lang in ARABIC_SCRIPT_CODES:
+        if lang in shuhras:
+            author_ar.append(shuhras[lang])
+        if lang in full_names:
+            author_ar.append(full_names[lang])
+    normalized_author_lat = [betacodeToSearch(a) for a in author_lat]
+    author_ar_prefered = shuhra_ar or full_name_ar
+    author_lat_prefered = shuhra or full_name or english_name or name_from_uri
+
+    # add data from header:
+    if not author_ar and "name_from_text_header" in auth_d:
+        header_names = auth_d["name_from_text_header"]
+        if type(header_names) == str:
+            header_names = re.split(r" *[:;,]+ *", header_names)
+        for n in header_names:
+            n = n.strip()
+            if not n:
+                continue
+            if re.findall("[ء-ي]", n):
+                if n not in author_ar:
+                    author_ar.append(n)
+                    if not author_ar_prefered:
+                        author_ar_prefered = n
             else:
-                # store a version of the name in transcription and Arabic script:
-                name_d["LA"] = lang_d
-                lang_d_converted = {k: betacodeToArSimple(v) for k,v in lang_d.items()}
-                name_d[lang] = lang_d_converted
+                if n not in author_lat:
+                    author_lat.append(n)
+                    if not author_lat_prefered:
+                        author_lat_prefered = n
 
+    # print(name_d)
+    # print("shuhra:", shuhra)
+    # print("shuhra_ar:", shuhra_ar)
+    # print("full_name_ar:", full_name_ar)
+    # print("full_name:", full_name)
+    # print("full_names:", full_names)
+    # print("author_lat_prefered:", author_lat_prefered)
+    # print("author_ar_prefered:", author_ar_prefered)
+    # #input()
 
     # geo data:
     geo_regex = r"\w+_RE(?:_\w+)?|\w+_[RSNO]\b|\w+XXXYYY\w*"
     place_relations = []
     
-    born = re.findall(geo_regex, auth_d["20#AUTH#BORN#####:"])
+    born = re.findall(geo_regex, auth_d.get("20#AUTH#BORN#####:", ""))
     for p in born:
-        place_relations.append(dict(code="BORN", subtype_code="", person_a=author_uri, place_b=p))
+        place_relations.append(dict(
+            code="BORN", 
+            subtype_code="", 
+            person_a=author_uri, 
+            place_b=p
+        ))
         if p not in geo_URIs:
             geo_URIs[p] = set()
         geo_URIs[p].add(author_uri)
         
-    died = re.findall(geo_regex, auth_d["20#AUTH#DIED#####:"])
+    died = re.findall(geo_regex, auth_d.get("20#AUTH#DIED#####:", ""))
     for p in died:
-        place_relations.append(dict(code="DIED", subtype_code="", person_a=author_uri, place_b=p))
+        place_relations.append(dict(
+            code="DIED", 
+            subtype_code="", 
+            person_a=author_uri, 
+            place_b=p
+        ))
         if p not in geo_URIs:
             geo_URIs[p] = set()
         geo_URIs[p].add(author_uri)
     
-    resided = re.findall(geo_regex, auth_d["20#AUTH#RESIDED##:"])
+    resided = re.findall(geo_regex, auth_d.get("20#AUTH#RESIDED##:", ""))
     for p in resided:
-        place_relations.append(dict(code="RESID", subtype_code="", person_a=author_uri, place_b=p))
+        place_relations.append(dict(
+            code="RESID", 
+            subtype_code="", 
+            person_a=author_uri, 
+            place_b=p
+        ))
         if p not in geo_URIs:
             geo_URIs[p] = set()
         geo_URIs[p].add(author_uri)
     
-    visited = re.findall(geo_regex, auth_d["20#AUTH#VISITED##:"])
+    visited = re.findall(geo_regex, auth_d.get("20#AUTH#VISITED##:", ""))
     for p in visited:
-        place_relations.append(dict(code="VISIT", subtype_code="", person_a=author_uri, place_b=p))
+        place_relations.append(dict(
+            code="VISIT", 
+            subtype_code="", 
+            person_a=author_uri, 
+            place_b=p
+        ))
         if p not in geo_URIs:
             geo_URIs[p] = set()
         geo_URIs[p].add(author_uri)
@@ -859,7 +1882,12 @@ def collect_author_yml_data(author_yml_fp, author_uri):
                 if student_uri:
                     if not student.strip() == student_uri[0]:
                         print("Additional information in student field?", student)
-                    person_relations.append(dict(code="STUDENT", subtype_code="", person_a=student_uri[0], person_b=author_uri))
+                    person_relations.append(dict(
+                        code="STUDENT", 
+                        subtype_code="", 
+                        person_a=student_uri[0], 
+                        person_b=author_uri
+                    ))
     else:
         print("MISSING KEY 40#AUTH#STUDENTS# in", author_uri)
         print(json.dumps(auth_d, indent=2, ensure_ascii=False))
@@ -870,52 +1898,97 @@ def collect_author_yml_data(author_yml_fp, author_uri):
             if teacher_uri:
                 if not re.sub(r"[\s¶]+", "", teacher) == teacher_uri[0]:
                     print("Additional information in teacher field?", teacher)
-                person_relations.append(dict(code="STUDENT", subtype_code="", person_a=author_uri, person_b=teacher_uri[0]))
+                person_relations.append(dict(
+                    code="STUDENT", 
+                    subtype_code="", 
+                    person_a=author_uri, 
+                    person_b=teacher_uri[0]
+                ))
+
+    # collect external IDs:
+    external_ids = get_external_ids(auth_d, "70#AUTH#EXTID####:")
+    # external_ids = dict()
+    # if "70#AUTH#EXTID####:" in auth_d:
+    #     ext_ids = auth_d["70#AUTH#EXTID####:"].strip().lower()
+    #     if ext_ids not in ["", "none", "viaf@id, wikidata@id, src@id"]:
+    #         for ext_id in re.split(r" *[;,:]+ *", ext_ids):
+    #             try:
+    #                 src, id_ = ext_id.split("@")
+    #             except:
+    #                 src = "NA"
+    #                 id_ = ext_id
+    #             if src not in external_ids:
+    #                 external_ids[src] = []
+    #             external_ids[src].append(id_)                
 
     # collect bibliography:
     bibliography = ""
-    if auth_d["80#AUTH#BIBLIO###:"] and not auth_d["80#AUTH#BIBLIO###:"].strip().startswith("src@id"):
-        bibliography = auth_d["80#AUTH#BIBLIO###:"].strip()
-        bibliography = re.sub(r"\s+", " ", bibliography)
+    raw_bib = auth_d["80#AUTH#BIBLIO###:"].strip()
+    if raw_bib and not raw_bib.startswith("src@id"):
+        bibliography = re.sub(r"\s+", " ", raw_bib)
 
     # collect notes:
     notes = ""
     if "90#AUTH#COMMENT##:" in auth_d:
-        if auth_d["90#AUTH#COMMENT##:"] and not auth_d["90#AUTH#COMMENT##:"].strip().startswith("a free running comment"):
-            notes = auth_d["90#AUTH#COMMENT##:"].strip()
-            notes = re.sub(r"    ", "", notes)
+        raw_notes = auth_d["90#AUTH#COMMENT##:"].strip()
+        if raw_notes and not raw_notes.startswith("a free running comment"):
+            notes = re.sub(r"\s+", " ", raw_notes)
     else:
         print("MISSING KEY: 90#AUTH#COMMENT##: in", author_uri)
         print(json.dumps(auth_d, indent=2, ensure_ascii=False))
         input()
 
-    try:
-        author_ar_prefered = [x for x in [shuhra_ar, full_name_ar] if x][0]
-    except:
-        author_ar_prefered = ""
-    author_lat =[x for x in [shuhra, full_name, english_name, name_from_uri] if x.strip()]
-    normalized_author_lat = [betacodeToSearch(a) for a in author_lat]
-    author_lat_prefered=author_lat[0]
-
     author_meta = dict(
         author_uri=author_uri,
-        author_ar=" :: ".join([x for x in [shuhra_ar, full_name_ar] if x.strip()]),
-        author_lat=" :: ".join(list(set(author_lat + normalized_author_lat))),
-        author_ar_prefered=author_ar_prefered,
-        author_lat_prefered=author_lat_prefered,
         date=date,
         date_AH=date_AH,
         date_CE=date_CE,
         date_str=date_str,
-        tags="",
-        notes=notes,
+        author_ar=" :: ".join(author_ar),
+        author_lat=" :: ".join(list(set(author_lat + normalized_author_lat))),
+        author_ar_prefered=author_ar_prefered,
+        author_lat_prefered=author_lat_prefered,
+        author_from_uri=name_from_uri,
         name_elements=name_d,
         place_relations=place_relations,
         person_relations=person_relations,
-        bibliography=bibliography
+        external_ids=external_ids,
+        bibliography=bibliography,
+        notes=notes,
+        tags="",
         )
     return author_meta
 
+def get_external_ids(d, ext_id_key,
+                     defaults=["", "none", "viaf@id, wikidata@id, src@id"]):
+    """Get a dictionary of external IDs from a yml dictionary.
+    
+    Keys in the dictionary are external ID providers;
+    values are all external IDs from this provider
+    
+    Args:
+        d (dict): a yml dictionary
+        ext_id_key (str): the key that contains the external IDs
+            in that yml dictionary
+    """
+    # check if the key exists and is not empty or default:
+    if ext_id_key not in d:
+        return {}
+    ext_id_str = d[ext_id_key].strip().lower()
+    if ext_id_str in defaults:
+        return {}
+    
+    external_ids = {}
+    for ext_id in re.split(r" *[;,:]+ *", ext_id_str):
+        try:
+            src, id_ = ext_id.split("@")
+        except:
+            src = "NA"
+            id_ = ext_id
+        if src not in external_ids:
+            external_ids[src] = []
+        external_ids[src].append(id_)
+    return external_ids
 
 def set_analysis_priority(version_list):
     """Check which of the versions of the text should get primary status

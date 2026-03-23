@@ -104,10 +104,9 @@ urlpatterns = [
     # path('all-releases/corpusinsights/', views.get_corpus_insights, name='corpusinsights'),
     # path('<str:release_code>/corpusinsights/', views.get_corpus_insights, name='corpusinsights'),
 
-    # BUILDUP: UNCOMMENT:
-    # # Person names endpoints: 
+    # Object names endpoints: 
 
-    # path('person-name/all/', views.PersonNameListView.as_view(), name='person-names-all'),
+    path('name/all/', views.ObjectNameListView.as_view(), name='object-names-all'),
 
     # BUILDUP: UNCOMMENT:
     # # GitHub Issues endpoints (temporary): TO DO: version this endpoint + create view for single issue?

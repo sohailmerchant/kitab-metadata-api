@@ -1,4 +1,4 @@
-"""THIS SCRIPT IS WORK IN PROGRESS - DO NOT USE YET
+"""
 
 This script uploads the metadata of a single release to the database.
 

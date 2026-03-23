@@ -163,7 +163,8 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
                 print("AUTHOR YML MISSING:", author_yml_fp)
                 author_meta = dict()
             else:
-                author_meta = collect_author_yml_data(author_yml_fp, author_uri)
+                auth_d = readYML(author_yml_fp)
+                author_meta = collect_author_yml_data(auth_d, author_uri)
             #print(json.dumps(author_meta, indent=2, ensure_ascii=False))
 
             # go through all text folders in the author folder and collect their metadata:
@@ -179,7 +180,9 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
                         print("TEXT YML MISSING:", text_yml_fp)
                         text_meta = dict()
                     else:
-                        text_meta = collect_text_yml_data(text_yml_fp, text_uri)
+                        #text_meta = collect_text_yml_data(text_yml_fp, text_uri)
+                        text_d = readYML(text_yml_fp)
+                        collect_text_yml_data(text_d, text_uri)
                     
                     # create an entry in the texts dictionary in which we store the text_meta
                     # and will store metadata for all versions of that text
@@ -207,8 +210,11 @@ def load_corpus_meta(corpus_folder, base_url, text_tags, release_code):
                             print(fn)
                             version_yml_fp = fp
                             # collect the version metadata from the version yml file:
-                            version_fp, version_meta = collect_version_yml_data(version_yml_fp, fn.strip(".yml"), 
-                                                                                corpus_folder, base_url)
+                            version_d = readYML(version_yml_fp)
+                            version_meta = collect_version_yml_data(version_d)
+                            version_fp = version_meta["path"]
+                            #version_fp, version_meta = collect_version_yml_data(version_yml_fp, fn.strip(".yml"), 
+                            #                                                    corpus_folder, base_url)
                             # collect additional metadata from the text file metadata headers:
                             r = collect_header_meta(version_fp, author_meta, text_meta, version_meta)
                             author_meta, text_meta, version_meta = r

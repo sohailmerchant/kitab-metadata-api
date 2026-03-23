@@ -14,7 +14,8 @@ Documentation:
 * https://www.django-rest-framework.org/api-guide/views/#function-based-views
 """
 
-from django.db.models import Q
+from django.db.models import Q, Prefetch
+
 from django.shortcuts import render
 from django.http import HttpResponse, JsonResponse, Http404
 
@@ -30,7 +31,8 @@ from django_filters import rest_framework as django_filters
 
 from .models import Author, Text, Version, ReleaseVersion, \
                     ReleaseInfo, RelationType, A2BRelation,\
-                    SourceCollectionDetails, ManuscriptHolding, Manuscript
+                    SourceCollectionDetails, ManuscriptHolding, \
+                    Manuscript, ObjectName, ObjectNameLink
 # BUILDUP: UNCOMMENT:
 # from .models import PersonName, CorpusInsights, \
 #                     TextReuseStats, GitHubIssue
@@ -38,7 +40,8 @@ from .serializers import  AllRelationsSerializer, AllRelationTypesSerializer, \
                           AuthorSerializer, ReleaseInfoSerializer, TextSerializer,\
                           VersionSerializer, ReleaseVersionSerializer, \
                           SourceCollectionDetailsSerializer,\
-                          ManuscriptHoldingSerializer, ManuscriptSerializer
+                          ManuscriptHoldingSerializer, ManuscriptSerializer, \
+                          ObjectNameSerializer
 # BUILDUP: UNCOMMENT:
 # from .serializers import PersonNameSerializer, \
 #                          TextReuseStatsSerializer, CorpusInsightsSerializer, \
@@ -193,7 +196,7 @@ def api_overview(request):
         'Get a list of all sources for our texts': 'source-collection/all/', 
         'Get a list of all relation types in the database': 'relation-type/all/', 
         'Get a list of all relations (between persons, books, places) in the database': 'relation/all/',
-        'Get a list of all manually entered person names in the database': 'person-name/all/', 
+        'Get a list of all object names in the database': 'name/all/', 
 
     }
 
@@ -776,7 +779,25 @@ class TextListView(CustomListView):
 # class PersonNameListView(CustomListView):
 #     """Display all person names (independent of releases) in a paginated list."""
 #     queryset = PersonName.objects.all()
-#     serializer_class = PersonNameSerializer
+#     serializer_class = 
+
+
+class ObjectNameListView(CustomListView):
+    """Display all names (independent of releases) in a paginated list."""
+    queryset = ObjectName.objects.prefetch_related(
+        Prefetch(
+            "links",
+            queryset=ObjectNameLink.objects.select_related(
+                "author",
+                "text",
+                "manuscript_holding",
+                "manuscript",
+                "place",
+            )
+        )
+    )
+    serializer_class = ObjectNameSerializer
+
 
 
 #class RelationsListView(generics.ListAPIView):

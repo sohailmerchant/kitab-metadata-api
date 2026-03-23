@@ -27,7 +27,7 @@ class CountrySerializer(FlexFieldsModelSerializer):
 
 TO DO: implement flex fields?
 """
-
+import json
 import re
 from argparse import Namespace
 from operator import truediv
@@ -96,10 +96,64 @@ class ExternalIDSerializer(serializers.ModelSerializer):
         model = ExternalID
         fields = ('provider', 'external_id', 'url')
 
-class ObjectNameSerializer(FlexFieldsModelSerializer):
+# class ObjectNameSerializer(FlexFieldsModelSerializer):
+#     class Meta:
+#         model = ObjectName
+#         fields = "__all__"
+
+class ObjectNameSerializer(serializers.ModelSerializer):
+    referred_objects = serializers.SerializerMethodField()
+
     class Meta:
         model = ObjectName
-        fields = "__all__"
+        fields = [
+            "id",
+            "name",
+            "normalized_name",
+            "language",
+            "name_type",
+            "referred_objects",
+        ]
+
+    def get_referred_objects(self, obj):
+        results = []
+
+        for link in obj.links.select_related(
+            "author",
+            "text",
+            "manuscript_holding",
+            "manuscript",
+            "place",
+        ).all():
+            target = None
+            object_type = None
+
+            if link.author is not None:
+                target = link.author
+                object_type = "author"
+            elif link.text is not None:
+                target = link.text
+                object_type = "text"
+            elif link.manuscript_holding is not None:
+                target = link.manuscript_holding
+                object_type = "manuscript_holding"
+            elif link.manuscript is not None:
+                target = link.manuscript
+                object_type = "manuscript"
+            elif link.place is not None:
+                target = link.place
+                object_type = "place"
+
+            if target is not None:
+                results.append({
+                    "object_type": object_type,
+                    "object_id": target.pk,
+                    "object_label": str(target),
+                    "is_preferred": link.is_preferred,
+                    "source": link.source,
+                })
+
+        return results
 
 
 class ShallowPlaceSerializer(serializers.ModelSerializer):
@@ -357,7 +411,8 @@ class ShallowVersionSerializer(FlexFieldsModelSerializer):
         # select the versions that are part of the current version_instance:
         parts = Version.objects\
             .filter(part_of__version_uri=version_instance.version_uri)
-        return {"parts": parts}
+        #return {"parts": parts}
+        return {"parts": sorted(list(set([d.version_uri for d in parts])))}
         # # get the bookwise text reuse statistics: 
         # version_reuse_stats = VersionwiseReuseStats.objects\
         #     .filter(release_version__version__version_uri=version_instance.version_uri)\
@@ -712,11 +767,17 @@ class TextSerializer(FlexFieldsModelSerializer):
             elif d.place_a or d.place_b:
                 if d.place_a:
                     new_d["related_place_id"] = d.place_a.id
-                    new_d["related_place_name"] = d.place_a.names.first()
+                    try:
+                        new_d["related_place_name"] = d.place_a.names.first().name
+                    except:
+                        new_d["related_place_name"] = d.place_a.code
                     new_d["relation_type_name"]= d.relation_type.name_inverted
                 else: 
                     new_d["related_place_id"] = d.place_b.id
-                    new_d["related_place_name"] = d.place_b.names.first()
+                    try:
+                        new_d["related_place_name"] = d.place_b.names.first().name
+                    except:
+                        new_d["related_place_name"] = d.place_b.code
                     new_d["relation_type_name"]= d.relation_type.name
                 related_places.append(new_d)
 
@@ -1043,11 +1104,17 @@ class ManuscriptSerializer(FlexFieldsModelSerializer):
             elif d.place_a or d.place_b:
                 if d.place_a:
                     new_d["related_place_id"] = d.place_a.id
-                    new_d["related_place_name"] = d.place_a.names.first()
+                    try:
+                        new_d["related_place_name"] = d.place_a.names.first().name
+                    except:
+                        new_d["related_place_name"] = d.place_a.code
                     new_d["relation_type_name"]= d.relation_type.name_inverted
                 else: 
                     new_d["related_place_id"] = d.place_b.id
-                    new_d["related_place_name"] = d.place_b.names.first()
+                    try:
+                        new_d["related_place_name"] = d.place_b.names.first().name
+                    except:
+                        new_d["related_place_name"] = d.place_b.code
                     new_d["relation_type_name"]= d.relation_type.name
                 related_places.append(new_d)
 
@@ -1231,13 +1298,27 @@ class AuthorSerializer(FlexFieldsModelSerializer):
         full_name_ids = []
         for link in links:
             n = link.object_name
+            print(n, n.name_type, link.is_preferred)
             if not n.name:
                 continue
             lang = (n.language or "und").upper()
+            # if the name is the preferred name, store it there, too:
+            if link.is_preferred:
+                # define which legacy script key the name should be stored under:
+                if lang and lang[:2].upper() in ("AR", "UR", "PE", "FA"):
+                    preferred_key = "author_ar_prefered"
+                else:
+                    preferred_key = "author_lat_prefered"
+                print(preferred_key)
+                if not data[preferred_key]:
+                    data[preferred_key] = n.name
+                elif n.name not in data[preferred_key].split(", "):
+                    data[preferred_key] += ", " + n.name
             if n.name_type == "full_name":
                 # avoid duplicating names here
                 if n.id in full_name_ids:
                     continue
+                print("!FULLNAME!")
                 full_name_ids.append(n.id)
                 data["full_names"].append({
                     "name": n.name,
@@ -1248,12 +1329,11 @@ class AuthorSerializer(FlexFieldsModelSerializer):
                     "source": link.source
                     })
                 # define which legacy script key the name should be stored under:
-                if lang and lang[:2] in ("AR", "UR", "PE", "FA"):
+                if lang and lang[:2].upper() in ("AR", "UR", "PE", "FA"):
                     script_key = "author_ar"
-                    preferred_key = "author_ar_prefered"
                 else:
                     script_key = "author_lat"
-                    preferred_key = "author_lat_prefered"
+                print(script_key)
                 
                 # store the name to the relevant script key:
                 if not data[script_key]:
@@ -1261,12 +1341,8 @@ class AuthorSerializer(FlexFieldsModelSerializer):
                 elif n.name not in data[script_key].split(", "):
                     data[script_key] += ", " + n.name
                 
-                # if the name is the preferred name, store it there, too:
-                if link.is_preferred:
-                    if not data[preferred_key]:
-                        data[preferred_key] = n.name
-                    elif n.name not in data[preferred_key].split(", "):
-                        data[preferred_key] += ", " + n.name
+                
+                    
             # process the name elements:
             elif n.name_type in name_elements_keys:
                 if lang not in name_elements_by_lang:
@@ -1416,11 +1492,17 @@ class AuthorSerializer(FlexFieldsModelSerializer):
             elif d.place_a or d.place_b:
                 if d.place_a:
                     new_d["related_place_id"] = d.place_a.id
-                    new_d["related_place_name"] = d.place_a.names.first()
+                    try:
+                        new_d["related_place_name"] = d.place_a.names.first().name
+                    except:
+                        new_d["related_place_name"] = d.place_a.code
                     new_d["relation_type_name"]= d.relation_type.name_inverted
                 else: 
                     new_d["related_place_id"] = d.place_b.id
-                    new_d["related_place_name"] = d.place_b.names.first()
+                    try:
+                        new_d["related_place_name"] = d.place_b.names.first().name
+                    except:
+                        new_d["related_place_name"] = d.place_b.code
                     new_d["relation_type_name"]= d.relation_type.name
                 related_places.append(new_d)
 
@@ -1435,6 +1517,13 @@ class AuthorSerializer(FlexFieldsModelSerializer):
             d["related_persons"] = related_persons
         if self.include_related_places:
             d["related_places"] = related_places
+
+        # print("RELATED ITEMS:")
+        # try:
+        #     print(json.dumps(d, indent=2, ensure_ascii="False"))
+        # except:
+        #     print(d)
+        # print("----------------------")
         
         return d
 
@@ -1466,7 +1555,8 @@ class AuthorSerializer(FlexFieldsModelSerializer):
         #         del d["author"]
         # except Exception as e: # deal with the situation when the user doesn't request the texts
         #     print("No text in the json representation of the Author", e)
-
+        
+        # print("JSON_REP:", json.dumps(json_rep, indent=2, ensure_ascii=False))
         return json_rep
  
     class Meta:
@@ -1672,6 +1762,7 @@ class ReleaseVersionSerializer(serializers.ModelSerializer):
         parts = ReleaseVersion.objects\
             .filter(version__part_of__version_uri=instance.version.version_uri)
         return {"parts": parts}
+        #return {"parts": sorted(list(set([d.version.version_uri for d in parts])))}
         # # get the bookwise text reuse statistics: 
         # version_reuse_stats = VersionwiseReuseStats.objects\
         #     .filter(release_version=instance).first()
