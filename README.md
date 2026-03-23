@@ -48,12 +48,13 @@ kitab-metadata-api
                (see https://docs.djangoproject.com/en/3.2/howto/deployment/wsgi/)
      |- meta/
           |- OpenITI_metadata_<RELEASE_CODE>_wNoor.csv: OpenITI release metadata in csv format
+          |- OpenITI_metadata_<RELEASE_CODE>_wNoor.json: all yml files in a release, in json format
           |- release_notes_<RELEASE_CODE>.txt: OpenITI release notes
-          |- release-<RELEASE_CODE>.json: all yml files in a release, in json format
           |- alThurayya_places.json: metadata of all places in alThurayya
           |- CountryCodes.json: metadata of all country codes
-          |- ISO639_language_codes.csv : metadata of all ISO 639 language codes
-          |- ISO15924_script_codes.csv : metadata of all relevant ISO 15924 script codes
+          |- external_id_providers.csv : metadata of external ID providers (wikidata etc.)
+          |- ISO639_language_codes.csv : metadata of all ISO 639 language codes (from https://datahub.io/core/language-codes#language-codes-full)
+          |- ISO15924_script_codes.csv : metadata of all relevant ISO 15924 script codes (from https://en.wikipedia.org/wiki/ISO_15924)
           |- additional_language_codes.csv: metadata of language codes that are not in ISO 639
           |- languages_scripts.csv: manually generated metadata of all OpenITI language-script 
               combination codes, connected to ISO language and script codes
