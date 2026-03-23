@@ -360,6 +360,7 @@ def betacodeToSearch(text):
     text = re.sub(r"ŧ", r"", text)
     text = dictReplace(text, translitSearch)
     text = re.sub(r"\w_", "", text)
+    text = re.sub(" Wa ", " wa-", text)
     return(text)
 
 def betacodeToLOC(text):
@@ -387,7 +388,7 @@ def arabicTobetacode(text):
     text = re.sub(r"،", r",", text)
 
     # fixing artifacts
-    text = re.sub(r"\b_a", r"a", text)
+    text = re.sub(r"(?:\b|^)_a", r"a", text)
     text = re.sub(r"aa", r"a", text)
     text = re.sub(r"ii", r"i", text)
     text = re.sub(r"uu", r"u", text)
@@ -420,30 +421,30 @@ def betacodeToArabic(text):
     text = re.sub(r"bi-?a?ll[āã]hi?", "بِاللهِ", text) # Convert God's Name
     text = re.sub(r"wa-?a?ll[āã]hi?", "وَاللهِ", text) # Convert God's Name
     text = re.sub(r"all[ãā]h", " ﭐلـلّٰـه ".strip(), text) # Convert God's Name
-    text = re.sub(r"\bb\.", "بن", text) # Convert b. into ar bn
+    text = re.sub(r"(?:\b|^)b\.", "بن", text) # Convert b. into ar bn
 
     sun = "tṯdḏrzsšṣḍṭẓln"
-    text = re.sub(r"\bal-([%s])" % sun, r"ﭐل-\1\1", text) # converts articles w/ sun letters
-    text = re.sub(r"\bal-", r"ﭐلْ-", text) # converts articles
-    text = re.sub(r"\bwa-a?l-", "وَﭐل-", text) # converts articles
+    text = re.sub(r"(?:\b|^)al-([%s])" % sun, r"ﭐل-\1\1", text) # converts articles w/ sun letters
+    text = re.sub(r"(?:\b|^)al-", r"ﭐلْ-", text) # converts articles
+    text = re.sub(r"(?:\b|^)wa-a?l-", "وَﭐل-", text) # converts articles
     #text   = re.sub(r"n-", "", text) # converts articles
 
     text  = re.sub(r",", "،", text) # Convert commas
 
     # initial HAMZAs
-    text = re.sub(r"\\bʾ?a", "أَ", text)
-    text = re.sub(r"\\bʾi", "إِ", text)
-    text = re.sub(r"\\bi", "ﭐ", text)
-    text = re.sub(r"\\bʾ?u", "أُ", text)
-    text = re.sub(r"\\bʾ?ā", "آ", text)
-    text = re.sub(r"\\bʾ?ī", "إِي", text)
-    text = re.sub(r"\\bʾ?ū", "أُو", text)
+    text = re.sub(r"(?:\b|^)ʾ?a", "أَ", text)
+    text = re.sub(r"(?:\b|^)ʾi", "إِ", text)
+    text = re.sub(r"(?:\b|^)i", "ﭐ", text)
+    text = re.sub(r"(?:\b|^)ʾ?u", "أُ", text)
+    text = re.sub(r"(?:\b|^)ʾ?ā", "آ", text)
+    text = re.sub(r"(?:\b|^)ʾ?ī", "إِي", text)
+    text = re.sub(r"(?:\b|^)ʾ?ū", "أُو", text)
 
     # final HAMZAs
     
-    text = re.sub(r'aʾ\b', "أ", text)
-    text = re.sub(r'uʾ\b', "ؤ", text)
-    text = re.sub(r'iʾ\b', "ئ", text)
+    text = re.sub(r'aʾ(?:\b|$)', "أ", text)
+    text = re.sub(r'uʾ(?:\b|$)', "ؤ", text)
+    text = re.sub(r'iʾ(?:\b|$)', "ئ", text)
     text = re.sub(r'yʾaȵ', r"يْئًا", text)
     text = re.sub(r'([%s])ʾuȵ' % cnsnnts, r"\1%s" % "ْءٌ", text)
     text = re.sub(r'([%s])ʾiȵ' % cnsnnts, r"\1%s" % "ْءٍ", text)
@@ -476,9 +477,9 @@ def betacodeToArabic(text):
     text = re.sub(r'āʾaȵ', r"اءً", text)
 
     # long, hamza, diptote
-    text = re.sub(r'āʾu\b', r"اءُ", text)
-    text = re.sub(r'āʾi\b', r"اءِ", text)
-    text = re.sub(r'āʾa\b', r"اءَ", text)
+    text = re.sub(r'āʾu(?:\b|$)', r"اءُ", text)
+    text = re.sub(r'āʾi(?:\b|$)', r"اءِ", text)
+    text = re.sub(r'āʾa(?:\b|$)', r"اءَ", text)
     
     # medial HAMZAs
     text = re.sub(r"aʾū", r"َؤُو", text)
@@ -562,7 +563,7 @@ def betacodeToArSimple(text):
     text = betacodeToArabic(text)
     text = text.replace("ﭐ", "ا")
     text = deNoise(text)
-    text = re.sub(r"\bإبن\b", "ابن", text)
+    text = re.sub(r"(?:\b|^)إبن\b", "ابن", text)
     return(text)
     
 
