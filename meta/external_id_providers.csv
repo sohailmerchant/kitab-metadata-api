@@ -1,0 +1,12 @@
+slug,name,base_url
+worldcat,Worldcat,https://search.worldcat.org/title/
+wikidata,Wikidata,https://www.wikidata.org/wiki/
+wikipedia,Wikipedia,https://wikipedia.org/wiki/
+althurayya,al-Thurayya,
+geonames,Geonames,https://www.geonames.org/
+viaf,Virtual Authority File (VIAF),https://viaf.org/en/viaf/
+haf_person,HMML Authority File (HAF) Persons,https://haf.vhmml.org/person/
+haf_work,HMML Authority File (HAF) Works,https://haf.vhmml.org/work/
+haf_place,HMML Authority File (HAF) Places,https://haf.vhmml.org/place/
+haf_org,HMML Authority File (HAF) Organizations,https://haf.vhmml.org/organization/
+gnd,Gemeinsame Normdatei / Integrated Authority File (GND),https://d-nb.info/gnd/
