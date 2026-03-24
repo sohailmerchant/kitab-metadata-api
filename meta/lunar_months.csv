@@ -1,0 +1,25 @@
+name,abbreviation,ara_name,number
+Muḥarram,MUH,مُحَرَّم,1
+Ṣafar,SAF,صَفَر,2
+Ṣafar,SFR,صَفَر,2
+Rabīʿ al-awwal,RA1,رَبيع الأوّل,3
+Rabīʿ al-awwal,RAI,رَبيع الأوّل,3
+Rabīʿ al-awwal,RB1,رَبيع الأوّل,3
+Rabīʿ al-awwal,RBI,رَبيع الأوّل,3
+Rabīʿ al-ṯānī,RA2,رَبيع الثاني,4
+Rabīʿ al-ṯānī,RB2,رَبيع الثاني,4
+Jumādá al-ūlá,JU1,جُمادى الأولى,5
+Jumādá al-ūlá,JUI,جُمادى الأولى,5
+Jumādá al-ūlá,JM1,جُمادى الأولى,5
+Jumādá al-ūlá,JMI,جُمادى الأولى,5
+Jumādá al-āḫiraŧ,JU2,جُمادى الآخرة,6
+Jumādá al-āḫiraŧ,JM2,جُمادى الآخرة,6
+Rajab,RAJ,رَجَب,7
+Šaʿbān,SHC,شَعْبان,8
+Ramaḍān,RAM,رَمَضان,9
+Šawwāl,SHW,شَوّال,10
+Ḏū al-Qaʿdaŧ,DHQ,ذو القعدة,11
+Ḏū al-Ḥijjaŧ,DHH,ذو الحجة,12
+undefined,UND,,0
+undefined,XXX,,0
+undefined,MMM,,0
