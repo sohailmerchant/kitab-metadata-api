@@ -103,6 +103,7 @@ class ObjectNameLink(models.Model):
 class Calendar(models.Model):
     slug = models.SlugField(unique=True)  # "AH", "CE", ...
     name = models.CharField(max_length=100)
+    description = models.TextField(blank=True)
 
     def __str__(self):
         return self.name
@@ -847,6 +848,9 @@ class LanguageScriptCombo(models.Model):
     script = models.ForeignKey("Script", blank=True, null=True,
         related_name="language_script_combo", 
         on_delete=models.DO_NOTHING)
+    
+    def __str__(self):
+        return self.code
 
 class Version(models.Model):
     """Describes a digital version of a text in the database.
@@ -973,7 +977,8 @@ class Manuscript(models.Model):
         related_name="manuscripts", 
         blank=True
     )
-    titles = models.ManyToManyField(ObjectName, through=ObjectNameLink,
+    titles = models.ManyToManyField(ObjectName, 
+        through=ObjectNameLink,
         through_fields=("manuscript", "object_name"), 
         related_name="manuscripts", 
         blank=True
@@ -1138,26 +1143,37 @@ class A2BRelation(models.Model):
 #     def __str__(self):
 #         return f"{self.book_1}_{self.book_2}"
 
-# BUILDUP: UNCOMMENT:
-# class CorpusInsights(models.Model):
-#     """Describes general statistics on the corpus in a specific release"""
-#     id = models.AutoField(primary_key=True)
-#     number_of_authors = models.IntegerField(null=True, blank=True)
-#     number_of_books = models.IntegerField(null=True, blank=True)
-#     number_of_versions = models.IntegerField(null=True, blank=True)
-#     number_of_pri_versions = models.IntegerField(null=True, blank=True)
-#     number_of_sec_versions = models.IntegerField(null=True, blank=True)
-#     number_of_markdown_versions = models.IntegerField(null=True, blank=True)
-#     number_of_completed_versions = models.IntegerField(null=True, blank=True)
-#     total_word_count = models.IntegerField(null=True, blank=True)
-#     total_word_count_pri = models.IntegerField(null=True, blank=True)
-#     largest_book = models.IntegerField(null=True, blank=True)
-#     largest_10_books = models.JSONField(null=True, blank=True)
-#     release_info = models.ForeignKey("ReleaseInfo", related_name="corpus_statistics", 
-#                                 related_query_name="corpus_statistics", on_delete=models.DO_NOTHING)
+class CorpusInsights(models.Model):
+    """Describes general statistics on the corpus in a specific release"""
+    id = models.AutoField(primary_key=True)
+    number_of_authors = models.IntegerField(null=True, blank=True)
+    number_of_books = models.IntegerField(null=True, blank=True)
+    number_of_manuscript_holdings = models.IntegerField(null=True, blank=True)
+    number_of_manuscripts = models.IntegerField(null=True, blank=True)
+    #number_of_versions = models.IntegerField(null=True, blank=True)
+    #number_of_pri_versions = models.IntegerField(null=True, blank=True)
+    #number_of_sec_versions = models.IntegerField(null=True, blank=True)
+    #number_of_markdown_versions = models.IntegerField(null=True, blank=True)
+    #number_of_completed_versions = models.IntegerField(null=True, blank=True)
+    #total_word_count = models.IntegerField(null=True, blank=True)
+    #total_word_count_pri = models.IntegerField(null=True, blank=True)
+    
+    number_of_versions = models.JSONField(null=True, blank=True)
+    number_of_pri_versions = models.JSONField(null=True, blank=True)
+    number_of_sec_versions = models.JSONField(null=True, blank=True)
+    number_of_markdown_versions = models.JSONField(null=True, blank=True)
+    number_of_completed_versions = models.JSONField(null=True, blank=True)
+    total_word_count = models.JSONField(null=True, blank=True)
+    total_word_count_pri = models.JSONField(null=True, blank=True)
 
-#     def __str__(self):
-#         return f"{self.release_info} corpus insights"
+    largest_book_size = models.IntegerField(null=True, blank=True)
+    largest_book = models.CharField(max_length=100, blank=True)
+    largest_10_books = models.JSONField(null=True, blank=True)
+    release_info = models.ForeignKey("ReleaseInfo", related_name="corpus_statistics", 
+                                related_query_name="corpus_statistics", on_delete=models.DO_NOTHING)
+
+    def __str__(self):
+        return f"{self.release_info} corpus insights"
 
 class ReleaseVersion(models.Model):
     """Describes metadata of a digital text version in a specific OpenITI release"""

@@ -35,9 +35,10 @@ from rest_framework import serializers
 from .models import Author, RelationType, A2BRelation, ReleaseInfo, Date, \
                     ObjectName, ObjectNameLink, \
                     Text, Version, ReleaseVersion, SourceCollectionDetails, Edition, \
-                    ManuscriptHolding, Place, Manuscript, ExternalID, ExternalIDLink
+                    ManuscriptHolding, Place, Manuscript, ExternalID, \
+                    ExternalIDLink, CorpusInsights
                     # DateLink, AuthorshipRoleLink, \
-                    # CorpusInsights, TextReuseStats, \
+                    # TextReuseStats, \
                     # GitHubIssue, VersionwiseReuseStats
 from rest_flex_fields import FlexFieldsModelSerializer
 from django.db.models import Q
@@ -765,20 +766,33 @@ class TextSerializer(FlexFieldsModelSerializer):
                     continue
                 related_persons.append(new_d)
             elif d.place_a or d.place_b:
+                # if d.place_a:
+                #     new_d["related_place_id"] = d.place_a.id
+                    
+                #     # try:
+                #     #     new_d["related_place_name"] = d.place_a.names.first().name
+                #     # except:
+                #     #     new_d["related_place_name"] = d.place_a.code
+                    
+                    
+                #     new_d["relation_type_name"]= d.relation_type.name_inverted
+                # else: 
+                #     new_d["related_place_id"] = d.place_b.id
+                #     try:
+                #         new_d["related_place_name"] = d.place_b.names.first().name
+                #     except:
+                #         new_d["related_place_name"] = d.place_b.code
+                #     new_d["relation_type_name"]= d.relation_type.name
                 if d.place_a:
-                    new_d["related_place_id"] = d.place_a.id
-                    try:
-                        new_d["related_place_name"] = d.place_a.names.first().name
-                    except:
-                        new_d["related_place_name"] = d.place_a.code
+                    place_obj = d.place_a
                     new_d["relation_type_name"]= d.relation_type.name_inverted
                 else: 
-                    new_d["related_place_id"] = d.place_b.id
-                    try:
-                        new_d["related_place_name"] = d.place_b.names.first().name
-                    except:
-                        new_d["related_place_name"] = d.place_b.code
+                    place_obj = d.place_b
                     new_d["relation_type_name"]= d.relation_type.name
+                new_d["related_place_id"] = place_obj.id
+                # faster than using first(), using prefetched names from the queryset: 
+                names = list(place_obj.names.all())
+                new_d["related_place_name"] = names[0] if names else place_obj.code
                 related_places.append(new_d)
 
         # combine the categories into a dictionary that will be added to the json representation:
@@ -1262,10 +1276,12 @@ class AuthorSerializer(FlexFieldsModelSerializer):
     external_ids = serializers.SerializerMethodField()
 
     def get_external_ids(self, person_instance):
-        qs = (ExternalIDLink.objects
-              .filter(author=person_instance)
-              .select_related("identifier")
-        )
+        # qs = (ExternalIDLink.objects
+        #       .filter(author=person_instance)
+        #       .select_related("identifier")
+        # )
+        # faster (taking advantage of the prefetch):
+        qs = person_instance.external_id_links.all()
         ids = [link.identifier for link in qs]
         return ExternalIDSerializer(ids, many=True, context=self.context).data
 
@@ -1298,7 +1314,7 @@ class AuthorSerializer(FlexFieldsModelSerializer):
         full_name_ids = []
         for link in links:
             n = link.object_name
-            print(n, n.name_type, link.is_preferred)
+            #print(n, n.name_type, link.is_preferred)
             if not n.name:
                 continue
             lang = (n.language or "und").upper()
@@ -1309,7 +1325,7 @@ class AuthorSerializer(FlexFieldsModelSerializer):
                     preferred_key = "author_ar_prefered"
                 else:
                     preferred_key = "author_lat_prefered"
-                print(preferred_key)
+                #print(preferred_key)
                 if not data[preferred_key]:
                     data[preferred_key] = n.name
                 elif n.name not in data[preferred_key].split(", "):
@@ -1318,7 +1334,7 @@ class AuthorSerializer(FlexFieldsModelSerializer):
                 # avoid duplicating names here
                 if n.id in full_name_ids:
                     continue
-                print("!FULLNAME!")
+                #print("!FULLNAME!")
                 full_name_ids.append(n.id)
                 data["full_names"].append({
                     "name": n.name,
@@ -1333,7 +1349,7 @@ class AuthorSerializer(FlexFieldsModelSerializer):
                     script_key = "author_ar"
                 else:
                     script_key = "author_lat"
-                print(script_key)
+                #print(script_key)
                 
                 # store the name to the relevant script key:
                 if not data[script_key]:
@@ -1432,14 +1448,18 @@ class AuthorSerializer(FlexFieldsModelSerializer):
         # relationship_instances = A2BRelation.objects\
         #     .select_related("relation_type", "person_a", "person_b", "text_a", "text_b", "place_a", "place_b", "manuscript_a", "manuscript_b")\
         #     .filter(Q(person_a=person_instance) | Q(person_b=person_instance))
-        relationship_instances = A2BRelation.objects\
-            .select_related("relation_type", "person_a", "person_b", "text_a", "text_b", "place_a", "place_b")\
-            .filter(Q(person_a=person_instance) | Q(person_b=person_instance))
         
         # NB: select_related creates a more complex SQL query that joins the relevant tables,
         # so that the foreign-key relationships are included in the query set
         # and no further database lookups are needed to get attributes from the foreign-key related table 
         # (see https://docs.djangoproject.com/en/4.2/ref/models/querysets/#select-related)
+
+        # faster (using the prefetched queryset):
+        relationship_instances = (
+            getattr(person_instance, "prefetched_relations_a", [])
+            + getattr(person_instance, "prefetched_relations_b", [])
+        )
+
 
         # divide these relations into the relevant categories:
         
@@ -1586,17 +1606,16 @@ class ShallowAuthorSerializer(AuthorSerializer):
 
 
 
-# BUILDUP: UNCOMMENT:
-# class CorpusInsightsSerializer(serializers.ModelSerializer):
-#     class Meta:
-#         model = CorpusInsights
-#         depth = 1
+class CorpusInsightsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CorpusInsights
+        depth = 1
 
-#         fields = ["id", "release_info", "number_of_authors", "number_of_books", "number_of_versions", 
-#                   "number_of_pri_versions", "number_of_sec_versions",
-#                   "number_of_markdown_versions", "number_of_completed_versions",
-#                   "total_word_count", "total_word_count_pri", 
-#                   "largest_book", "largest_10_books"]
+        fields = ["id", "release_info", "number_of_authors", "number_of_books", "number_of_versions", 
+                  "number_of_pri_versions", "number_of_sec_versions",
+                  "number_of_markdown_versions", "number_of_completed_versions",
+                  "total_word_count", "total_word_count_pri", 
+                  "largest_book", "largest_10_books"]
 
 # BUILDUP: UNCOMMENT:
 # class ReleaseCodeOnlySerializer(serializers.ModelSerializer):

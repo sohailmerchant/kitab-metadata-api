@@ -14,7 +14,9 @@ Documentation:
 * https://www.django-rest-framework.org/api-guide/views/#function-based-views
 """
 
-from django.db.models import Q, Prefetch
+import time
+
+from django.db.models import Q, Prefetch, CharField, TextField
 
 from django.shortcuts import render
 from django.http import HttpResponse, JsonResponse, Http404
@@ -30,9 +32,10 @@ from django_filters import rest_framework as django_filters
 
 
 from .models import Author, Text, Version, ReleaseVersion, \
-                    ReleaseInfo, RelationType, A2BRelation,\
+                    ReleaseInfo, RelationType, A2BRelation, Date, \
                     SourceCollectionDetails, ManuscriptHolding, \
-                    Manuscript, ObjectName, ObjectNameLink
+                    Manuscript, ObjectName, ObjectNameLink, \
+                    CorpusInsights
 # BUILDUP: UNCOMMENT:
 # from .models import PersonName, CorpusInsights, \
 #                     TextReuseStats, GitHubIssue
@@ -41,10 +44,10 @@ from .serializers import  AllRelationsSerializer, AllRelationTypesSerializer, \
                           VersionSerializer, ReleaseVersionSerializer, \
                           SourceCollectionDetailsSerializer,\
                           ManuscriptHoldingSerializer, ManuscriptSerializer, \
-                          ObjectNameSerializer
+                          ObjectNameSerializer, CorpusInsightsSerializer
 # BUILDUP: UNCOMMENT:
 # from .serializers import PersonNameSerializer, \
-#                          TextReuseStatsSerializer, CorpusInsightsSerializer, \
+#                          TextReuseStatsSerializer, \
 #                          ShallowTextReuseStatsSerializer, TextReuseStatsSerializerB1, \
 #                          GitHubIssueSerializer
 
@@ -82,6 +85,14 @@ excl_flds = [
     "related_text_a", "related_text_b"]
 
 
+
+def filter_string_fields(model):
+    """Select only the fields in a model that are searchable strings"""
+    string_fields = []
+    for f in model._meta.get_fields():
+        if isinstance(f, (CharField, TextField)):
+            string_fields.append(f)
+    return string_fields
 
 class CustomPagination(PageNumberPagination):
     """Add customizable pagination to a list of results.
@@ -300,44 +311,82 @@ def get_manuscript_holding(request, loc_uri, release_code=None):
 def get_author(request, author_uri, release_code=None):
     """Get an author record by its author_uri (and, if provided, release_code)"""
     try:
+        relation_qs = (
+            A2BRelation.objects
+            .select_related(
+                "relation_type",
+                "person_a",
+                "person_b",
+                "text_a",
+                "text_b",
+                "place_a",
+                "place_b",
+            )
+            .prefetch_related(
+                "place_a__names",
+                "place_b__names",
+            )
+        )
+
+        queryset = (
+            Author.objects
+            .prefetch_related(
+                "object_name_links__object_name",
+                "dates__date_type",
+                "dates__calendar",
+                "external_id_links__identifier",
+                Prefetch("related_persons_a", queryset=relation_qs, to_attr="prefetched_relations_a"),
+                Prefetch("related_persons_b", queryset=relation_qs, to_attr="prefetched_relations_b"),
+            )
+        )
         if release_code:
-            # BUILDUP: UNCOMMENT:
-            author = Author.objects\
-                .filter(author_uri=author_uri)\
-                .first() # multiple (identical) results will be returned because of the join strategy; take the first one
+            queryset = queryset.filter(
+                author_uri=author_uri,
+                texts__version__release_version__release_info__release_code=release_code,
+            ).distinct()
+            author = queryset.first()
+            # author = Author.objects\
+            #     .filter(author_uri=author_uri)\
+            #     .first() # multiple (identical) results will be returned because of the join strategy; take the first one
 
             #author = Author.objects\
                 #.filter(author_uri=author_uri, text__version__release_version__release_info__release_code=release_code)\
                 #.first() # multiple (identical) results will be returned because of the join strategy; take the first one
         else:
-            author = Author.objects.get(author_uri=author_uri)
+            #author = Author.objects.get(author_uri=author_uri)
+            author = queryset.get(author_uri=author_uri)
+
+        if author is None:
+            raise Http404
+
         serializer = AuthorSerializer(author, many=False)
         return Response(serializer.data)
-        
+    except Author.DoesNotExist:
+        raise Http404
     except Exception as e:
         print("get_author failed:")
         print(e)
         raise Http404
 
-# BUILDUP: UNCOMMENT:
-# @api_view(['GET'])
-# def get_corpus_insights(request, release_code=None):
-#     """Get some aggregated stats on the corpus (number of authors, texts, ...)"""
-#     try:
-#         if release_code:
-#             corpus_insight_stats = CorpusInsights.objects.get(release_info__release_code=release_code)
-#             serializer = CorpusInsightsSerializer(corpus_insight_stats, many=False)
-#         else:
-#             corpus_insight_stats = CorpusInsights.objects.all()
-#             serializer = CorpusInsightsSerializer(corpus_insight_stats, many=True)
-#         return Response(serializer.data)
+@api_view(['GET'])
+def get_corpus_insights(request, release_code=None):
+    """Get some aggregated stats on the corpus (number of authors, texts, ...)"""
+    try:
+        if release_code:
+            corpus_insight_stats = CorpusInsights.objects.get(release_info__release_code=release_code)
+            serializer = CorpusInsightsSerializer(corpus_insight_stats, many=False)
+        else:
+            corpus_insight_stats = CorpusInsights.objects.all()
+            serializer = CorpusInsightsSerializer(corpus_insight_stats, many=True)
+        return Response(serializer.data)
         
-#     except Exception as e:
-#         print("get_corpus_insights failed:")
-#         print(e)
-#         raise Http404
+    except Exception as e:
+        print("get_corpus_insights failed:")
+        print(e)
+        raise Http404
 
-#     return Response(serializer.data)
+    return Response(serializer.data)
+
 
 
 
@@ -366,12 +415,15 @@ class AuthorListView(CustomListView):
     serializer_class = AuthorSerializer
 
     # customize the search:
-    search_fields = [field.name for field in Author._meta.get_fields() if (field.name not in excl_flds)]
-    # BUILDUP: UNCOMMENT:
+    search_fields = [f.name for f in filter_string_fields(Author)] \
+        + ["texts__" + f.name for f in filter_string_fields(Text)] \
+        + ["texts__version__" + f.name for f in filter_string_fields(Version)] \
+        + ["names__" + f.name for f in filter_string_fields(ObjectName)] \
+        + ["dates__" + f.name for f in filter_string_fields(Date)] # does not work?
     # search_fields = [field.name for field in Author._meta.get_fields() if (field.name not in excl_flds)] \
     #     + ["text__" + field.name for field in Text._meta.get_fields() if (field.name not in excl_flds)] \
     #     + ["text__version__" + field.name for field in Version._meta.get_fields() if (field.name not in excl_flds)] \
-    #     + ["name_element__" + field.name for field in PersonName._meta.get_fields()
+    #     + ["names__" + field.name for field in ObjectName._meta.get_fields()
     #        if (field.name not in excl_flds)]
     search_fields = (search_fields)
 
@@ -381,21 +433,37 @@ class AuthorListView(CustomListView):
     def get_queryset(self):
         """Filter the author objects present in the specified release, 
         if a release_code was specified in the URL"""
-        try:
-            release_code = self.kwargs['release_code']
-        except: 
-            release_code = None
-        if release_code:
-            
-            queryset = Author.objects\
-                .distinct()
-            # BUILDUP: UNCOMMENT:
-            # queryset = Author.objects\
-            #     .filter(text__version__release_version__release_info__release_code=release_code)\
-            #     .distinct()
-        else:
-            queryset = Author.objects.all()
+        release_code = self.kwargs.get('release_code')
 
+        # define the relevant relation objects:
+        relation_qs = A2BRelation.objects.select_related(
+            "relation_type",
+            "person_a",
+            "person_b",
+            "text_a",
+            "text_b",
+            "place_a",
+            "place_b",
+        ).prefetch_related(
+            "place_a__names",
+            "place_b__names",
+        )
+
+        queryset = Author.objects.all().prefetch_related(
+            "object_name_links__object_name",
+            "dates__date_type",
+            "dates__calendar",
+            "external_id_links__identifier",
+            # 
+            Prefetch("related_persons_a", queryset=relation_qs, to_attr="prefetched_relations_a"),
+            Prefetch("related_persons_b", queryset=relation_qs, to_attr="prefetched_relations_b"),
+        )
+
+        if release_code:
+            queryset = queryset.filter(
+                texts__version__release_version__release_info__release_code=release_code
+            ).distinct()
+        
         # Create a list of all valid filters to validate the request:
         # 1. get all filters defined in the body of the filter class: 
         declared_filters = list(self.filterset_class.declared_filters.keys())  
@@ -526,15 +594,34 @@ class ManuscriptListView(CustomListView):
     def get_queryset(self):
         """Filter the manuscript objects present in the specified release, 
         if a release_code was specified in the URL"""
-        try:
-            release_code = self.kwargs['release_code']
-        except: 
-            release_code = None
+        release_code = self.kwargs.get('release_code')
+
+        # define the relevant relation objects:
+        relation_qs = A2BRelation.objects.select_related(
+            "relation_type",
+            "person_a",
+            "person_b",
+            "text_a",
+            "text_b",
+            "place_a",
+            "place_b",
+        ).prefetch_related(
+            "place_a__names",
+            "place_b__names",
+        )
+
         if release_code:
+            queryset = Manuscript.objects.all().prefetch_related(
+                "object_name_links__object_name",
+                "dates__date_type",
+                "dates__calendar",
+                "external_id_links__identifier",
+                "text_type_links__text_type",
+                # 
+                Prefetch("related_manuscripts_a", queryset=relation_qs, to_attr="prefetched_relations_a"),
+                Prefetch("related_manuscripts_b", queryset=relation_qs, to_attr="prefetched_relations_b"),
+            )
             
-            queryset = Manuscript.objects\
-                .distinct()
-            # BUILDUP: UNCOMMENT:
             # queryset = Author.objects\
             #     .filter(text__version__release_version__release_info__release_code=release_code)\
             #     .distinct()

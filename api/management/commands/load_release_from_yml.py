@@ -29,11 +29,12 @@ from api.models import Author, Text, Version, Edition, \
     TextType, TextTypeLink, ReleaseInfo, \
     ManuscriptHolding, Place, Manuscript, \
     ExternalID, ExternalIDLink, IdentifierProvider, \
-    Language, Script, LanguageScriptCombo
+    Language, Script, LanguageScriptCombo, CorpusInsights
 from django.core.management.base import BaseCommand
 import os
 import re
 import datetime
+import time
 import json
 import traceback
 import logging
@@ -48,158 +49,306 @@ from api.util.utility import compute_ce_range, COUNTRY_CODES, \
                             collect_version_yml_data, collect_loc_yml_data, \
                             collect_manuscr_yml_data, collect_transcr_yml_data, \
                             set_analysis_priority, get_github_issues, \
-                            get_city_from_loc_uri
+                            get_city_from_loc_uri, logger
 
 from itertools import islice
 
-# prepare logger: 
-today = datetime.datetime.today().strftime("%Y-%m-%d")
-log_fp = f'release_upload_{today}.log'
-if os.path.exists(log_fp):
-    with open(log_fp, mode="w", encoding="utf-8") as file:
-        file.write("")
-logging.basicConfig(filename=log_fp, level=logging.NOTSET)
-logger = logging.getLogger()
+# # prepare logger: 
+# today = datetime.datetime.today().strftime("%Y-%m-%d")
+# log_fp = f'logs/release_upload_{today}.log'
+# if os.path.exists(log_fp):
+#     with open(log_fp, mode="w", encoding="utf-8") as file:
+#         file.write("")
+# logging.basicConfig(filename=log_fp, level=logging.NOTSET)
+# logger = logging.getLogger()
 
 IMPORT_STATS = dict()
 VERSION_CODES = dict()  # NOT USED??
 VERBOSE = False
 DATE_TYPES = {}
-CALENDARS = {}
 
 with open("meta/alThurayya_places.json", encoding="utf-8") as file:
     data = json.load(file)
     ALTHURAYYA_LOOKUP = {d["properties"]["cornuData"]["cornu_URI"]: d["properties"]["cornuData"] for d in data["features"]}
 
+with open("meta/lunar_months.csv", encoding="utf-8") as file:
+    LUNAR_MONTHS = {d["abbreviation"]: d["number"] for d in csv.DictReader(file)}
+
+CALENDARS = {}
+with open("meta/calendars.csv", encoding="utf-8") as file:
+    for d in csv.DictReader(file):
+        cal, created = Calendar.objects.get_or_create(
+            slug=d["slug"],
+            defaults=dict(
+                name=d["name"],
+                description=d["description"]
+            )
+        )
+        if created:
+            IMPORT_STATS["calendar"] = IMPORT_STATS.get("calendar", 0) + 1
+        CALENDARS[d["slug"]] = cal
+
+# load Maxim's tags into a dictionary
+#text_tags = tags2dic(tags_fp)
+#print("tags loaded for", len(text_tags), "files")
+
 class Command(BaseCommand):
     def handle(self, **options):
         # if testing, only upload text reuse data for Tabari.Tarikh and MalikIbnAnas.Muwatta
-        test = True
+        test = False
 
         # if uploading only text reuse stats: set upload to False:
-        meta_upload=True
-
-        imported_models = [Author, Text, Version, Edition, \
-            ReleaseVersion, SourceCollectionDetails, \
-            Date, DateType, Calendar, DateLink,\
-            ObjectName, ObjectNameLink, A2BRelation, RelationType, \
-            TextType, TextTypeLink, ReleaseInfo, \
-            ManuscriptHolding, Place, Manuscript, \
-            ExternalID, ExternalIDLink, IdentifierProvider, \
-            Language, Script, LanguageScriptCombo
-        ]
-        # for m in imported_models:
-        #     print(m)
-        #     try:
-        #         m.objects.all().delete()
-        #     except Exception as e:
-        #         print("Failed to delete data:", e)
-        # input("CONTINUE?")
-        
-        
-
-        #TextReuseStats.objects.all().delete()
+        meta_upload=False
+        CorpusInsights.objects.all().delete()
 
         # provide the release details here:
 
-        release_code = "2025.1.9"
-        release_date = datetime.date(2025, 12, 30) # YYYY, M, D
-        meta_fp = "meta/OpenITI_metadata_2025-1-9_wNoor.csv"
-        meta_fp = "meta/all_ymls_in_release-2025_1_9_list.json"
-        base_url = "https://raw.githubusercontent.com/OpenITI/RELEASE/v2025.1.9/data"
-        zenodo_link = "https://zenodo.org/records/17767721"
-        release_notes_fp = "meta/release_notes_2025-1-9.txt"
-        reuse_data_fp = None
-        reuse_data_base_url = "http://dev.kitab-project.org/2025.1.9-pairwise/"
+        releases = [
+            dict(
+                release_code = "2021.2.5",
+                release_date = datetime.date(2021, 10, 18), # YYYY, M, D
+                meta_fp = "meta/OpenITI_metadata_2021-2-5_wNoor.json",
+                base_url = "https://raw.githubusercontent.com/OpenITI/RELEASE/v2021.2.5/data",
+                zenodo_link = "https://zenodo.org/record/5550338",
+                release_notes_fp="meta/release_notes_2021-2-5.txt",
+                reuse_data_fp = "reuse_data/stats-v2021-2-5_bi-dir.csv",
+                #reuse_data_base_url = "http://dev.kitab-project.org/passim01102021/",
+                reuse_data_base_url = "http://dev.kitab-project.org/2021.2.5-pairwise/"
+            ),
+            dict(
+                release_code = "2022.1.6",
+                release_date = datetime.date(2022, 7, 8), # YYYY, M, D
+                meta_fp = "meta/OpenITI_metadata_2022-1-6_wNoor.json",
+                base_url = "https://raw.githubusercontent.com/OpenITI/RELEASE/v2022.1.6/data",
+                zenodo_link = "https://zenodo.org/record/6808108",
+                release_notes_fp = "meta/release_notes_2022-1-6.txt",
+                reuse_data_fp = "reuse_data/stats-v2022-1-6_bi-dir.csv",
+                #reuse_data_base_url = "http://dev.kitab-project.org/passim01102022/",
+                reuse_data_base_url = "http://dev.kitab-project.org/2022.1.6-pairwise/"
+            ),
+            dict(
+                release_code = "2022.2.7",
+                release_date = datetime.date(2023, 2, 24), # YYYY, M, D
+                meta_fp = "meta/OpenITI_metadata_2022-2-7_wNoor.json",
+                base_url = "https://raw.githubusercontent.com/OpenITI/RELEASE/v2022.2.7/data",
+                zenodo_link = "https://zenodo.org/record/7687795",
+                release_notes_fp = "meta/release_notes_2022-2-7.txt",
+                reuse_data_fp = "reuse_data/stats-v2022-2-7_bi-dir.csv",
+                #reuse_data_base_url = "http://dev.kitab-project.org/passim01122022-v7/",
+                reuse_data_base_url = "http://dev.kitab-project.org/2022.2.7-pairwise/"
+            ),
+            dict(
+                release_code = "2023.1.8",
+                release_date = datetime.date(2023, 10, 17), # YYYY, M, D
+                meta_fp = "meta/OpenITI_metadata_2023-1-8_wNoor.json",
+                base_url = "https://raw.githubusercontent.com/OpenITI/RELEASE/v2023.1.8/data",
+                zenodo_link = "https://zenodo.org/records/10007820",
+                release_notes_fp = "meta/release_notes_2023-1-8.txt",
+                reuse_data_fp = "reuse_data/stats-v8_uni-dir.csv",
+                #reuse_data_base_url = "http://dev.kitab-project.org/2023.1.8/",
+                reuse_data_base_url = "http://dev.kitab-project.org/2023.1.8-pairwise/"
+            ),
+            dict(
+                release_code = "2025.1.9",
+                release_date = datetime.date(2025, 12, 30), # YYYY, M, D
+                #meta_fp = "meta/OpenITI_metadata_2025-1-9_wNoor.csv",
+                meta_fp = "meta/OpenITI_metadata_2025-1-9_wNoor.json",
+                base_url = "https://raw.githubusercontent.com/OpenITI/RELEASE/v2025.1.9/data",
+                zenodo_link = "https://zenodo.org/records/17767721",
+                release_notes_fp = "meta/release_notes_2025-1-9.txt",
+                reuse_data_fp = None,
+                reuse_data_base_url = "http://dev.kitab-project.org/2025.1.9-pairwise/"
+            ),
+            # dict(
+            #     release_code = "2021.1.4",
+            #     release_date = datetime.date(2021, 2, 5), # YYYY, M, D
+            #     meta_fp = "meta/OpenITI_metadata_2021-1-4_merged_wNoor.csv",
+            #     base_url = "https://raw.githubusercontent.com/OpenITI/RELEASE/v2021.1.4/data",
+            #     zenodo_link = "https://zenodo.org/record/4513723",
+            #     release_notes_fp="meta/release_notes_2021-1-4.txt",
+            #     reuse_data_fp = "reuse_data/stats-v2021-1-4_bi-dir.csv",
+            #     reuse_data_base_url = "http://dev.kitab-project.org/passim01022021/"
+            # )
+        ]
+
+        # release_code = "2025.1.9"
+        # release_date = datetime.date(2025, 12, 30) # YYYY, M, D
+        # meta_fp = "meta/OpenITI_metadata_2025-1-9_wNoor.csv"
+        # meta_fp = "meta/OpenITI_metadata_2025-1-9_wNoor.json"
+        # base_url = "https://raw.githubusercontent.com/OpenITI/RELEASE/v2025.1.9/data"
+        # zenodo_link = "https://zenodo.org/records/17767721"
+        # release_notes_fp = "meta/release_notes_2025-1-9.txt"
+        # reuse_data_fp = None
+        # reuse_data_base_url = "http://dev.kitab-project.org/2025.1.9-pairwise/"
 
 
-        # release_code = "2023.1.8"
-        # release_date = datetime.date(2023, 10, 17) # YYYY, M, D
-        # meta_fp = "meta/OpenITI_metadata_2023-1-8_wNoor.csv"
-        # base_url = "https://raw.githubusercontent.com/OpenITI/RELEASE/v2023.1.8/data"
-        # zenodo_link = "https://zenodo.org/records/10007820"
-        # release_notes_fp = "meta/release_notes_2023-1-8.txt"
-        # reuse_data_fp = "reuse_data/stats-v8_uni-dir.csv"
-        # #reuse_data_base_url = "http://dev.kitab-project.org/2023.1.8/"
-        # reuse_data_base_url = "http://dev.kitab-project.org/2023.1.8-pairwise/"
+        # # release_code = "2023.1.8"
+        # # release_date = datetime.date(2023, 10, 17) # YYYY, M, D
+        # # meta_fp = "meta/OpenITI_metadata_2023-1-8_wNoor.csv"
+        # # base_url = "https://raw.githubusercontent.com/OpenITI/RELEASE/v2023.1.8/data"
+        # # zenodo_link = "https://zenodo.org/records/10007820"
+        # # release_notes_fp = "meta/release_notes_2023-1-8.txt"
+        # # reuse_data_fp = "reuse_data/stats-v8_uni-dir.csv"
+        # # #reuse_data_base_url = "http://dev.kitab-project.org/2023.1.8/"
+        # # reuse_data_base_url = "http://dev.kitab-project.org/2023.1.8-pairwise/"
 
 
-        # release_code = "2022.2.7"
-        # release_date = datetime.date(2023, 2, 24) # YYYY, M, D
-        # meta_fp = "meta/OpenITI_metadata_2022-2-7_wNoor.csv"
-        # base_url = "https://raw.githubusercontent.com/OpenITI/RELEASE/v2022.2.7/data"
-        # zenodo_link = "https://zenodo.org/record/7687795"
-        # release_notes_fp = "meta/release_notes_2022-2-7.txt"
-        # reuse_data_fp = "reuse_data/stats-v2022-2-7_bi-dir.csv"
-        # #reuse_data_base_url = "http://dev.kitab-project.org/passim01122022-v7/"
-        # reuse_data_base_url = "http://dev.kitab-project.org/2022.2.7-pairwise/"
+        # # release_code = "2022.2.7"
+        # # release_date = datetime.date(2023, 2, 24) # YYYY, M, D
+        # # meta_fp = "meta/OpenITI_metadata_2022-2-7_wNoor.csv"
+        # # base_url = "https://raw.githubusercontent.com/OpenITI/RELEASE/v2022.2.7/data"
+        # # zenodo_link = "https://zenodo.org/record/7687795"
+        # # release_notes_fp = "meta/release_notes_2022-2-7.txt"
+        # # reuse_data_fp = "reuse_data/stats-v2022-2-7_bi-dir.csv"
+        # # #reuse_data_base_url = "http://dev.kitab-project.org/passim01122022-v7/"
+        # # reuse_data_base_url = "http://dev.kitab-project.org/2022.2.7-pairwise/"
 
-        # release_code = "2022.1.6"
-        # release_date = datetime.date(2022, 7, 8) # YYYY, M, D
-        # meta_fp = "meta/OpenITI_metadata_2022-1-6_wNoor.csv"
-        # base_url = "https://raw.githubusercontent.com/OpenITI/RELEASE/v2022.1.6/data"
-        # zenodo_link = "https://zenodo.org/record/6808108"
-        # release_notes_fp = "meta/release_notes_2022-1-6.txt"
-        # reuse_data_fp = "reuse_data/stats-v2022-1-6_bi-dir.csv"
-        # #reuse_data_base_url = "http://dev.kitab-project.org/passim01102022/"
-        # reuse_data_base_url = "http://dev.kitab-project.org/2022.1.6-pairwise/"
+        # # release_code = "2022.1.6"
+        # # release_date = datetime.date(2022, 7, 8) # YYYY, M, D
+        # # meta_fp = "meta/OpenITI_metadata_2022-1-6_wNoor.csv"
+        # # base_url = "https://raw.githubusercontent.com/OpenITI/RELEASE/v2022.1.6/data"
+        # # zenodo_link = "https://zenodo.org/record/6808108"
+        # # release_notes_fp = "meta/release_notes_2022-1-6.txt"
+        # # reuse_data_fp = "reuse_data/stats-v2022-1-6_bi-dir.csv"
+        # # #reuse_data_base_url = "http://dev.kitab-project.org/passim01102022/"
+        # # reuse_data_base_url = "http://dev.kitab-project.org/2022.1.6-pairwise/"
 
-        # release_code = "2021.2.5"
-        # release_date = datetime.date(2021, 10, 18) # YYYY, M, D
-        # meta_fp = "meta/OpenITI_metadata_2021-2-5_wNoor.csv"
-        # base_url = "https://raw.githubusercontent.com/OpenITI/RELEASE/v2021.2.5/data"
-        # zenodo_link = "https://zenodo.org/record/5550338"
-        # release_notes_fp="meta/release_notes_2021-2-5.txt"
-        # reuse_data_fp = "reuse_data/stats-v2021-2-5_bi-dir.csv"
-        # #reuse_data_base_url = "http://dev.kitab-project.org/passim01102021/"
-        # reuse_data_base_url = "http://dev.kitab-project.org/2021.2.5-pairwise/"
+        # # release_code = "2021.2.5"
+        # # release_date = datetime.date(2021, 10, 18) # YYYY, M, D
+        # # meta_fp = "meta/OpenITI_metadata_2021-2-5_wNoor.csv"
+        # # base_url = "https://raw.githubusercontent.com/OpenITI/RELEASE/v2021.2.5/data"
+        # # zenodo_link = "https://zenodo.org/record/5550338"
+        # # release_notes_fp="meta/release_notes_2021-2-5.txt"
+        # # reuse_data_fp = "reuse_data/stats-v2021-2-5_bi-dir.csv"
+        # # #reuse_data_base_url = "http://dev.kitab-project.org/passim01102021/"
+        # # reuse_data_base_url = "http://dev.kitab-project.org/2021.2.5-pairwise/"
 
 
-        # release_code = "2021.1.4"
-        # release_date = datetime.date(2021, 2, 5) # YYYY, M, D
-        # meta_fp = "meta/OpenITI_metadata_2021-1-4_merged_wNoor.csv"
-        # base_url = "https://raw.githubusercontent.com/OpenITI/RELEASE/v2021.1.4/data"
-        # zenodo_link = "https://zenodo.org/record/4513723"
-        # release_notes_fp="meta/release_notes_2021-1-4.txt"
-        # reuse_data_fp = "reuse_data/stats-v2021-1-4_bi-dir.csv"
-        # reuse_data_base_url = "http://dev.kitab-project.org/passim01022021/"
+        # # release_code = "2021.1.4"
+        # # release_date = datetime.date(2021, 2, 5) # YYYY, M, D
+        # # meta_fp = "meta/OpenITI_metadata_2021-1-4_merged_wNoor.csv"
+        # # base_url = "https://raw.githubusercontent.com/OpenITI/RELEASE/v2021.1.4/data"
+        # # zenodo_link = "https://zenodo.org/record/4513723"
+        # # release_notes_fp="meta/release_notes_2021-1-4.txt"
+        # # reuse_data_fp = "reuse_data/stats-v2021-1-4_bi-dir.csv"
+        # # reuse_data_base_url = "http://dev.kitab-project.org/passim01022021/"
 
-        with open(release_notes_fp, mode="r", encoding="utf-8") as file:
-            release_notes = file.read()
 
-        release_info = dict(
-            release_code=release_code,
-            release_date=release_date,
-            zenodo_link=zenodo_link,
-            release_notes=release_notes,
-        )
-
+        # create / update helper objects in the database:
         relations_definitions_fp = "meta/relations_definitions.tsv"
         source_collections_fp = "meta/source_collections.tsv"
+        language_codes_fp = "meta/ISO639_language_codes.csv"
+        ext_id_providers_fp = "meta/external_id_providers.csv"
+        r = prepare(relations_definitions_fp=relations_definitions_fp,
+                source_collections_fp=source_collections_fp,
+                language_codes_fp=language_codes_fp,
+                ext_id_providers_fp=ext_id_providers_fp,
+                )
+        authorship_obj, book_type_obj, part_of_obj, worldcat_obj = r
 
-        main(meta_fp, base_url, release_info, relations_definitions_fp, source_collections_fp, 
-             reuse_data_fp, reuse_data_base_url, test=test, meta_upload=meta_upload)
+        for release_d in releases:
+            main(release_d, authorship_obj, book_type_obj, part_of_obj, worldcat_obj,
+                 test=test, meta_upload=meta_upload)
+        # main(meta_fp, base_url, release_info, relations_definitions_fp, source_collections_fp, 
+        #      reuse_data_fp, reuse_data_base_url, test=test, meta_upload=meta_upload)
 
 
-def main(meta_fp, base_url, release_info, relations_definitions_fp, source_collections_fp, 
-         reuse_data_fp, reuse_data_base_url, test=False, meta_upload=True):
+def prepare(relations_definitions_fp=None, source_collections_fp=None,
+            language_codes_fp=None, ext_id_providers_fp=None):
+    
     # load the language and script metadata:
-    load_language_codes()
+    load_language_codes(language_codes_fp)
     # load the relation types into the database:
     load_relations_definitions(relations_definitions_fp)
-
     # load the (main) source collections into the database:
     load_source_collections(source_collections_fp)
-
     # load the metadata of the (main) identity providers into the database:
-    load_ext_id_providers()
+    load_ext_id_providers(ext_id_providers_fp)
 
-    # load Maxim's tags into a dictionary
-    #text_tags = tags2dic(tags_fp)
-    #print("tags loaded for", len(text_tags), "files")
+    # Create / get the ID of the generic authorship relation,
+    # used to connect books to their authors:
+    
+    authorship_obj, created = RelationType.objects.get_or_create(
+        code="AUTH",
+        name="is author of",
+        name_inverted="is written by",
+        descr="Generic authorship relation between a person and a book",
+        entities="person_book"
+    )
+    if created:
+        IMPORT_STATS["relationType"] = IMPORT_STATS.get("relationType", 0) + 1
+        if VERBOSE:
+            print("AUTHORSHIP OBJECT CREATED:", authorship_obj)
+
+    # Create / get the ID of the text_type for a generic book:
+    book_type_obj, created = TextType.objects.get_or_create(
+        slug="book",
+        label="book",
+        description="a generic text_type for books in the OpenITI corpus",
+    )
+    if created:
+        IMPORT_STATS["textType"] = IMPORT_STATS.get("textType", 0) + 1
+        if VERBOSE:
+            print("BOOK TYPE OBJECT CREATED:", book_type_obj)
+
+    # ms_type_obj, created = TextType.objects.get_or_create(
+    #     slug="manuscript",
+    #     label="manuscript",
+    #     description="a generic text_type for handwritten documents in the OpenITI corpus",
+    # )
+    # if created and VERBOSE:
+    #     print("MANUSCRIPT TYPE OBJECT CREATED:", ms_type_obj)
+
+    # Create / get the ID of the generic relation between a part and a whole
+    part_of_obj, created = RelationType.objects.get_or_create(
+        code="PARTOF",
+        name="is part of",
+        name_inverted="has part",
+        descr="Generic relation between a part and a whole",
+        entities=""
+    )
+    if created:
+        IMPORT_STATS["relationType"] = IMPORT_STATS.get("relationType", 0) + 1
+
+    # Create/get the ID for Worldcat:
+    worldcat_obj, created = IdentifierProvider.objects.get_or_create(
+        slug="worldcat",
+        name="Worldcat",
+        base_url="https://search.worldcat.org/title/"
+    )
+    if created:
+        IMPORT_STATS["identifierProvider"] = IMPORT_STATS.get("identifierProvider", 0) + 1
+
+
+    return authorship_obj, book_type_obj, part_of_obj, worldcat_obj
+
+#def main(meta_fp, base_url, release_info, relations_definitions_fp, source_collections_fp, 
+#         reuse_data_fp, reuse_data_base_url, test=False, meta_upload=True):
+def main(release_d, authorship_obj, book_type_obj, part_of_obj, worldcat_obj,
+         test=False, meta_upload=True):
+    start = time.time()
+    
+    release_notes_fp = release_d["release_notes_fp"]
+    with open(release_notes_fp, mode="r", encoding="utf-8") as file:
+        release_notes = file.read()
+
+    release_info = dict(
+        release_code=release_d["release_code"],
+        release_date=release_d["release_date"],
+        zenodo_link=release_d["zenodo_link"],
+        release_notes=release_notes,
+    )
 
     # load the release metadata:
-    release_obj, version_codes_d = upload_release_meta(meta_fp, base_url, release_info, meta_upload=meta_upload, test=test)
+    meta_fp = release_d["meta_fp"]
+    base_url = release_d["base_url"]
+    release_obj, version_codes_d = upload_release_meta(meta_fp, base_url, 
+        release_info, authorship_obj, book_type_obj, part_of_obj, worldcat_obj,
+        meta_upload=meta_upload, test=test)
+    msg = f'Uploading release {release_d["release_code"]} metadata took {time.time()-start} seconds.'
+    logger.info(msg)
+    print(msg)
+    
     
     # BUILDUP: UNCOMMENT:
     # # check for duplicate version_codes:
@@ -221,10 +370,11 @@ def main(meta_fp, base_url, release_info, relations_definitions_fp, source_colle
     # # create the corpus insights data:
     # # TODO
 
-def load_language_codes():
+def load_language_codes(fp):
+    if not fp:
+        return
     # create a dictionary of all ISO 639 language codes
     all_language_codes = dict()
-    fp = r"meta/ISO639_language_codes.csv"
     with open(fp, encoding="utf-8-sig") as file:
         for row in csv.DictReader(file):
             d = dict()
@@ -320,9 +470,11 @@ def load_language_codes():
                 IMPORT_STATS["languageScriptCombo"] = IMPORT_STATS.get("languageScriptCombo", 0) + 1
 
 
-def load_relations_definitions(relations_definitions_fp):
+def load_relations_definitions(fp):
     """Load the definitions of the relation types into the database from a tsv file"""
-    with open(relations_definitions_fp, mode="r", encoding="utf-8") as file:
+    if not fp:
+        return
+    with open(fp, mode="r", encoding="utf-8") as file:
         reader = csv.DictReader(file, delimiter='\t')
         for row in reader:
             if "descr" in row:
@@ -344,9 +496,11 @@ def load_relations_definitions(relations_definitions_fp):
                 #print(reltype, created)
                 IMPORT_STATS["relationType"] = IMPORT_STATS.get("relationType", 0) + 1
 
-def load_source_collections(source_collections_fp):
+def load_source_collections(fp):
     """Load the descriptions of the OpenITI corpus's source collections and contributors to the database"""
-    with open(source_collections_fp, mode="r", encoding="utf-8") as file:
+    if not fp:
+        return
+    with open(fp, mode="r", encoding="utf-8") as file:
         reader = csv.DictReader(file, delimiter='\t')
         for row in reader:
             coll, created = SourceCollectionDetails.objects.update_or_create(
@@ -365,8 +519,9 @@ def load_source_collections(source_collections_fp):
                     print(coll, created)
                 IMPORT_STATS["collection"] = IMPORT_STATS.get("collection", 0) + 1
 
-def load_ext_id_providers():
-    fp = "meta/external_id_providers.csv"
+def load_ext_id_providers(fp):
+    if not fp:
+        return
     with open(fp, mode="r", encoding="utf-8") as file:
         reader = csv.DictReader(file)
         for row in reader:
@@ -607,7 +762,7 @@ def link_book_to_author(text_obj, author_obj, rel_type_obj, authority=""):
 
 def link_manuscript_to_author(ms_obj, record, rel_type_obj, authority=""):
     author_uri = record["author_uri"]
-    author_obj = get_or_create_author(author_uri, record)
+    author_obj, _ = get_or_create_author(author_uri, record)
     rel, created = A2BRelation.objects.get_or_create(
         person_a=author_obj,
         manuscript_b=ms_obj,
@@ -649,37 +804,37 @@ def link_manuscript_to_texts(ms_obj, record, rel_type_obj, authority=""):
             IMPORT_STATS["A2BRelation"] = IMPORT_STATS.get("A2BRelation", 0) + 1
 
 def link_manuscript_to_dates(ms_obj, record, source=""):
-    # TODO: when loading metadata from YML files, 
-    # parse the 30#MS#DATE#AH####: key
     if "dates" not in record:
         return
-    try:
-        dd, mm, yyyy = date.split("-")
-        try: 
-            dd = int(dd)
-        except:
-            dd = None
-        try: 
-            mm = int(mm)
-        except:
-            mm = None
-        try:
-            yyyy = int(yyyy)
-        except:
-            yyyy = None
-    except:
-        dd = None
-        mm = None
-        yyyy = None
+    # try:
+    #     dd, mm, yyyy = date.split("-")
+    #     try: 
+    #         dd = int(dd)
+    #     except:
+    #         dd = None
+    #     try: 
+    #         mm = int(mm)
+    #     except:
+    #         mm = None
+    #     try:
+    #         yyyy = int(yyyy)
+    #     except:
+    #         yyyy = None
+    # except:
+    #     dd = None
+    #     mm = None
+    #     yyyy = None
     for date, page_range in record["dates"]:
+        year, month, day, precision, modifier = parse_date_str(date)
         date_obj = get_or_create_date(
             date_type_slug="date_written",
             calendar_slug="AH",
             date_str=date,
-            year=yyyy,
-            month=mm,
-            day=mm,
-            source=source,
+            year=year,
+            month=month,
+            day=day,
+            precision=precision,
+            source="YML",
         )
         if date_obj:
             dlm, created = DateLink.objects.get_or_create(date=date_obj, manuscript=ms_obj)
@@ -828,8 +983,10 @@ def add_author_names(am, record):
             nm = get_or_create_name_obj(name, lang, "shuhra")
             link_name_to_obj(nm, author_obj=am, is_preferred=True)
         else:
-            print(f'No value for author_{lang}_prefered in record', record)
-            input()
+            msg = f'No value for author_{lang}_prefered in record {record}'
+            if VERBOSE:
+                print(msg)
+            logger.warning(msg)
     name = record['author_from_uri']
     nm = get_or_create_name_obj(name, "lat", "from_uri")
     link_name_to_obj(nm, author_obj=am, is_preferred=False, source="URI")
@@ -880,6 +1037,158 @@ def add_author_names(am, record):
     #     #link_author_name(am, nm, is_preferred=True)
     #     link_name_to_obj(nm, author_obj=am, is_preferred=True)
 
+def parse_date_str(date_str):
+    date_upper = date_str.strip().upper()
+    modifier = ""
+    date_str = re.sub(r" *\(X+ FOR UNKNOWN\)", "", date_str)
+    
+    try:
+        date_str = re.findall(r"[X\d]+[/-][X\da-zA-Z]+[/-][X\da-zA-Z]+", date_upper)[0]
+        if date_str != date_upper:
+            if "BEFORE" in date_upper:
+                modifier = "before"
+            elif "AFTER" in date_upper:
+                modifier = "after"
+            msg = f"Date contains modifier: '{date_upper}'"
+            logger.warning(msg)
+            if VERBOSE:
+                print(msg)
+            
+    except Exception as e:
+        msg = f"UNKNOWN DATE FORMAT: '{date_upper}'"
+        logger.warning(msg)
+        print(e, msg)
+        #input("CONTINUE")
+        return None, None, None, None, None
+
+    # YYYY-MM-DD:
+    if re.findall(r"[X\d]{3,4}[/-][X\d]{1,2}[/-][X\d]{1,2}", date_str):
+        year, month, day = re.split(r"[/-]", date_str)
+    # DD-MM-YYYY
+    elif re.findall(r"[X\d]{1,2}[/-][X\d]{2}[/-][X\d]{3,4}", date_str):
+        day, month, year = re.split(r"[/-]", date_str)
+    
+    # YYYY-MMM-DD (Lunar month abbreviation)
+    elif re.findall(r"[X\d]{3,4}[/-][a-zA-Z]{2,3}\d?[/-][X\d]{1,2}", date_str):
+        year, month_str, day = re.split(r"[/-]", date_str)
+        month = LUNAR_MONTHS.get(month_str.upper(), "0")
+    # DD-MMM-YYYY (Lunar month abbreviation)
+    elif re.findall(r"[X\d]{1,2}[/-][a-zA-Z]{2,3}\d?[/-][X\d]{3,4}", date_str):
+        day, month_str, year = re.split(r"[/-]", date_str)
+        month = LUNAR_MONTHS.get(month_str.upper(), "0")
+    
+    # KNOWN YEAR, UNKNOWN DAY AND MONTH:
+    # YYYY-XXX?-XX
+    elif re.findall(r"\d+[X\d]*[/-]X+[/-]X+", date_str):
+        year, month, day = re.split(r"[/-]", date_str)
+    # XX-XXX?-YYYY
+    elif re.findall(r"X+[/-]X+[/-]\d+[X\d]*", date_str):
+        day, month, year = re.split(r"[/-]", date_str)
+    # YYYY-MON-DA
+    elif re.findall(r"\d+[X\d]*[/-]MON[/-]DA", date_str):
+        year, _, _ = re.split(r"[/-]", date_str)
+        month = "0"
+        day = "0"
+    # KNOWN YEAR AND MONTH, UNKNOWN DAY:
+    # YYYY-MMM-XX
+    elif re.findall(r"\d+[/-][a-zA-Z]{2,3}\d?[/-]DA", date_str):
+        year, month_str, day = re.split(r"[/-]", date_str)
+        month = LUNAR_MONTHS.get(month_str.upper(), "0")
+        day = "0"
+    else:
+        msg = f"UNKNOWN DATE FORMAT: '{date_str}'"
+        logger.warning(msg)
+        if VERBOSE:
+            print(msg)
+        return None, None, None, None, None
+    
+    # convert date elements to integers:
+    precision = "day" # default; will be reset if not all date elements are fully present
+    try:
+        year = int(year)
+    except:
+        if re.findall(r"\dXXX\b", year):
+            precision = "millennium"
+        elif re.findall(r"\dXX\b", year):
+            precision = "century"
+        elif re.findall(r"\dX\b", year):
+            precision = "decade"
+        try:
+            year = int(year.replace("X", "0"))
+        except:
+            year = None
+    try:
+        month = int(month)
+    except:
+        month = 0
+    try:
+        day = int(day)
+    except:
+        day = 0
+    
+    # define the level of precision of the date:
+    if day == 0:
+        day = None
+        precision = "month"
+    if month == 0:
+        month = None
+        precision = "year"
+
+    return year, month, day, precision, modifier
+
+
+def add_author_dates(am, record):
+    # add dates related to the author:
+    # first, create the date itself:
+    date_str = record["date_str"]
+    date_obj = get_or_create_date(
+        date_type_slug="death_date",
+        calendar_slug="AH",
+        date_str=date_str,
+        year=int(date_str),
+        precision="year",
+        source="URI",
+    )
+    # then, add the link to the author:
+    if date_obj:
+        dlm, created = DateLink.objects.get_or_create(date=date_obj, author=am)
+        if created:
+            IMPORT_STATS["dateLink"] = IMPORT_STATS.get("dateLink", 0) + 1
+    
+    # process death and birth dates from yml file:
+    for date_type_slug, dates_d in record["dates"].items():
+        for cal, cal_dates in dates_d.items():
+            print(cal_dates)
+            if type(cal_dates) == list:
+                cal_dates = re.split(r" *(?:\bOR\b|\bor\b|[;:,])+ *", ",".join(cal_dates)) 
+            elif type(cal_dates) == str:
+                cal_dates = re.split(r" *(?:\bOR\b|\bor\b|[;:,])+ *", cal_dates.strip())
+            for date_str in cal_dates:
+                
+                year, month, day, precision, modifier = parse_date_str(date_str)
+                print(f"-> {date_str} => year {year}, month {month}, day {day}")
+                # TODO: deal with modifiers like "before" and "after"
+                if not year:
+                    continue
+
+                date_obj = get_or_create_date(
+                    date_type_slug=date_type_slug,
+                    calendar_slug=cal,
+                    date_str=date_str,
+                    year=year,
+                    month=month,
+                    day=day,
+                    precision=precision,
+                    source="YML",
+                )
+
+                if date_obj:
+                    dlm, created = DateLink.objects.get_or_create(date=date_obj, author=am)
+                    if created:
+                        IMPORT_STATS["dateLink"] = IMPORT_STATS.get("dateLink", 0) + 1
+            
+
+
     
 def get_or_create_date(date_type_slug, calendar_slug, date_str,
                        year=None, month=None, day=None, precision="year",
@@ -897,7 +1206,7 @@ def get_or_create_date(date_type_slug, calendar_slug, date_str,
         )
         if created:
             IMPORT_STATS["dateType"] = IMPORT_STATS.get("dateType", 0) + 1
-        DATE_TYPES[date_type_slug] = dt
+            DATE_TYPES[date_type_slug] = dt
     try:
         cal = CALENDARS[calendar_slug]
     except:
@@ -1175,10 +1484,14 @@ def clean(s):
 
 def get_or_create_book(text_uri, authorship_obj=None, book_type_obj=None, 
                        book_record=dict(), am=None, part_of_obj=None):
+    # CHECK WHETHER THE TEXT_URI REALLY IS A URI?
+    #if not re.findall(r"\d{4}[A-Za-z]+\.[A-Za-z]+\w+", text_uri):
+    #    return
     try:
         tm = Text.objects.get(
             text_uri=text_uri
         )
+        tm_created = False
         if VERBOSE:
             print("Text already in the database:", text_uri)
     except: 
@@ -1224,7 +1537,7 @@ def get_or_create_book(text_uri, authorship_obj=None, book_type_obj=None,
                     part_of_obj, authority="OpenITI metadata")
         
     
-    return tm
+    return tm, tm_created
 
 def add_related(source_obj, source_uri, related_list, 
                 part_of_obj, authority=""):
@@ -1245,20 +1558,18 @@ def add_related(source_obj, source_uri, related_list,
             if key_b == "place_b":
                 obj_b = get_or_create_place_obj(d["place_b"], part_of_obj)
             elif key_b == "text_b":
-                # TODO: add a check that this is a real book URI!?
-                obj_b  = get_or_create_book(d["text_b"])
+                obj_b, _  = get_or_create_book(d["text_b"])
             elif key_b == "person_b":
-                obj_b = get_or_create_author(d["person_b"])
+                obj_b, _ = get_or_create_author(d["person_b"])
         elif d[key_b] == source_uri:
             obj_b = source_obj
             # get or create the target object:
             if key_a == "place_a":
                 obj_a = get_or_create_place_obj(d["place_a"], part_of_obj)
             elif key_a == "text_a":
-                # TODO: add a check that this is a real book URI!?
-                obj_a  = get_or_create_book(d["text_a"])
+                obj_a, _  = get_or_create_book(d["text_a"])
             elif key_a == "person_a":
-                obj_a = get_or_create_author(d["person_a"])
+                obj_a, _ = get_or_create_author(d["person_a"])
         else:
             print("Neither _a or _b key is the source_uri!")
             print("Source uri:", source_uri)
@@ -1404,11 +1715,12 @@ def add_external_id(provider,ext_id, prov_obj=None, author=None, text=None,
 
 
 def get_or_create_version(record, release_obj, worldcat_obj, tm=None, mm=None):
-
+    vm = None
+    vm_created = None
     # now we are sure the author and text exist in the database, create a new version object:
 
     # (but first, we check if the edition meta object exists or create it)
-
+    
     header_meta = record.get("header_meta", {})
     ed_info = header_meta.get("Edition:Editor", []) + \
               header_meta.get("Edition:Place", []) + \
@@ -1495,24 +1807,30 @@ def get_or_create_version(record, release_obj, worldcat_obj, tm=None, mm=None):
         whole_obj = Version.objects.get(version_uri=record["part_of"])
     else:
         whole_obj = None
-
-    vm, vm_created = Version.objects.update_or_create(
-        version_code=record["version_code"],
-        version_uri=record["version_uri"],
-        text=tm,
-        manuscript=mm,
-        language=record["language"],
-        defaults=dict(
-            edition=em,
-            source_coll=cm,
-            part_of=whole_obj
+    try:
+        vm, vm_created = Version.objects.update_or_create(
+            version_code=record["version_code"],
+            version_uri=record["version_uri"],
+            text=tm,
+            manuscript=mm,
+            language=record["language"],
+            defaults=dict(
+                edition=em,
+                source_coll=cm,
+                part_of=whole_obj
+            )
         )
-    )
+    except Exception as e:
+        msg = f"ERROR {e} while creating version record for {record['version_uri']}"
+        logger.warning(msg)
+        print(msg)
+        return None, None
     if vm_created:
         IMPORT_STATS["version"] = IMPORT_STATS.get("version", 0) + 1
         if VERBOSE:
             print("-> created version:", record['version_uri'])
-
+        # add language_script_combo field
+        add_version_language(vm, record)
 
     # add external IDs:
     for provider, id_list in record["external_ids"].items():
@@ -1520,7 +1838,8 @@ def get_or_create_version(record, release_obj, worldcat_obj, tm=None, mm=None):
         for ext_id in id_list:
             prov_obj, _, _ = add_external_id(provider, ext_id, 
                                                 prov_obj=prov_obj, version=vm)
-    # TODO: language_script_combo field
+    
+
 
     
     # now that we know that the version object is in the database, 
@@ -1543,13 +1862,28 @@ def get_or_create_version(record, release_obj, worldcat_obj, tm=None, mm=None):
         IMPORT_STATS["releaseVersion"] = IMPORT_STATS.get("releaseVersion", 0) + 1
         if VERBOSE:
             print("NEW RELEASE VERSION OBJECT CREATED:", rvm)
-    return vm, rvm
+    return vm, vm_created
+
+def add_version_language(vm, record):
+    for lang_code in record["language"].split(","):
+        lm, created = LanguageScriptCombo.objects.get_or_create(
+            code=lang_code
+        )
+        if created:
+            msg = "UNKNOWN LANGUAGE CODE: {lang_code}"
+            print(msg)
+            logger.warning(msg)
+        vm.language_script_combo.add(lm)
+    if "," in record["language"]:
+        print("multiple languages:", vm.language_script_combo.all())
+        #input("CONTINUE?")
 
 def get_or_create_author(author_uri, record=dict(), part_of_obj=None):  
     try:
         am = Author.objects.get(
             author_uri=author_uri
         )
+        am_created = False
         if VERBOSE:
             print("Author already in the database:", author_uri)
     except:
@@ -1572,26 +1906,12 @@ def get_or_create_author(author_uri, record=dict(), part_of_obj=None):
             if VERBOSE:
                 print("-> created", author_uri)
     
-    # add dates related to the author:
-    # first, create the date itself: 
-    date_str = author_uri[:4]
-    date_obj = get_or_create_date(
-        date_type_slug="death_date",
-        calendar_slug="AH",
-        date_str=date_str,
-        year=int(date_str),
-        precision="year",
-        source="URI",
-    )
-    # then, add the link to the author:
-    if date_obj:
-        dlm, created = DateLink.objects.get_or_create(date=date_obj, author=am)
-        if created:
-            IMPORT_STATS["dateLink"] = IMPORT_STATS.get("dateLink", 0) + 1
+    
 
     if record:
         # Add names to the author object:
         add_author_names(am, record)
+        add_author_dates(am, record)
         
         # Add external IDs
         for provider, id_list in record["external_ids"].items():
@@ -1607,34 +1927,42 @@ def get_or_create_author(author_uri, record=dict(), part_of_obj=None):
         add_related(am, author_uri, record["person_relations"], 
                     part_of_obj, authority="OpenITI metadata")
 
-    return am
+    return am, am_created
 
 def upload_book_corpus_meta(author_d, authorship_obj, release_obj, part_of_obj, 
-                            book_type_obj, worldcat_obj, base_url):
+                            book_type_obj, worldcat_obj, base_url, release_code, insights):
     author_record = collect_author_yml_data(author_d)
     author_uri = author_record["author_uri"]
-    am = get_or_create_author(author_uri, author_record, part_of_obj)
+    print(release_code, author_uri)
+
+    am, am_created = get_or_create_author(author_uri, author_record, part_of_obj)
+    insights["n_authors"] = insights.get("n_authors", 0) + 1
+    if am_created:
+        insights["n_new_authors"] = insights.get("n_new_authors", 0) + 1
     for book_d in author_d["books"]:
         book_record = collect_text_yml_data(book_d)
-        #print(json.dumps(book_record, indent=2, ensure_ascii=False))
-        #input("CONTINUE?")
-
         text_uri = book_record["text_uri"]
-        tm = get_or_create_book(text_uri, authorship_obj, book_type_obj, 
+        tm, tm_created = get_or_create_book(text_uri, authorship_obj, book_type_obj, 
                                 book_record, am, part_of_obj)
+        insights["n_books"] = insights.get("n_books", 0) + 1
+        if tm_created:
+            insights["n_new_books"] = insights.get("n_new_books", 0) + 1
         for version_d in book_d["versions"]:
             version_record = collect_version_yml_data(version_d, base_url)
             version_uri = version_record["version_uri"]
-            vm,rvm = get_or_create_version(version_record, release_obj, 
+            vm, vm_created = get_or_create_version(version_record, release_obj, 
                                            worldcat_obj, tm=tm)
+            insights["n_versions"] = insights.get("n_versions", 0) + 1
+            if vm_created:
+                insights["n_new_versions"] = insights.get("n_new_versions", 0) + 1
 
 def upload_ms_corpus_meta(loc_d, authorship_obj, release_obj, part_of_obj, 
-                          worldcat_obj, base_url):
+                          worldcat_obj, base_url, release_code, insights):
     # check if the version uri is already in the database:
     #print(record)
     loc_record =  collect_loc_yml_data(loc_d)
     loc_uri = loc_record["loc_uri"]
-    print(loc_uri)
+    print(release_code, loc_uri)
     hm = get_or_create_ms_holding(loc_uri, loc_record, part_of_obj)
     for ms_d in loc_d["manuscripts"]:
         ms_record = collect_manuscr_yml_data(ms_d)
@@ -1644,7 +1972,7 @@ def upload_ms_corpus_meta(loc_d, authorship_obj, release_obj, part_of_obj,
         for transcr_d in ms_d["transcriptions"]:
             transcr_record = collect_transcr_yml_data(transcr_d, base_url)
             transcr_uri = transcr_record["version_uri"]
-            vm,rvm = get_or_create_version(transcr_record, release_obj, 
+            vm, vm_created = get_or_create_version(transcr_record, release_obj, 
                                            worldcat_obj, mm=mm)
 
 def get_or_create_ms_holding(loc_uri, record, part_of_obj):
@@ -1841,11 +2169,12 @@ def get_or_create_manuscript(ms_uri, record, authorship_obj,
 #     if rvm_created and VERBOSE:
 #         print("NEW RELEASE VERSION OBJECT CREATED:", rvm)    
 
-def upload_release_meta(meta_fp, base_url, release_info, meta_upload=True, test=False):
+def upload_release_meta(meta_fp, base_url, release_info, 
+        authorship_obj, book_type_obj, part_of_obj, worldcat_obj,
+        meta_upload=True, test=False):
     print(f"Uploading release {release_info['release_code']} metadata...")
 
     # first, create the new release itself in the database:
-
     release_obj, created = ReleaseInfo.objects.update_or_create(
         release_code=release_info["release_code"],
         defaults=dict(
@@ -1858,68 +2187,19 @@ def upload_release_meta(meta_fp, base_url, release_info, meta_upload=True, test=
         IMPORT_STATS["releaseInfo"] = IMPORT_STATS.get("releaseInfo", 0) + 1
         if VERBOSE:
             print("NEW RELEASE ENTRY CREATED:", release_obj)
-
-    # Create / get the ID of the generic authorship relation,
-    # used to connect books to their authors:
     
-    authorship_obj, created = RelationType.objects.get_or_create(
-        code="AUTH",
-        name="is author of",
-        name_inverted="is written by",
-        descr="Generic authorship relation between a person and a book",
-        entities="person_book"
-    )
-    if created:
-        IMPORT_STATS["relationType"] = IMPORT_STATS.get("relationType", 0) + 1
-        if VERBOSE:
-            print("AUTHORSHIP OBJECT CREATED:", authorship_obj)
-
-    # Create / get the ID of the text_type for a generic book:
-    book_type_obj, created = TextType.objects.get_or_create(
-        slug="book",
-        label="book",
-        description="a generic text_type for books in the OpenITI corpus",
-    )
-    if created:
-        IMPORT_STATS["textType"] = IMPORT_STATS.get("textType", 0) + 1
-        if VERBOSE:
-            print("BOOK TYPE OBJECT CREATED:", book_type_obj)
-
-    # ms_type_obj, created = TextType.objects.get_or_create(
-    #     slug="manuscript",
-    #     label="manuscript",
-    #     description="a generic text_type for handwritten documents in the OpenITI corpus",
-    # )
-    # if created and VERBOSE:
-    #     print("MANUSCRIPT TYPE OBJECT CREATED:", ms_type_obj)
-
-    # Create / get the ID of the generic relation between a part and a whole
-    part_of_obj, created = RelationType.objects.get_or_create(
-        code="PARTOF",
-        name="is part of",
-        name_inverted="has part",
-        descr="Generic relation between a part and a whole",
-        entities=""
-    )
-    if created:
-        IMPORT_STATS["relationType"] = IMPORT_STATS.get("relationType", 0) + 1
-
-    # Create/get the ID for Worldcat:
-    worldcat_obj, created = IdentifierProvider.objects.get_or_create(
-        slug="worldcat",
-        name="Worldcat",
-        base_url="https://search.worldcat.org/title/"
-    )
-    if created:
-        IMPORT_STATS["identifierProvider"] = IMPORT_STATS.get("identifierProvider", 0) + 1
-
     version_codes_d = dict()
+    
     with open(meta_fp, 'r', encoding='utf-8') as f:
         data = f.read()
         data = re.sub(r" *¶ +", " ", data)
         data = re.sub('10#MS#GENRES###:','10#MS#GENRES####:', data)
+        pri_indicator = len(re.findall("PRIMARY_VERSION", data)) > 20
         #print(data[:50])
         json_list = json.loads(data)
+        # generate the corpus insights for this release:
+        create_corpus_insights(json_list, release_obj, pri_indicator)
+    if meta_upload:
         for d1 in json_list:
             try: 
                 uri = d1["00#AUTH#URI######:"]
@@ -1935,12 +2215,14 @@ def upload_release_meta(meta_fp, base_url, release_info, meta_upload=True, test=
                 
             if uri.startswith("MS"):
                 upload_ms_corpus_meta(d1, authorship_obj, release_obj, part_of_obj, 
-                                      worldcat_obj, base_url)
+                                      worldcat_obj, base_url, 
+                                      release_info["release_code"], insights)
             else:
                 upload_book_corpus_meta(d1, authorship_obj, release_obj, part_of_obj, 
-                                        book_type_obj, worldcat_obj, base_url)
+                                        book_type_obj, worldcat_obj, base_url, 
+                                        release_info["release_code"], insights)
                 
-
+    
 
     # with open(meta_fp, 'r', encoding='utf-8') as f:
     #     reader = csv.DictReader(f, fieldnames=fieldnames, delimiter='\t')
@@ -2133,16 +2415,177 @@ def upload_release_meta(meta_fp, base_url, release_info, meta_upload=True, test=
     #         # if rvm_created and VERBOSE:
     #         #     print("NEW RELEASE VERSION OBJECT CREATED:", rvm)
 
-    print("Done uploading metadata!")
+    print(f'Done uploading metadata for release {release_info["release_code"]}')
     print("OBJECTS CREATED:")
     print(json.dumps(IMPORT_STATS, indent=2))
     IMPORT_STATS.clear()
-    logger.info("Done uploading metadata")
+    logger.info(f'Done uploading metadata for release {release_info["release_code"]}')
+    logger.info("OBJECTS CREATED:")
+    for model,count in IMPORT_STATS.items():
+        logger.info(f"- {count} {model} object(s)")
     if test:
         logger.warning("ONLY A TEST - NOT ALL METADATA UPLOADED!")
 
 
     return release_obj, version_codes_d
+
+def add_insight(insights, key, languages, n=1):
+    insights[key]["all"] =  insights[key]["all"] + n
+    for lang in languages:
+        insights[key][lang] = insights[key].get(lang, 0) + n
+
+def create_corpus_insights(json_list, release_obj, pri_indicator=True):
+    insights = dict(
+        number_of_authors=0,
+        number_of_books=0,
+        number_of_versions={"all": 0},
+        number_of_manuscript_holdings=0,
+        number_of_manuscripts=0,
+        number_of_pri_versions={"all": 0},
+        number_of_sec_versions={"all": 0},
+        number_of_markdown_versions={"all": 0},
+        number_of_completed_versions={"all": 0},
+        total_word_count={"all": 0},
+        total_word_count_pri={"all": 0},
+        largest_book_size=0,
+        largest_book="",
+        largest_10_books={}
+    )
+    pri_book_sizes = []
+    book_sizes = []
+    for d1 in json_list:
+        if "00#AUTH#URI######:" in d1:
+            insights["number_of_authors"] += 1
+            for book_d in d1.get("books", []):
+                insights["number_of_books"] += 1
+                pri_versions = get_pri_versions(book_d)
+                for version_d in book_d.get("versions", []):
+                    version_uri = version_d["00#VERS#URI######:"]
+                    languages = re.findall("[a-z]{3}", version_uri.split("-")[-1])
+                    word_count = int(version_d.get("00#VERS#LENGTH###:"), 0)
+                    book_sizes.append((word_count, version_uri))
+                    add_insight(insights, "number_of_versions", languages)
+                    add_insight(insights, "total_word_count", languages, word_count)
+                    #if "PRIMARY_VERSION" in version_d.get("90#VERS#ISSUES###:", ""):
+                    if version_uri in pri_versions:
+                        add_insight(insights, "number_of_pri_versions", languages)
+                        add_insight(insights, "total_word_count_pri", languages, word_count)
+                        pri_book_sizes.append((word_count, version_uri))
+                    else:
+                        add_insight(insights, "number_of_sec_versions", languages)
+                    extensions = version_d.get("extensions", [])
+                    if ".completed" in extensions or "completed" in extensions:
+                        add_insight(insights, "number_of_completed_versions", languages)
+                    elif ".mARkdown" in extensions or "mARkdown" in extensions:
+                        add_insight(insights, "number_of_markdown_versions", languages)
+
+        elif "00#LOC#URI#######:" in d1:
+            insights["number_of_manuscript_holdings"] += 1
+            for ms_d in d1.get("manuscripts", []):
+                pri_versions = get_pri_versions(ms_d)
+                insights["number_of_manuscripts"] += 1
+                for version_d in ms_d.get("transcriptions", []):
+                    version_uri = version_d["00#TRNS#URI######:"]
+                    languages = re.findall("[a-z]{3}", version_uri.split("-")[-1])
+                    word_count = int(version_d.get("00#TRNS#LENGTH###:"), 0)
+                    book_sizes.append((word_count, version_uri))
+                    add_insight(insights, "number_of_versions", languages)
+                    add_insight(insights, "total_word_count", languages, word_count)
+                    #if "PRIMARY_VERSION" in version_d.get("90#TRNS#ISSUES###:", ""):
+                    if version_uri in pri_versions:
+                        add_insight(insights, "number_of_pri_versions", languages)
+                        add_insight(insights, "total_word_count_pri", languages, word_count)
+                        pri_book_sizes.append((word_count, version_uri))
+                    else:
+                        add_insight(insights, "number_of_sec_versions", languages)
+                    extensions = version_d.get("extensions", [])
+                    if ".completed" in extensions or "completed" in extensions:
+                        add_insight(insights, "number_of_completed_versions", languages)
+                    elif ".mARkdown" in extensions or "mARkdown" in extensions:
+                        add_insight(insights, "number_of_markdown_versions", languages)
+        else:
+            print("no URI in dictionary?", d)
+    
+    if len(pri_book_sizes) == 0:
+        book_sizes.sort(reverse=True)
+        largest_10_books = dict()
+        book_uris = []
+        for tok_count, version_uri in book_sizes:
+            if len(largest_10_books) == 10:
+                break
+            book_uri = ".".join(version_uri.split(".")[:2])
+            if book_uri not in book_uris:
+                largest_10_books[version_uri] = tok_count
+                book_uris.append(book_uri)
+        pri_book_sizes = book_sizes
+    else:
+        pri_book_sizes.sort(reverse=True)
+        largest_10_books = {tup[1]: tup[0] for tup in pri_book_sizes[:10]}
+    insights["largest_10_books"] = largest_10_books
+    insights["largest_book_size"] = pri_book_sizes[0][0]
+    insights["largest_book"] = pri_book_sizes[0][1]
+
+    CorpusInsights.objects.get_or_create(
+        release_info=release_obj,
+        defaults=insights
+    )
+    IMPORT_STATS["corpusInsights"] = IMPORT_STATS.get("corpusInsights", 0) + 1
+
+def get_pri_versions(d):
+    version_list = d.get("versions", []) or d.get("transcriptions", [])
+    
+    # if there is only one version, it's primary by default:
+    if len(version_list) == 1:
+        version_uri = version_list[0].get("00#VERS#URI######:", "") \
+                         or version_list[0].get("00#TRNS#URI######:", "")
+        return [version_uri]
+    elif version_list == []:
+        return []
+
+    # first, try to use the "PRIMARY_VERSION" issue:
+    pri_versions = []
+    uri_extensions = []
+    for version_d in version_list:
+        version_uri = version_d.get("00#VERS#URI######:", "") \
+                         or version_d.get("00#TRNS#URI######:", "")
+        version_issues = version_d.get("90#VERS#ISSUES###:", "") \
+                         or version_d.get("90#TRNS#ISSUES###:", "")
+        if "PRIMARY_VERSION" in version_issues:
+            pri_versions.append(version_uri)
+        uri_extensions.append((version_uri, version_d["extensions"]))
+    
+    if pri_versions != []:
+        return pri_versions
+
+    # if no version was selected as primary, use the file extensions:
+    extensions_in_order = [".mARkdown", ".completed", ".inProgress",]
+    for extension in extensions_in_order:
+        for version_uri, extensions in uri_extensions:
+            if extension in extensions:
+                pri_versions.append(version_uri)
+        if pri_versions != []:
+            return pri_versions
+    
+    # if still no version was selected as primary: use the longest file:
+    by_length = []
+    for version_d in version_list:
+        version_uri = version_d.get("00#VERS#URI######:", "") \
+                         or version_d.get("00#TRNS#URI######:", "")
+        length = version_d.get("00#VERS#LENGTH###:", "") \
+                         or version_d.get("00#TRNS#LENGTH###:", "")
+        by_length.append((length, version_uri))
+    by_length.sort(reverse=True)
+    for i in range(len(by_length)):
+        version_uri = by_length[i][1]
+        if "Sham30K" in version_uri:
+            continue
+        return [version_uri]
+        
+
+
+
+
+        
 
 # BUILDUP: UNCOMMENT:
 # def upload_reuse_stats(reuse_data_fp, release_code, release_obj, reuse_data_base_url, version_codes_d, test=False):

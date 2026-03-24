@@ -4,6 +4,7 @@ import json
 import os
 import re
 import datetime
+import logging
 import convertdate
 
 
@@ -14,6 +15,16 @@ from api.util.betacode import betacodeToArSimple, betacodeToSearch
 
 geo_URIs = dict()
 text_rel_d = dict()
+
+# prepare logger: 
+today = datetime.datetime.today().strftime("%Y-%m-%d")
+log_fp = f'logs/release_upload_{today}.log'
+if os.path.exists(log_fp):
+    with open(log_fp, mode="w", encoding="utf-8") as file:
+        file.write("")
+logging.basicConfig(filename=log_fp, encoding='utf-8', level=logging.NOTSET)
+logger = logging.getLogger()
+
 
 DATE_CONVERTERS  = {
     "AH": convertdate.islamic,
@@ -182,8 +193,8 @@ def compute_ce_range(calendar, year, month=None, day=None, precision=None):
         year (int): the year value
         month (int): the month value
         day (int): the day value
-        precision (str): "year" | "month" | "day"; if None, the precision
-            will be infrerred from the presence/absence of month and day values
+        precision (str): "millennium" | "century" | "year" | "month" | "day"; if None, the precision
+            will be inferred from the presence/absence of month and day values
 
     Returns:
         (datetime, datetime)
@@ -191,7 +202,7 @@ def compute_ce_range(calendar, year, month=None, day=None, precision=None):
     if year is None:
         return (None, None)
 
-    if calendar == "gregorian":
+    if calendar in ("gregorian", "CE", "BCE"):
         return compute_ce_range_from_gregorian(year, 
             month=month, day=day, precision=precision)
 
@@ -206,8 +217,8 @@ def compute_ce_range_from_gregorian(year, month=None, day=None, precision=None):
         year (int): the year value
         month (int): the month value
         day (int): the day value
-        precision (str): "year" | "month" | "day"; if None, the precision
-            will be infrerred from the presence/absence of month and day values
+        precision (str): "millennium" | "century" | "decennium" | "year" | "month" | "day"; if None, the precision
+            will be inferred from the presence/absence of month and day values
     
     Returns:
         (datetime, datetime)
@@ -216,6 +227,15 @@ def compute_ce_range_from_gregorian(year, month=None, day=None, precision=None):
         return (None, None)
 
     precision = normalize_precision(precision, month, day)
+
+    if precision == "millennium":
+       return (datetime.date(year, 1, 1), datetime.date(year+999, 12, 31))
+
+    if precision == "century":
+       return (datetime.date(year, 1, 1), datetime.date(year+99, 12, 31))
+
+    if precision == "decennium":
+       return (datetime.date(year, 1, 1), datetime.date(year+9, 12, 31))
 
     if precision == "year":
         return (datetime.date(year, 1, 1), datetime.date(year, 12, 31))
@@ -261,6 +281,42 @@ def compute_ce_range_from_other_calendar(calendar, year, month=None, day=None, p
         return (None, None)
 
     precision = normalize_precision(precision, month, day)
+
+    if precision == "millennium":
+        start = to_datetime(converter.to_gregorian(year, 1, 1))
+        last_year = year+999
+        last_month = 12
+        try:
+            last_day = converter.month_length(last_year, last_month)
+        except Exception:
+            last_day = 30 # approximation
+
+        end = to_datetime(converter.to_gregorian(last_year, last_month, last_day))
+        return (start, end)
+
+    if precision == "century":
+        start = to_datetime(converter.to_gregorian(year, 1, 1))
+        last_year = year+99
+        last_month = 12
+        try:
+            last_day = converter.month_length(last_year, last_month)
+        except Exception:
+            last_day = 30 # approximation
+
+        end = to_datetime(converter.to_gregorian(last_year, last_month, last_day))
+        return (start, end)
+
+    if precision == "decennium":
+        start = to_datetime(converter.to_gregorian(year, 1, 1))
+        last_year = year+9
+        last_month = 12
+        try:
+            last_day = converter.month_length(last_year, last_month)
+        except Exception:
+            last_day = 30 # approximation
+
+        end = to_datetime(converter.to_gregorian(last_year, last_month, last_day))
+        return (start, end)
 
     # YEAR precision: whole year in that calendar
     if precision == "year":
@@ -437,7 +493,7 @@ def extract_metadata_from_header(fp, VERBOSE=False):
             for line in unreadable:
                 print(line)
             print(meta)
-            input("press enter to continue")
+            #input("press enter to continue")
 
     
     #all_header_meta[os.path.split(fp)[0]] = all_meta
@@ -467,9 +523,11 @@ def collect_version_yml_data(vers_d, base_url, corpus_folder=None,
         #collection_code = re.findall(r"^([A-Za-z]+?\d*[A-Za-z]+)\d+(?:BK\d+)?(?:Vols)?[A-Z]?$", version_code)[0]
         collection_code = re.findall(r"^[A-Za-z]+?\d{,2}[A-Za-z]+", version_code)[0]
     except:
-        print("no collection code found in", [version_code])
+        msg = f"no collection code found in '{version_code}'"
+        logger.warning(msg)
+        print(msg)
         collection_code = None
-        input("CONTINUE?")
+        #input("CONTINUE?")
 
     # - explicit primary version:
 
@@ -581,7 +639,7 @@ def collect_version_yml_data(vers_d, base_url, corpus_folder=None,
     else:
         print("MISSING KEY: 80#VERS#LINKS####: in", version_uri)
         print(json.dumps(vers_d, indent=2, ensure_ascii=False))
-        input()
+        #input()
 
     # - notes:
     notes = ""
@@ -592,7 +650,7 @@ def collect_version_yml_data(vers_d, base_url, corpus_folder=None,
     else:
         print("MISSING KEY: 90#VERS#COMMENT##: in", version_uri)
         print(json.dumps(vers_d, indent=2, ensure_ascii=False))
-        input()
+        #input()
 
     # - issues: 
     #version_tags = re.findall(r"[A-Z_]{5,}", vers_d["90#VERS#ISSUES###:"])
@@ -698,29 +756,35 @@ def collect_text_yml_data(text_d, text_uri=None):
         title_ar_prefered = ""
 
     # - tags
-    tags = []
-    raw_tags = text_d["10#BOOK#GENRES###:"].strip()
-    if raw_tags and not raw_tags.startswith("src"):
-        for genre in re.split(r" *[,:;]+ *", raw_tags):
-            tags.append(genre)
+    tags = parse_val_as_list(text_d, "10#BOOK#GENRES###:", default_start="src")
+    # tags = []
+    # raw_tags = text_d["10#BOOK#GENRES###:"].strip()
+    # if raw_tags and not raw_tags.startswith("src"):
+    #     for genre in re.split(r" *[,:;]+ *", raw_tags):
+    #         tags.append(genre)
     tags += text_d.get("genre_from_text_header", [])
 
     # - place of writing:
-    places = []
-    raw_places = text_d["20#BOOK#WROTE####:"].strip()
-    if raw_places and not raw_places.startswith("URIs from Althurayya"):
-        for place in re.split(r" *[:,;]+ *", raw_places):
-            places.append(place)
+    places = parse_val_as_list(text_d, "20#BOOK#WROTE####:", 
+                               default_start="URIs from Althurayya")
+    # places = []
+    # raw_places = text_d["20#BOOK#WROTE####:"].strip()
+    # if raw_places and not raw_places.startswith("URIs from Althurayya"):
+    #     for place in re.split(r" *[:,;]+ *", raw_places):
+    #         places.append(place)
+
     # - date of writing:
-    dates = []
-    for k in text_d:
-        if "WROTE" in k and "#WROTE####:" not in k:
-            #raw_dates = text_d["30#BOOK#WROTE##AH:"].strip()
-            calendar = re.findall(r"([A-Z]+):", k)[0]
-            raw_dates = text_d[k].strip()
-            if raw_dates and not raw_dates.startswith("YEAR-MON-DA"):
-                for date in re.split(r" *[:,;]+ *", raw_dates):
-                    dates.append((date, calendar))
+    dates = parse_modifier_vals(text_d, "WROTE#+[A-Z]+#*:", 
+                                default_start="YEAR-MON-DA", output="tuples")
+    # dates = []
+    # for k in text_d:
+    #     if "WROTE" in k and "#WROTE####:" not in k:
+    #         #raw_dates = text_d["30#BOOK#WROTE##AH:"].strip()
+    #         calendar = re.findall(r"([A-Z]+):", k)[0]
+    #         raw_dates = text_d[k].strip()
+    #         if raw_dates and not raw_dates.startswith("YEAR-MON-DA"):
+    #             for date in re.split(r" *[:,;]+ *", raw_dates):
+    #                 dates.append((date, calendar))
 
     # connect place and date of writing:
     place_relations = []
@@ -780,8 +844,9 @@ def collect_text_yml_data(text_d, text_uri=None):
                     try:
                         rel_types = re.findall(r"\(([^\)]+)", rel)[0]
                     except:
-                        print(text_uri, ":")
-                        print("    no relationship type found in ", rel)
+                        msg = f"{text_uri}: no relationship type found in '{rel}'"
+                        logger.warning(msg)
+                        print(msg)
                         continue
                     rel_text = re.sub(r" *\(.+", "", rel).strip()
                 
@@ -854,7 +919,7 @@ def collect_text_yml_data(text_d, text_uri=None):
     else:
         print("MISSING KEY: 90#BOOK#COMMENT##: in", text_uri)
         print(json.dumps(text_d, indent=2, ensure_ascii=False))
-        input()
+        #input()
 
     text_meta = dict(
         text_uri=text_uri,
@@ -972,7 +1037,7 @@ def collect_loc_yml_data(loc_d, loc_uri=None):
     else:
         print("MISSING KEY: 90#LOC#COMMENT###: in", loc_uri)
         print(json.dumps(loc_d, indent=2, ensure_ascii=False))
-        input()
+        #input()
 
     loc_meta = dict(
         loc_uri=loc_uri,
@@ -1010,7 +1075,10 @@ def parse_val_as_str(d, k, default_start=None, default_return=""):
     """
     try:
         val = d[k].strip()
-    except:
+    except KeyError:
+        msg = f"parsing error: key '{k}' not found in {json.dumps(d, ensure_ascii=False)}"
+        logger.warning(msg)
+        print(msg)
         return default_return
     if not val or val.lower() == "none" : 
         return default_return
@@ -1025,6 +1093,10 @@ def parse_val_as_int(d, k, default_start=None, default_return=0):
     try: 
         return int(val)
     except:
+        msg = f"Expected number in value for key '{k}' in {d}"
+        msg += f"Got '{val}'"
+        print(msg)
+        logger.warning(msg)
         return default_return
 
 
@@ -1095,8 +1167,8 @@ def parse_val_as_dict(d, k, default_start=None, default_return={},
         val_d[prop].append(v)
     return val_d
 
-def parse_modifier_vals(d, key_component, default_start=None, default_return={}, 
-                        split_regex=r" *[;,:]+ *"):
+def parse_modifier_vals(d, key_regex, default_start=None, default_return={}, 
+                        split_regex=r" *[;,:]+ *", output="dict"): # or "tuples"
     """Parses values of keys that include a modifier (e.g,., AH or CE for dates )
 
     Example: 
@@ -1106,7 +1178,8 @@ def parse_modifier_vals(d, key_component, default_start=None, default_return={},
         "30#MS#DATE#CE####:": "19-09-1526"
     }
     >>> parse_modifier_vals(d, "DATE", default_start="date of")
-    {"AH": "02-12-0932", "CE": "19-09-1526"}
+    >>> parse_modifier_vals(d, "DATE", default_start="date of", output="tuples")
+    [("02-12-0932", "AH"), ("19-09-1526", "CE")]
     >>> d = {
         "40#MS#HEIGHT#MM##:": 110,
         "40#MS#HEIGHT#INCH:": 4.33,
@@ -1118,9 +1191,12 @@ def parse_modifier_vals(d, key_component, default_start=None, default_return={},
     Returns: 
        dict
     """
-    val_d = dict()
+    if output == "dict":
+        val_d = dict()
+    elif output == "tuples":
+        val_list = []
     for k in d:
-        if re.findall(key_component, k):
+        if re.findall(key_regex, k):
             val = parse_val_as_str(d, k, default_start=default_start)
             if not val:
                 return default_return
@@ -1128,20 +1204,30 @@ def parse_modifier_vals(d, key_component, default_start=None, default_return={},
             # get the modifier (AH, CE, MM, CM, ...) from the key:
             #_, _, _, mod = re.split(r"#+", k.strip(":"))
             mod = re.findall("([A-Z]+)#*:", k)[0]
-            if mod not in val_d:
-                if split_regex:
-                    val_d[mod] = []
-                else:
-                    val_d[mod] = ""
+            if output == "dict":
+                if mod not in val_d:
+                    if split_regex:
+                        val_d[mod] = []
+                    else:
+                        val_d[mod] = ""
             
             if split_regex:
                 for v in re.split(split_regex, val):
                     v = v.strip()
-                    if v and v not in val_d[mod]:
-                        val_d[mod].append(v)
+                    if output == "dict":
+                        if v and v not in val_d[mod]:
+                            val_d[mod].append(v)
+                    elif output == "tuples":
+                        val_list.append((v, mod))
             else:
-                val_d[mod] = val
-    return val_d
+                if output == "dict":
+                    val_d[mod] = val
+                elif output == "tuples":
+                    val_list.append((val, mod))
+    if output == "dict":
+        return val_d
+    elif output == "tuples":
+        return val_list
 
 def parse_language_vals(d, key_component, default_start=None, default_return=({},[],[]), 
                         split_regex=r" *[;,:]+ *", incl_transcr_in_lat_list=False):
@@ -1523,9 +1609,11 @@ def collect_transcr_yml_data(transcr_d, base_url, corpus_folder=None,
         #collection_code = re.findall(r"^([A-Za-z]+?\d*[A-Za-z]+)\d+(?:BK\d+)?(?:Vols)?[A-Z]?$", version_code)[0]
         collection_code = re.findall(r"^[A-Za-z]+?\d{,2}[A-Za-z]+", version_code)[0]
     except:
-        print("no collection code found in", [version_code])
+        msg = f"no collection code found in '{version_code}'"
+        print(msg)
+        logger.warning(msg)
         collection_code = None
-        input("CONTINUE?")
+        #input("CONTINUE?")
 
     # - most developed text version:
 
@@ -1671,13 +1759,17 @@ def collect_author_yml_data(auth_d, author_uri=None):
 
     if not author_uri:
         author_uri = auth_d["00#AUTH#URI######:"]
-    print(author_uri)
+
+    # collect death and birth dates from yml keys:
+    birth_dates = parse_modifier_vals(auth_d, "30#AUTH#BORN", default_start="YEAR-MON-DA")
+    death_dates = parse_modifier_vals(auth_d, "30#AUTH#DIED", default_start="YEAR-MON-DA")
+    dates = {"birth": birth_dates, "death": death_dates}
 
     # collect the author's dates from the URI:
     date_str = author_uri[:4]
     date = int(date_str)
     date_AH = date
-    date_CE = ah2ce(date)
+    #date_CE = ah2ce(date)
 
     # process the name elements:
     name_d = {"LAT": {}}
@@ -1688,11 +1780,14 @@ def collect_author_yml_data(auth_d, author_uri=None):
             try:
                 _, _, name_el, lang = re.split("#+", k.strip(":"))
             except Exception as e:
-                print(e)
-                print(k)
-                print(k.strip(":"))
-                print(re.split("#+", k.strip(":")))
-                input("CONTINUE?")
+                msg = f"{e}: failed to parse name element key '{k}' in {author_uri}"
+                logger.warning(msg)
+                print(msg)
+                # print(e)
+                # print(k)
+                # print(k.strip(":"))
+                # print(re.split("#+", k.strip(":")))
+                #input("CONTINUE?")
             if lang not in name_d:
                 name_d[lang] = {}
             if lang in ARABIC_SCRIPT_CODES:
@@ -1891,7 +1986,7 @@ def collect_author_yml_data(auth_d, author_uri=None):
     else:
         print("MISSING KEY 40#AUTH#STUDENTS# in", author_uri)
         print(json.dumps(auth_d, indent=2, ensure_ascii=False))
-        input()
+        #input()
     if not "from OpenITI" in auth_d["40#AUTH#TEACHERS#:"]:
         for teacher in auth_d["40#AUTH#TEACHERS#:"].split(","):
             teacher_uri = re.findall(r"\d{4}[A-Z][a-zA-Z]+", teacher)
@@ -1936,13 +2031,14 @@ def collect_author_yml_data(auth_d, author_uri=None):
     else:
         print("MISSING KEY: 90#AUTH#COMMENT##: in", author_uri)
         print(json.dumps(auth_d, indent=2, ensure_ascii=False))
-        input()
+        #input()
 
     author_meta = dict(
         author_uri=author_uri,
         date=date,
         date_AH=date_AH,
-        date_CE=date_CE,
+        #date_CE=date_CE,
+        dates=dates,
         date_str=date_str,
         author_ar=" :: ".join(author_ar),
         author_lat=" :: ".join(list(set(author_lat + normalized_author_lat))),
