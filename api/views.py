@@ -36,25 +36,20 @@ from .models import Author, Text, Version, ReleaseVersion, \
                     SourceCollectionDetails, ManuscriptHolding, \
                     Manuscript, ObjectName, ObjectNameLink, \
                     CorpusInsights
-# BUILDUP: UNCOMMENT:
-# from .models import PersonName, CorpusInsights, \
-#                     TextReuseStats, GitHubIssue
+# from .models import TextReuseStats, GitHubIssue
 from .serializers import  AllRelationsSerializer, AllRelationTypesSerializer, \
                           AuthorSerializer, ReleaseInfoSerializer, TextSerializer,\
                           VersionSerializer, ReleaseVersionSerializer, \
                           SourceCollectionDetailsSerializer,\
                           ManuscriptHoldingSerializer, ManuscriptSerializer, \
                           ObjectNameSerializer, CorpusInsightsSerializer
-# BUILDUP: UNCOMMENT:
-# from .serializers import PersonNameSerializer, \
-#                          TextReuseStatsSerializer, \
+# from .serializers import TextReuseStatsSerializer, \
 #                          ShallowTextReuseStatsSerializer, TextReuseStatsSerializerB1, \
 #                          GitHubIssueSerializer
 
 from .filters import AuthorFilter, CustomSearchFilter, TextFilter, VersionFilter,\
                      ReleaseVersionFilter, VersionSearchFilter, ReleaseVersionSearchFilter,\
                      ManuscriptHoldingFilter, ManuscriptFilter
-# BUILDUP: UNCOMMENT:
 # from .filters import TextReuseFilter
 
 # list all parameters (apart from view-specific filters)
@@ -84,7 +79,8 @@ excl_flds = [
     'authormeta', 'textmeta', 'related_person_a', 'related_person_b',
     "related_text_a", "related_text_b"]
 
-
+# NB March 2026: blacklist of non-string fields is not the best idea;
+# better solution:
 
 def filter_string_fields(model):
     """Select only the fields in a model that are searchable strings"""
@@ -1086,12 +1082,12 @@ class ReleaseVersionListView(CustomListView):
         declared_filters += list(self.filterset_class.get_fields().keys())     
         #print(dir(self.filterset_class))  # gets you a list of all available properties of the filterset_class
         # 3. add the default allowed parameters (like search, page, fields, ...):
-        all_allowed_parameters = allowed_parameters + declared_filters
+        all_allowed_parameters = allowed_parameters + declared_filters + ["include_manuscripts"]
         # # 3. create an additional filter "__in" for each declared filter; this allows "OR" filtering:
         # declared_filters_in = [f+"__in" for f in declared_filters]
         # # 4. add the default allowed parameters (like search, page, fields, ...):
         # all_allowed_parameters = allowed_parameters + declared_filters + declared_filters_in
-        
+
         print("THIS IS THE RELEASEVERSIONLISTVIEW")
 
         # Now check all elements in the query URL to check if they are valid:
@@ -1105,7 +1101,7 @@ class ReleaseVersionListView(CustomListView):
         # get the release code from the URL:
         try:
             release_code = self.kwargs['release_code']
-        except: 
+        except:
             release_code = None
         # filter the ReleaseVersion objects based on the release code:
         if release_code:
@@ -1114,6 +1110,11 @@ class ReleaseVersionListView(CustomListView):
                 .distinct()
         else:
             queryset = ReleaseVersion.objects.all()
+
+        # exclude manuscript versions if include_manuscripts=False:
+        include_manuscripts = self.request.GET.get("include_manuscripts", "True")
+        if include_manuscripts.lower() == "false":
+            queryset = queryset.filter(version__manuscript__isnull=True)
 
         return queryset
 

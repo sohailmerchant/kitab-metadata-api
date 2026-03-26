@@ -1411,8 +1411,8 @@ class ReleaseVersionFilter(django_filters.FilterSet):
 
     subcorpus = django_filters.CharFilter(lookup_expr='icontains',
         field_name="subcorpus", label="Subcorpus (ara, per, mss, ...)") 
-    language = django_filters.CharFilter(lookup_expr='icontains',    # case insensitive version of "in"
-        field_name="version__language", label="Language (three-letter code, separate multiple options with comma)")
+    language = CharInFilter(lookup_expr='iin',
+        field_name="version__language_script_combo__code", label="Language-script combo code (comma-separated, e.g. ara,per)")
     uncorrected_ocr = django_filters.BooleanFilter(field_name="uncorrected_ocr", 
         label="Was this text created using OCR, without manual correction?")
     tags = django_filters.CharFilter(lookup_expr='icontains',
