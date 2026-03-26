@@ -597,16 +597,16 @@ def collect_version_yml_data(vers_d, base_url, corpus_folder=None,
     based_list = parse_val_as_list(vers_d, "80#VERS#BASED####:", 
                                    default_start="permalink,")
     external_ids = {}
-    for url in based_list:
+    for based_url in based_list:
         org_regex = r"^(?:https?://)?(?:www\.)?(?:[a-z]{2}\.)?(\w+)"
-        org = re.findall(org_regex, url.strip())
+        org = re.findall(org_regex, based_url.strip())
         if org:
             org = org[0]
         else:
             org = "NA"
         if org not in external_ids:
             external_ids[org] = []
-        external_ids[org].append(url)
+        external_ids[org].append(based_url)
     worldcat_links = [v for k, v in external_ids.items() if k.lower() == "worldcat"]
     if "worldcat" in external_ids:
         del external_ids["worldcat"]
@@ -930,7 +930,7 @@ def collect_text_yml_data(text_d, text_uri=None):
         title_lat_prefered=title_lat_prefered,
         title_d=title_d,
         text_type="text",
-        tags=tags,
+        tags=" :: ".join(tags),
         place_relations=place_relations,
         text_relations=text_relations,
         person_relations=person_relations,
@@ -1673,16 +1673,16 @@ def collect_transcr_yml_data(transcr_d, base_url, corpus_folder=None,
     based_list = parse_val_as_list(transcr_d, "80#TRNS#BASED####:", 
                                    default_start="permalink,")
     external_ids = {}
-    for url in based_list:
+    for based_url in based_list:
         org_regex = r"^(?:https?://)?(?:www\.)?(?:[a-z]{2}\.)?(\w+)"
-        org = re.findall(org_regex, url.strip())
+        org = re.findall(org_regex, based_url.strip())
         if org:
             org = org[0]
         else:
             org = "NA"
         if org not in external_ids:
             external_ids[org] = []
-        external_ids[org].append(url)
+        external_ids[org].append(based_url)
     worldcat_links = [v for k, v in external_ids.items() if k.lower() == "worldcat"]
     if "worldcat" in external_ids:
         del external_ids["worldcat"]
