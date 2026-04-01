@@ -15,7 +15,7 @@ import regex
 
 from django_filters import rest_framework as django_filters
 from rest_framework import filters
-from django.db.models import Field
+from django.db.models import Field, Q
 from django.db.models.lookups import In
 
 from .models import Author, Text, Version, ReleaseVersion,\
@@ -235,6 +235,9 @@ class ReleaseVersionSearchFilter(CustomSearchFilter):
         search_fields = super().get_search_fields(view, request)
         print("ReleaseVersionSearchFilter default search fields:", search_fields)
 
+        search_fields += ["version__manuscript__titles__name",
+                          "version__manuscript__titles__normalized_name",]
+
         related_search_fields = search_fields + [ 
             "version__text__related_texts__text_uri", 
             "version__text__related_texts__titles__name", 
@@ -283,6 +286,8 @@ class ReleaseVersionSearchFilter(CustomSearchFilter):
             "version__text__related_text_a__relation_type__descr",
             "version__text__related_text_b__relation_type__descr",
             ##"version__text__authors__related_places__relation_type__code"
+
+
         ]
 
         extended_search_fields = search_fields + [
@@ -294,7 +299,7 @@ class ReleaseVersionSearchFilter(CustomSearchFilter):
             "version__text__text_types__slug", # "version__text__text_type", 
             "version__text__text_types__label", # "version__text__text_type", 
             "version__text__tags", 
-            "version__text__notes"
+            "version__text__notes",
             ]
 
         # check whether the user wants to use other search fields than the basic search fields:
@@ -1480,8 +1485,14 @@ class ReleaseVersionFilter(django_filters.FilterSet):
         label="Author died between (CE)") 
     
     title = django_filters.CharFilter(
-        field_name="version__text__titles__name", lookup_expr='icontains',
+        method="filter_title",
         label="Title (Arabic/Latin script)")
+
+    def filter_title(self, queryset, name, value):
+        return queryset.filter(
+            Q(version__text__titles__name__icontains=value) |
+            Q(version__manuscript__titles__name__icontains=value)
+        ).distinct()
     title_ar = django_filters.CharFilter(
         method="filter_name_by_language",
         label="Title (Arabic script)"
@@ -1542,7 +1553,17 @@ class ReleaseVersionFilter(django_filters.FilterSet):
         field_name="script", label="Script")
     manuscript_title = django_filters.CharFilter(lookup_expr='icontains',
         field_name="version__manuscript__titles__name", label="Title of the manuscript")
-
+    #holding = django_filters.CharFilter(lookup_expr='icontains',
+    #    field_name="version__manuscript__manuscript_holding__names__name", label="Manuscript holding")
+    holding = django_filters.CharFilter(
+        method="filter_holding",
+        label="Manuscript holding city and institution (Arabic/Latin script)")
+    def filter_holding(self, queryset, name, value):
+        return queryset.filter(
+            Q(version__manuscript__manuscript_holding__names__name=value) |
+            Q(version__manuscript__manuscript_holding__country__names__name=value) |
+            Q(version__manuscript__manuscript_holding__city__names__name=value)
+        ).distinct()
     
     
     class Meta:
