@@ -9,17 +9,25 @@ class Command(BaseCommand):
 
         #VersionwiseReuseStats.objects.all().delete()
 
-        #versionwise_stats_fp = "reuse_data/bookwise-stats-v5-Oct_uni-dir.csv"
+        #versionwise_stats_fp = "reuse_data/bookwise-stats-v2021.2.5_uni-dir.csv"
         #release_code = "2021.2.5"
-        #versionwise_stats_fp = "reuse_data/bookwise-stats-Octv6_uni-dir.csv"
+        #versionwise_stats_fp = "reuse_data/bookwise-stats-v2022.1.6_uni-dir.csv"
         #release_code = "2022.1.6"
-        #versionwise_stats_fp = "reuse_data/bookwise-stats-v7_uni-dir.csv"
+        #versionwise_stats_fp = "reuse_data/bookwise-stats-v2022.2.7_uni-dir.csv"
         #release_code = "2022.2.7"
-        versionwise_stats_fp = "reuse_data/bookwise-stats-v8_uni-dir.csv"
-        release_code = "2023.1.8"
-
+        #versionwise_stats_fp = "reuse_data/bookwise-stats-v2023.1.8_uni-dir.csv"
+        #release_code = "2023.1.8"
         
-        main(versionwise_stats_fp, release_code)
+        release_codes = [
+            "2021.2.5", 
+            "2022.1.6", 
+            "2022.2.7",
+            "2023.1.8",
+        ]
+
+        for release_code in release_codes:
+            versionwise_stats_fp = f"reuse_data/bookwise-stats-v{release_code}_uni-dir.csv"
+            main(versionwise_stats_fp, release_code)
 
 
 def main(versionwise_stats_fp, release_code):

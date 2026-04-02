@@ -1225,24 +1225,24 @@ class Contributor(models.Model):
         return f"{self.code} ({self.name})"
 
     
-# BUILDUP: UNCOMMENT:
-# class VersionwiseReuseStats(models.Model):
-#     """Describes text reuse statistics on the single release version level
-#     (how many versions does it share text reuse with? How many text reuse instances?)
-#     """
-#     id = models.AutoField(primary_key=True)
-#     release_version = models.ForeignKey(ReleaseVersion, on_delete=models.DO_NOTHING, 
-#                                            related_name='versionwise_reuse_stats', 
-#                                            related_query_name="versionwise_reuse")
-#     n_instances = models.IntegerField(null=True, blank=True)
-#     n_versions = models.IntegerField(null=True, blank=True)
-#     # TO DO: 
-#     #passim_run = models.ForeignKey("PassimRun", blank=False, 
-#     #                               related_name='passim_runs', related_query_name="passim_run",
-#     #                               on_delete=models.DO_NOTHING)
 
-#     def __str__(self):
-#         return f"{self.release_version}: {self.n_instances}, {self.n_versions}"
+class VersionwiseReuseStats(models.Model):
+    """Describes text reuse statistics on the single release version level
+    (how many versions does it share text reuse with? How many text reuse instances?)
+    """
+    id = models.AutoField(primary_key=True)
+    release_version = models.ForeignKey(ReleaseVersion, on_delete=models.DO_NOTHING, 
+                                           related_name='versionwise_reuse_stats', 
+                                           related_query_name="versionwise_reuse")
+    n_instances = models.IntegerField(null=True, blank=True)
+    n_versions = models.IntegerField(null=True, blank=True)
+    # TO DO: 
+    #passim_run = models.ForeignKey("PassimRun", blank=False, 
+    #                               related_name='passim_runs', related_query_name="passim_run",
+    #                               on_delete=models.DO_NOTHING)
+
+    def __str__(self):
+        return f"{self.release_version}: {self.n_instances}, {self.n_versions}"
 
 
 class ReleaseInfo(models.Model):
