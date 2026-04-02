@@ -283,7 +283,12 @@ class Command(BaseCommand):
             "version__manuscript__titles__name",
             "version__manuscript__manuscript_holding__names__name",
             "version__manuscript__manuscript_holding__country__names__name",
-            "version__manuscript__manuscript_holding__city__names__name"
+            "version__manuscript__manuscript_holding__city__names__name",
+            "version__text__authors__names__name",
+            "version__text__authors__names__normalized_name",
+            "version__text__titles__name",
+            "version__text__titles__normalized_name",
+
         ]
 
         self.test_lookups(LOOKUPS, qs)

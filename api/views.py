@@ -1047,11 +1047,8 @@ class ReleaseVersionListView(CustomListView):
     """
 
     search_fields = [
-        'analysis_priority', 'annotation_status',
-        'version__version_uri',        # also contains the version_code, source_coll__code, text_uri, author_uri and text__author__date_str!
-        # BUILDUP: UNCOMMENT:
-        #"version__text__titles_ar", "version__text__titles_lat", # contain all attested titles in a single string
-        #"version__text__author__author_ar", "version__text__author__author_lat", # contains all attested author names (incl. from the name elements)
+        'analysis_priority', 
+        'annotation_status',
         ]
 
 
@@ -1088,8 +1085,6 @@ class ReleaseVersionListView(CustomListView):
         # declared_filters_in = [f+"__in" for f in declared_filters]
         # # 4. add the default allowed parameters (like search, page, fields, ...):
         # all_allowed_parameters = allowed_parameters + declared_filters + declared_filters_in
-
-        print("THIS IS THE RELEASEVERSIONLISTVIEW")
 
         # Now check all elements in the query URL to check if they are valid:
         for p in self.request.GET:

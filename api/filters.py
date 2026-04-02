@@ -235,8 +235,19 @@ class ReleaseVersionSearchFilter(CustomSearchFilter):
         search_fields = super().get_search_fields(view, request)
         print("ReleaseVersionSearchFilter default search fields:", search_fields)
 
-        search_fields += ["version__manuscript__titles__name",
-                          "version__manuscript__titles__normalized_name",]
+        search_fields += [
+            'version__version_uri',        # also contains the version_code, source_coll__code, text_uri, author_uri and text__author__date_str!
+            "version__edition__ed_info",
+            'version__manuscript__titles__name',
+            'version__manuscript__titles__normalized_name',
+            "version__manuscript__manuscript_holding__names__name",
+            "version__manuscript__manuscript_holding__country__names__name",
+            "version__manuscript__manuscript_holding__city__names__name",
+            "version__text__authors__names__name",
+            "version__text__authors__names__normalized_name",
+            "version__text__titles__name",
+            "version__text__titles__normalized_name",
+            ]
 
         related_search_fields = search_fields + [ 
             "version__text__related_texts__text_uri", 
