@@ -35,6 +35,7 @@ urlpatterns = [
     path('<str:release_code>/version/all/', views.ReleaseVersionListView.as_view(), name='one-release-all-versions'),
     path('<str:release_code>/version/', views.ReleaseVersionListView.as_view(), name='one-release-all-versions'),
     path('<str:release_code>/version/<str:version_code>/', views.get_release_version, name='one-release-one-version'),
+    path('<str:release_code>/version-tsv/', views.version_tsv, name='one-release-version-tsv'),
 
     # BUILDUP: UNCOMMENT:
     # # text endpoints:  # TO DO: use other view for the texts  get_release_text

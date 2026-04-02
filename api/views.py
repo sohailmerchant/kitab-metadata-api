@@ -14,6 +14,8 @@ Documentation:
 * https://www.django-rest-framework.org/api-guide/views/#function-based-views
 """
 
+import csv
+import io
 import time
 
 from django.db.models import Q, Prefetch, CharField, TextField
@@ -69,7 +71,7 @@ allowed_parameters = [
 # fields to be excluded from search (because they are not string fields):
 excl_flds = [
     # numeric fields:
-    "id", "date", "date_AH", "date_CE", "tok_length", "char_length",
+    "id", "date", "date_AH", "date_CE",  "date_CE_end", "tok_length", "char_length",
     # foreign key fields:
     "text", "name_element", "version", "author", "text", "version_info",
     "related_persons", "related_places", "related_texts", "place_relations",
@@ -1065,8 +1067,7 @@ class ReleaseVersionListView(CustomListView):
     ordering_fields = [
         'tok_length', 
         'analysis_priority', 
-        # BUILDUP: UNCOMMENT:
-        # 'version__text__author__date', 
+        'version__text__author__date', 
         # 'version__text__title_lat_prefered', 
         # 'version__text__author__author_lat_prefered',
         # 'versionwise_reuse__n_instances'
@@ -1225,4 +1226,153 @@ def get_release_version(request, version_code, release_code=None):
         return Response(serializer.data)
     except Text.DoesNotExist:
         raise Http404
-    
+
+
+@api_view(['GET'])
+def version_tsv(request, release_code):
+    """Download all release versions for a release as a TSV file."""
+
+    # Prefetch preferred titles (text)
+    text_title_links = Prefetch(
+        'version__text__object_name_links',
+        queryset=ObjectNameLink.objects.filter(
+            is_preferred=True
+        ).select_related('object_name'),
+        to_attr='preferred_title_links'
+    )
+
+    # Prefetch preferred location names (manuscript holding)
+    location_name_links = Prefetch(
+        'version__manuscript__manuscript_holding__object_name_links',
+        queryset=ObjectNameLink.objects.filter(
+            is_preferred=True
+        ).select_related('object_name'),
+        to_attr='preferred_name_links'
+    )
+
+    # Prefetch authors with their death dates
+    author_death_dates = Prefetch(
+        'dates',
+        queryset=Date.objects.filter(
+            date_type__slug='death'
+        ).select_related('calendar'),
+        to_attr='death_dates'
+    )
+    authors_with_dates = Prefetch(
+        'version__text__authors',
+        queryset=Author.objects.prefetch_related(author_death_dates),
+        to_attr='prefetched_authors'
+    )
+
+    queryset = (
+        ReleaseVersion.objects
+        .filter(release_info__release_code=release_code)
+        .select_related(
+            'release_info',
+            'version__text',
+            'version__edition',
+            'version__manuscript__manuscript_holding',
+        )
+        .prefetch_related(
+            text_title_links,
+            location_name_links,
+            authors_with_dates,
+        )
+    )
+
+    # Apply the same filters as ReleaseVersionListView:
+    queryset = ReleaseVersionFilter(request.GET, queryset=queryset).qs
+    if request.GET.get('include_manuscripts', 'True').lower() == 'false':
+        queryset = queryset.filter(version__manuscript__isnull=True)
+
+    # Apply the same search filter as ReleaseVersionListView.
+    # _SearchView provides the base search_fields that ReleaseVersionSearchFilter
+    # reads via super().get_search_fields(view, request) before adding its own fields.
+    class _SearchView:
+        search_fields = [
+            'analysis_priority', 'annotation_status',
+            'version__version_uri',
+        ]
+    queryset = ReleaseVersionSearchFilter().filter_queryset(request, queryset, _SearchView())
+
+    def get_preferred_name(links, language):
+        for link in links:
+            if link.object_name.language == language:
+                return link.object_name.name
+        return ''
+
+    output = io.StringIO()
+    writer = csv.writer(output, delimiter='\t')
+
+    # Header row
+    writer.writerow([
+        'release_code', 'version_code', 'version_uri',
+        'pdf_url', 'language', 'analysis_priority', 'annotation_status',
+        'token_length', 'char_length', 'url',
+        'text_uri', 'text_tags', 'title_ar', 'title_lat',
+        'author_uri', 'author_date_AH', 'author_date_CE',
+        'location_uri', 'location_ar', 'location_lat', 'shelfmark',
+    ])
+
+    for rv in queryset:
+        v = rv.version
+        is_manuscript = v.manuscript is not None
+
+        # Book-specific fields
+        if not is_manuscript and v.text:
+            text_uri = v.text.text_uri
+            text_tags = v.text.tags
+            title_links = getattr(v.text, 'preferred_title_links', [])
+            title_ar = get_preferred_name(title_links, 'ar')
+            title_lat = get_preferred_name(title_links, 'lat')
+            authors = getattr(v.text, 'prefetched_authors', [])
+            if authors:
+                author = authors[0]
+                author_uri = author.author_uri
+                death_dates = getattr(author, 'death_dates', [])
+                ah_date = next((d.year for d in death_dates if d.calendar.slug == 'AH' and d.year), '')
+                ce_date = next((d.ce_start.year for d in death_dates if d.ce_start), '')
+            else:
+                author_uri = ah_date = ce_date = ''
+        else:
+            text_uri = text_tags = title_ar = title_lat = ''
+            author_uri = ah_date = ce_date = ''
+
+        # Manuscript-specific fields
+        if is_manuscript:
+            shelfmark = v.manuscript.shelfmark
+            holding = v.manuscript.manuscript_holding
+            location_uri = holding.loc_uri if holding else ''
+            name_links = getattr(holding, 'preferred_name_links', []) if holding else []
+            location_ar = get_preferred_name(name_links, 'ar')
+            location_lat = get_preferred_name(name_links, 'lat')
+        else:
+            shelfmark = location_uri = location_ar = location_lat = ''
+
+        writer.writerow([
+            rv.release_info.release_code,
+            v.version_code,
+            v.version_uri,
+            v.edition.pdf_url if v.edition else '',
+            v.language,
+            rv.analysis_priority,
+            rv.annotation_status,
+            rv.tok_length,
+            rv.char_length,
+            rv.url,
+            text_uri,
+            text_tags,
+            title_ar,
+            title_lat,
+            author_uri,
+            ah_date,
+            ce_date,
+            location_uri,
+            location_ar,
+            location_lat,
+            shelfmark,
+        ])
+
+    response = HttpResponse(output.getvalue(), content_type='text/tab-separated-values')
+    response['Content-Disposition'] = f'attachment; filename="{release_code}-versions.tsv"'
+    return response
