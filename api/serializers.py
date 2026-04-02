@@ -1383,6 +1383,7 @@ class AuthorSerializer(FlexFieldsModelSerializer):
             "date": None,
             "date_AH": None,
             "date_CE": None,
+            "date_CE_end": None,
             "date_str": "",
         }
 
@@ -1418,6 +1419,7 @@ class AuthorSerializer(FlexFieldsModelSerializer):
                 ce_death = ce_death[0]
                 data["date_str"] = ce_death.date_str or ""
                 data["date_CE"] = int(ce_death.ce_start.year)
+                data["date_CE_end"] = int(ce_death.ce_end.year)
                 # calculate the hijri death date from the CE death date
                 data["date_AH"] = int((data["date_CE"]-621.5643) * (33/32))
                 data["date"] = data["date_AH"]
@@ -1429,8 +1431,10 @@ class AuthorSerializer(FlexFieldsModelSerializer):
             if ce_death:
                 ce_death = ce_death[0]
                 data["date_CE"] = int(ce_death.ce_start.year) if ce_death.ce_start else None
+                data["date_CE_end"] = int(ce_death.ce_end.year) if ce_death.ce_end else None
             else:
                 data["date_CE"] = int(hijri_death.ce_start.year) if hijri_death.ce_start else None
+                data["date_CE_end"] = int(hijri_death.ce_end.year) if hijri_death.ce_end else None
 
         return data
 
