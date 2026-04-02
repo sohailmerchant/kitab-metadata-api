@@ -1171,6 +1171,11 @@ class CorpusInsights(models.Model):
     largest_10_books = models.JSONField(null=True, blank=True)
     release_info = models.ForeignKey("ReleaseInfo", related_name="corpus_statistics", 
                                 related_query_name="corpus_statistics", on_delete=models.DO_NOTHING)
+    subcorpora = models.JSONField(null=True, blank=True,
+        help_text="List of subcorpus codes present in this release, e.g. ['ARA', 'PER', 'MSS']")
+    languages = models.JSONField(null=True, blank=True,
+        help_text="List of all language codes present in this release, e.g. ['ara', 'per']")
+    has_manuscripts = models.BooleanField(null=True, blank=True, default=False)
 
     def __str__(self):
         return f"{self.release_info} corpus insights"
