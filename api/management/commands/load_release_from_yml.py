@@ -88,6 +88,9 @@ with open("meta/calendars.csv", encoding="utf-8") as file:
             IMPORT_STATS["calendar"] = IMPORT_STATS.get("calendar", 0) + 1
         CALENDARS[d["slug"]] = cal
 
+LANG_SCRIPT_NAMES = {}  # will be populated in `load_language_codes`
+LANG_SCRIPT_DESCR = {}
+
 # load Maxim's tags into a dictionary
 #text_tags = tags2dic(tags_fp)
 #print("tags loaded for", len(text_tags), "files")
@@ -97,9 +100,8 @@ class Command(BaseCommand):
         # if testing, only upload text reuse data for Tabari.Tarikh and MalikIbnAnas.Muwatta
         test = False
 
-        # if uploading only text reuse stats: set upload to False:
-        meta_upload=False
-        CorpusInsights.objects.all().delete()
+        # if uploading only corpus insights: set upload to False:
+        meta_upload=True
 
         # provide the release details here:
 
@@ -454,6 +456,7 @@ def load_language_codes(fp):
             if created:
                 IMPORT_STATS["script"] = IMPORT_STATS.get("script", 0) + 1
             # get or create the language-script combo item:
+             
             combo_code = row["code"]
             name = row["name"]
             descr = row["description"]
@@ -468,6 +471,10 @@ def load_language_codes(fp):
             )
             if created:
                 IMPORT_STATS["languageScriptCombo"] = IMPORT_STATS.get("languageScriptCombo", 0) + 1
+            
+            LANG_SCRIPT_NAMES[combo_code] = name
+            LANG_SCRIPT_DESCR[combo_code] = descr
+            
 
 
 def load_relations_definitions(fp):
@@ -695,12 +702,14 @@ def get_or_create_name_obj(name, language, name_type):
         normalized_name = name
     
     # create the name object:
-    nm, _created = ObjectName.objects.get_or_create(
+    d = dict(
         name=name,
         normalized_name=normalized_name,
-        language=language,
-        name_type=name_type
+        language=language
     )
+    if name_type:
+        d["name_type"] = name_type
+    nm, _created = ObjectName.objects.get_or_create(**d)
     if _created:
         IMPORT_STATS["objectName"] = IMPORT_STATS.get("objectName", 0) + 1
         if VERBOSE:
@@ -951,6 +960,7 @@ def add_holding_names(hm, record):
             lang_code = language.lower()[:2]
             for name in record["inst_names"][language]:
                 nm = get_or_create_name_obj(name, lang_code, "institution_name")
+                link_name_to_obj(nm, loc_obj=hm, is_preferred=False)
     else:
         for name in record['institution_ar'].split(" :: "):
             nm = get_or_create_name_obj(name, "ar", "institution_name")
@@ -966,6 +976,7 @@ def add_city_names(city_obj, record):
             lang_code = language.lower()[:2]
             for name in record["city_names"][language]:
                 nm = get_or_create_name_obj(name, lang_code, "city_name")
+                link_name_to_obj(nm, place_obj=city_obj, is_preferred=False)
     else:
         for name in record['city_ar'].split(" :: "):
             nm = get_or_create_name_obj(name, "ar", "city_name")
@@ -976,28 +987,21 @@ def add_city_names(city_obj, record):
 
 def add_author_names(am, record):
     """Add various names to an author object"""
-    # first add the prefered names:
-    for lang in ["ar", "lat"]:
-        name = record.get(f'author_{lang}_prefered', "")
-        if name:
-            nm = get_or_create_name_obj(name, lang, "shuhra")
-            link_name_to_obj(nm, author_obj=am, is_preferred=True)
-        else:
-            msg = f'No value for author_{lang}_prefered in record {record}'
-            if VERBOSE:
-                print(msg)
-            logger.warning(msg)
-    name = record['author_from_uri']
-    nm = get_or_create_name_obj(name, "lat", "from_uri")
-    link_name_to_obj(nm, author_obj=am, is_preferred=False, source="URI")
+    # first add shuhras, which should be the prefered name: 
+    for lang in record["name_elements"]:
+        d = record["name_elements"][lang]
+        if "shuhra" in d and d["shuhra"]:
+                name = d["shuhra"]
+                nm = get_or_create_name_obj(name, lang.lower(), "shuhra")
+                link_name_to_obj(nm, author_obj=am, is_preferred=True)
 
-    # improved this using the record["name_elements"] dictionary
+    # Then add other name elements, from the record["name_elements"] dictionary
     # (key: language, value: dictionary of name elements)
     #print(json.dumps(record, indent=2, ensure_ascii=False))
     for lang in record["name_elements"]:
         d = record["name_elements"][lang]
         # set one of the following (in this order) as the prefered name:
-        pref_els = ["shuhra","full_name", "nisba"] 
+        pref_els = ["full_name", "nisba"] 
         has_prefered = ObjectNameLink.objects.filter(
             author=am,
             is_preferred=True,
@@ -1018,7 +1022,28 @@ def add_author_names(am, record):
             if name_el not in pref_els:
                 nm = get_or_create_name_obj(name, lang.lower(), name_el.lower())
                 link_name_to_obj(nm, author_obj=am, is_preferred=False)
+
+    # then add any prefered names that are not yet included:
+    for lang in ["ar", "lat"]:
+        has_prefered = ObjectNameLink.objects.filter(
+            author=am,
+            is_preferred=True,
+            object_name__language=lang.lower()
+        ).exists()
+        name = record.get(f'author_{lang}_prefered', "")
+        if name:
+            nm = get_or_create_name_obj(name, lang, "")
+            link_name_to_obj(nm, author_obj=am, is_preferred=not(has_prefered))
+        else:
+            msg = f'No value for author_{lang}_prefered in record {record}'
+            if VERBOSE:
+                print(msg)
+            logger.warning(msg)
     
+    # finally, add the name from the URI:
+    name = record['author_from_uri']
+    nm = get_or_create_name_obj(name, "lat", "from_uri")
+    link_name_to_obj(nm, author_obj=am, is_preferred=False, source="URI")
     
     # for name in record['author_ar'].split(" :: "):
     #     nm = get_or_create_name_obj(name, "ar", "full_name")
@@ -1301,30 +1326,30 @@ def attach_dates_to_author(author, date_objs):
     links = [DateLink(date=d, author=author) for d in date_objs]
     DateLink.objects.bulk_create(links, ignore_conflicts=True)
 
-def split_tag_list(tag_list):
-    version_tags = []
-    text_tags = []
-    author_tags = []
+# def split_tag_list(tag_list):
+#     version_tags = []
+#     text_tags = []
+#     author_tags = []
  
-    for tag in tag_list:
-        if "MARKDOWN" in tag:
-            version_tags.append("MARKDOWN")
-        elif "COMPLETED" in tag:
-            version_tags.append("COMPLETED")
-        elif "INPROGRESS" in tag:
-            version_tags.append("INPROGRESS")
-        elif "CLEANED_VERSION" in tag:
-            version_tags.append("CLEANED_VERSION")
-        elif "NO_MAJOR_ISSUES" in tag:
-            version_tags.append("NO_MAJOR_ISSUES")
-        #elif "born@" in tag or "died@" in tag or "resided@" in tag or "visited@" in tag:
-        elif re.findall("born@|died@|resided@|visited@", tag):
-            author_tags.append(tag)
-        elif "@" in tag or tag.startswith("_"):
-            text_tags.append(tag)
-        else:
-            version_tags.append(tag)
-    return version_tags, text_tags, author_tags
+#     for tag in tag_list:
+#         if "MARKDOWN" in tag:
+#             version_tags.append("MARKDOWN")
+#         elif "COMPLETED" in tag:
+#             version_tags.append("COMPLETED")
+#         elif "INPROGRESS" in tag:
+#             version_tags.append("INPROGRESS")
+#         elif "CLEANED_VERSION" in tag:
+#             version_tags.append("CLEANED_VERSION")
+#         elif "NO_MAJOR_ISSUES" in tag:
+#             version_tags.append("NO_MAJOR_ISSUES")
+#         #elif "born@" in tag or "died@" in tag or "resided@" in tag or "visited@" in tag:
+#         elif re.findall("born@|died@|resided@|visited@", tag):
+#             author_tags.append(tag)
+#         elif "@" in tag or tag.startswith("_"):
+#             text_tags.append(tag)
+#         else:
+#             version_tags.append(tag)
+#     return version_tags, text_tags, author_tags
 
 def clean(s):
     s = re.sub(" *¶ *", " ", s)
@@ -1874,9 +1899,9 @@ def add_version_language(vm, record):
             print(msg)
             logger.warning(msg)
         vm.language_script_combo.add(lm)
-    if "," in record["language"]:
-        print("multiple languages:", vm.language_script_combo.all())
-        #input("CONTINUE?")
+    #if "," in record["language"]:
+    #    print("multiple languages:", vm.language_script_combo.all())
+    #    #input("CONTINUE?")
 
 def get_or_create_author(author_uri, record=dict(), part_of_obj=None):  
     try:
@@ -1930,34 +1955,34 @@ def get_or_create_author(author_uri, record=dict(), part_of_obj=None):
     return am, am_created
 
 def upload_book_corpus_meta(author_d, authorship_obj, release_obj, part_of_obj, 
-                            book_type_obj, worldcat_obj, base_url, release_code, insights):
+                            book_type_obj, worldcat_obj, base_url, release_code):
     author_record = collect_author_yml_data(author_d)
     author_uri = author_record["author_uri"]
     print(release_code, author_uri)
 
     am, am_created = get_or_create_author(author_uri, author_record, part_of_obj)
-    insights["n_authors"] = insights.get("n_authors", 0) + 1
-    if am_created:
-        insights["n_new_authors"] = insights.get("n_new_authors", 0) + 1
+    # insights["n_authors"] = insights.get("n_authors", 0) + 1
+    # if am_created:
+    #     insights["n_new_authors"] = insights.get("n_new_authors", 0) + 1
     for book_d in author_d["books"]:
         book_record = collect_text_yml_data(book_d)
         text_uri = book_record["text_uri"]
         tm, tm_created = get_or_create_book(text_uri, authorship_obj, book_type_obj, 
                                 book_record, am, part_of_obj)
-        insights["n_books"] = insights.get("n_books", 0) + 1
-        if tm_created:
-            insights["n_new_books"] = insights.get("n_new_books", 0) + 1
+        # insights["n_books"] = insights.get("n_books", 0) + 1
+        # if tm_created:
+        #     insights["n_new_books"] = insights.get("n_new_books", 0) + 1
         for version_d in book_d["versions"]:
             version_record = collect_version_yml_data(version_d, base_url)
             version_uri = version_record["version_uri"]
             vm, vm_created = get_or_create_version(version_record, release_obj, 
                                            worldcat_obj, tm=tm)
-            insights["n_versions"] = insights.get("n_versions", 0) + 1
-            if vm_created:
-                insights["n_new_versions"] = insights.get("n_new_versions", 0) + 1
+            # insights["n_versions"] = insights.get("n_versions", 0) + 1
+            # if vm_created:
+            #     insights["n_new_versions"] = insights.get("n_new_versions", 0) + 1
 
 def upload_ms_corpus_meta(loc_d, authorship_obj, release_obj, part_of_obj, 
-                          worldcat_obj, base_url, release_code, insights):
+                          worldcat_obj, base_url, release_code):
     # check if the version uri is already in the database:
     #print(record)
     loc_record =  collect_loc_yml_data(loc_d)
@@ -2216,11 +2241,11 @@ def upload_release_meta(meta_fp, base_url, release_info,
             if uri.startswith("MS"):
                 upload_ms_corpus_meta(d1, authorship_obj, release_obj, part_of_obj, 
                                       worldcat_obj, base_url, 
-                                      release_info["release_code"], insights)
+                                      release_info["release_code"])
             else:
                 upload_book_corpus_meta(d1, authorship_obj, release_obj, part_of_obj, 
                                         book_type_obj, worldcat_obj, base_url, 
-                                        release_info["release_code"], insights)
+                                        release_info["release_code"])
                 
     
 
@@ -2453,8 +2478,11 @@ def create_corpus_insights(json_list, release_obj, pri_indicator=True):
     )
     pri_book_sizes = []
     book_sizes = []
-    for d1 in json_list:
-        if "00#AUTH#URI######:" in d1:
+    subcorpora = set()
+    all_languages = set()
+    has_manuscripts = False
+    for d1 in json_list: 
+        if "00#AUTH#URI######:" in d1:  # BOOK CORPUS !
             insights["number_of_authors"] += 1
             for book_d in d1.get("books", []):
                 insights["number_of_books"] += 1
@@ -2462,6 +2490,9 @@ def create_corpus_insights(json_list, release_obj, pri_indicator=True):
                 for version_d in book_d.get("versions", []):
                     version_uri = version_d["00#VERS#URI######:"]
                     languages = re.findall("[a-z]{3}", version_uri.split("-")[-1])
+                    for lang in languages:
+                        subcorpora.add(lang)
+                        all_languages.add(lang)
                     word_count = int(version_d.get("00#VERS#LENGTH###:"), 0)
                     book_sizes.append((word_count, version_uri))
                     add_insight(insights, "number_of_versions", languages)
@@ -2479,14 +2510,18 @@ def create_corpus_insights(json_list, release_obj, pri_indicator=True):
                     elif ".mARkdown" in extensions or "mARkdown" in extensions:
                         add_insight(insights, "number_of_markdown_versions", languages)
 
-        elif "00#LOC#URI#######:" in d1:
+        elif "00#LOC#URI#######:" in d1:  # MANUSCRIPT CORPUS !
             insights["number_of_manuscript_holdings"] += 1
+            subcorpora.add("MSS")
+            has_manuscripts = True
             for ms_d in d1.get("manuscripts", []):
                 pri_versions = get_pri_versions(ms_d)
                 insights["number_of_manuscripts"] += 1
                 for version_d in ms_d.get("transcriptions", []):
                     version_uri = version_d["00#TRNS#URI######:"]
                     languages = re.findall("[a-z]{3}", version_uri.split("-")[-1])
+                    for lang in languages:
+                        all_languages.add(lang)
                     word_count = int(version_d.get("00#TRNS#LENGTH###:"), 0)
                     book_sizes.append((word_count, version_uri))
                     add_insight(insights, "number_of_versions", languages)
@@ -2524,6 +2559,10 @@ def create_corpus_insights(json_list, release_obj, pri_indicator=True):
     insights["largest_10_books"] = largest_10_books
     insights["largest_book_size"] = pri_book_sizes[0][0]
     insights["largest_book"] = pri_book_sizes[0][1]
+    insights["subcorpora"] = list(subcorpora)
+    all_languages = {lang: f"{LANG_SCRIPT_NAMES[lang]} ({LANG_SCRIPT_DESCR[lang]})" for lang in all_languages}
+    insights["languages"] = all_languages
+    insights["has_manuscripts"] = has_manuscripts
 
     CorpusInsights.objects.get_or_create(
         release_info=release_obj,
