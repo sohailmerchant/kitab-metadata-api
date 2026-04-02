@@ -1187,7 +1187,6 @@ class VersionSerializer(FlexFieldsModelSerializer):
     and includes the text and author metadata"""
     text = TextSerializer(read_only=True)
     manuscript = ManuscriptSerializer(read_only=True)
-    # BUILDUP: UNCOMMENT:
     edition = ShallowEditionSerializer(read_only=True)
     release_versions = ShallowReleaseVersionSerializer(read_only=True, many=True)
     external_ids = serializers.SerializerMethodField()
@@ -1607,15 +1606,20 @@ class ShallowAuthorSerializer(AuthorSerializer):
 
 
 class CorpusInsightsSerializer(serializers.ModelSerializer):
+    release_code = serializers.CharField(source="release_info.release_code", read_only=True)
+
     class Meta:
         model = CorpusInsights
         depth = 1
 
-        fields = ["id", "release_info", "number_of_authors", "number_of_books", "number_of_versions", 
+        fields = ["id", "release_code", "release_info", "number_of_authors",
+                  "number_of_books", "number_of_versions", 
+                  "number_of_manuscript_holdings", "number_of_manuscripts",
                   "number_of_pri_versions", "number_of_sec_versions",
                   "number_of_markdown_versions", "number_of_completed_versions",
                   "total_word_count", "total_word_count_pri", 
-                  "largest_book", "largest_10_books"]
+                  "largest_book", "largest_book_size", 
+                  "largest_10_books", "subcorpora", "languages", "has_manuscripts"]
 
 # BUILDUP: UNCOMMENT:
 # class ReleaseCodeOnlySerializer(serializers.ModelSerializer):
