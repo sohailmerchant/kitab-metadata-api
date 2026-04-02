@@ -1,5 +1,6 @@
 """Utility functions and constants for use in commands scripts"""
 
+import copy
 import json
 import os
 import re
@@ -561,10 +562,10 @@ def collect_version_yml_data(vers_d, base_url, corpus_folder=None,
     # - url:
     if corpus_folder: # data in 25Y folders
         url = version_fp.replace(corpus_folder, base_url).replace("\\","/")
-        url = url.replace("AH/data", "AH/master/data")
+        #url = url.replace("AH/data", "AH/master/data")
     else:
-        url = base_url+version_fp
-        url = url.replace("/data/", "/master/data/")
+        url = base_url.strip("/") + "/" + version_fp
+        #url = url.replace("/data/", "/master/data/")
 
     # annotation status:
 
@@ -1079,17 +1080,21 @@ def parse_val_as_str(d, k, default_start=None, default_return=""):
         msg = f"parsing error: key '{k}' not found in {json.dumps(d, ensure_ascii=False)}"
         logger.warning(msg)
         print(msg)
-        return default_return
+        #return default_return
+        return copy.deepcopy(default_return)
     if not val or val.lower() == "none" : 
-        return default_return
+        #return default_return
+        return copy.deepcopy(default_return)
     if default_start and val.startswith(default_start):
-        return default_return
+        #return default_return
+        return copy.deepcopy(default_return)
     return val
 
 def parse_val_as_int(d, k, default_start=None, default_return=0):
     val = parse_val_as_str(d, k, default_start=default_start)
     if not val: 
-        return default_return
+        #return default_return
+        return copy.deepcopy(default_return)
     try: 
         return int(val)
     except:
@@ -1097,7 +1102,8 @@ def parse_val_as_int(d, k, default_start=None, default_return=0):
         msg += f"Got '{val}'"
         print(msg)
         logger.warning(msg)
-        return default_return
+        #return default_return
+        return copy.deepcopy(default_return)
 
 
 def parse_val_as_list(d, k, default_start=None, default_return=[], 
@@ -1125,7 +1131,8 @@ def parse_val_as_list(d, k, default_start=None, default_return=[],
     # first, get the value as a string:
     val = parse_val_as_str(d, k, default_start=default_start, default_return=default_return)
     if not val:
-        return default_return
+        #return default_return
+        return copy.deepcopy(default_return)
     
     # then, create a list
     vals = []
@@ -1199,7 +1206,8 @@ def parse_modifier_vals(d, key_regex, default_start=None, default_return={},
         if re.findall(key_regex, k):
             val = parse_val_as_str(d, k, default_start=default_start)
             if not val:
-                return default_return
+                #return default_return
+                return copy.deepcopy(default_return)
             
             # get the modifier (AH, CE, MM, CM, ...) from the key:
             #_, _, _, mod = re.split(r"#+", k.strip(":"))
@@ -1266,7 +1274,7 @@ def parse_language_vals(d, key_component, default_start=None, default_return=({}
         if re.findall(key_component, k):
             val = parse_val_as_str(d, k, default_start=default_start)
             if not val:
-                return default_return
+                return copy.deepcopy(default_return)
             
             # get the language from the key:
             #_, _, _, lang = re.split(r"#+", k.strip(":"))
@@ -1639,10 +1647,11 @@ def collect_transcr_yml_data(transcr_d, base_url, corpus_folder=None,
     # - url:
     if corpus_folder: # data in 25Y folders
         url = transcr_fp.replace(corpus_folder, base_url).replace("\\","/")
-        url = url.replace("AH/data", "AH/master/data")
+        #url = url.replace("AH/data", "AH/master/data")
     else:
-        url = base_url+transcr_fp
-        url = url.replace("/data/", "/master/data/")
+        url = base_url.strip("/") + "/" + transcr_fp
+        #url = base_url+transcr_fp
+        #url = url.replace("/data/", "/master/data/")
 
     # - annotation status:
     if not ext:
