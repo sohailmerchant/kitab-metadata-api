@@ -64,7 +64,10 @@ allowed_parameters = [
     "page", 
     "page_size",
     "fields",
-    "search_fields"  # allowed options: "related", "extended"
+    "search_fields", # allowed options: "related", "extended"
+    #"include_ocr",
+    #"include_manuscripts"
+    "text_type"
 ] 
 
 
@@ -1107,10 +1110,33 @@ class ReleaseVersionListView(CustomListView):
         else:
             queryset = ReleaseVersion.objects.all()
 
-        # exclude manuscript versions if include_manuscripts=False:
-        include_manuscripts = self.request.GET.get("include_manuscripts", "True")
-        if include_manuscripts.lower() == "false":
-            queryset = queryset.filter(version__manuscript__isnull=True)
+        # # exclude manuscript versions if include_manuscripts=False:
+        # include_manuscripts = self.request.GET.get("include_manuscripts", "True")
+        # if include_manuscripts.lower() == "false":
+        #     queryset = queryset.filter(version__manuscript__isnull=True)
+
+        # include_ocr = self.request.GET.get("include_ocr", None)
+        # print('include_ocr:', self.request.query_params['include_ocr'])
+        # # exclude versions with uncorrected OCR if include_ocr=false:
+        # if include_ocr and include_ocr.lower() == "false":
+        #     queryset = queryset.filter(uncorrected_ocr=False)
+
+        # if no text_types parameter is present, show all;
+        # otherwise, implement an OR logic:
+        text_types = self.request.GET.get('text_type', '')
+        if text_types:
+            print("text_types:", text_types)
+            types = [t.strip() for t in text_types.split(',') if t.strip()]
+            q = Q()
+            if 'manuscripts' in types:
+                q |= Q(version__manuscript__isnull=False)
+            if 'ocr' in types:
+                q |= Q(uncorrected_ocr=True)
+            if 'other' in types:
+                q |= Q(version__manuscript__isnull=True, uncorrected_ocr=False)
+            queryset = queryset.filter(q)
+
+
 
         return queryset
 
