@@ -906,7 +906,7 @@ class ShallowReleaseVersionSerializer(FlexFieldsModelSerializer):
         model = ReleaseVersion
         #fields = ('__all__')
         fields = ("id", "char_length", "tok_length", "url", "analysis_priority", 
-                  "annotation_status", "tags", "notes", "release_info", "version")
+                  "annotation_status", "tags", "notes", "release_info", "version", "uncorrected_ocr")
         depth=1
 
 
@@ -1827,6 +1827,7 @@ class ReleaseVersionSerializer(serializers.ModelSerializer):
             "url": json_rep["url"],
             "analysis_priority": json_rep["analysis_priority"],
             "annotation_status": json_rep["annotation_status"],
+            "uncorrected_ocr": json_rep["uncorrected_ocr"],
             "tags": json_rep["tags"],
             "notes": json_rep["notes"],
             **inverse_foreign_keys
@@ -1849,7 +1850,7 @@ class ReleaseVersionSerializer(serializers.ModelSerializer):
         model = ReleaseVersion
         depth = 6
         fields = ("id", "char_length", "tok_length", "url", "analysis_priority", 
-                  "annotation_status", "tags", "notes", "release_info", "version")
+                  "annotation_status", "tags", "notes", "release_info", "version", "uncorrected_ocr")
 
 
 class ReleaseInfoSerializer(serializers.ModelSerializer):
