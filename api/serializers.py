@@ -792,7 +792,7 @@ class TextSerializer(FlexFieldsModelSerializer):
                 new_d["related_place_id"] = place_obj.id
                 # faster than using first(), using prefetched names from the queryset: 
                 names = list(place_obj.names.all())
-                new_d["related_place_name"] = names[0] if names else place_obj.code
+                new_d["related_place_name"] = names[0].name if names else place_obj.code
                 related_places.append(new_d)
 
         # combine the categories into a dictionary that will be added to the json representation:
@@ -1788,8 +1788,7 @@ class ReleaseVersionSerializer(serializers.ModelSerializer):
         # select the versions that are part of the current version_instance:
         parts = ReleaseVersion.objects\
             .filter(version__part_of__version_uri=instance.version.version_uri)
-        return {"parts": parts}
-        #return {"parts": sorted(list(set([d.version.version_uri for d in parts])))}
+        return {"parts": sorted(list(set([d.version.version_uri for d in parts])))}
         # # get the bookwise text reuse statistics: 
         # version_reuse_stats = VersionwiseReuseStats.objects\
         #     .filter(release_version=instance).first()
