@@ -36,7 +36,7 @@ from .models import Author, RelationType, A2BRelation, ReleaseInfo, Date, \
                     ObjectName, ObjectNameLink, \
                     Text, Version, ReleaseVersion, SourceCollectionDetails, Edition, \
                     ManuscriptHolding, Place, Manuscript, ExternalID, \
-                    ExternalIDLink, CorpusInsights
+                    ExternalIDLink, CorpusInsights, VersionwiseReuseStats
                     # DateLink, AuthorshipRoleLink, \
                     # TextReuseStats, \
                     # GitHubIssue, VersionwiseReuseStats
@@ -1770,17 +1770,24 @@ class CorpusInsightsSerializer(serializers.ModelSerializer):
 
 
 
+class VersionwiseReuseStatsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = VersionwiseReuseStats
+        fields = ("n_instances", "n_versions")
+
+
 class ReleaseVersionSerializer(serializers.ModelSerializer):
     """Serializes the ReleaseVersion table in the same way as the
     VersionSerializer does. This is necessary because release-version-
     specific metadata cannot be reliably filtered starting from the
-    Version model for a specific release. 
+    Version model for a specific release.
     E.g., if one filters the versions based on "pri",
     all versions that have "pri" priority in at least one release
-    will be returned, even if it has "sec" priority in the 
-    requested release. 
+    will be returned, even if it has "sec" priority in the
+    requested release.
     """
     version = VersionSerializer(read_only=True)
+    reuse_stats = VersionwiseReuseStatsSerializer(source="versionwise_reuse_stats", many=True, read_only=True)
 
     def serialize_relations(self, instance):
         """serialize a version's parts 
@@ -1829,6 +1836,7 @@ class ReleaseVersionSerializer(serializers.ModelSerializer):
             "uncorrected_ocr": json_rep["uncorrected_ocr"],
             "tags": json_rep["tags"],
             "notes": json_rep["notes"],
+            "reuse_stats": json_rep["reuse_stats"],
             **inverse_foreign_keys
         }
         # make the version dictionary the main part of the returned dictionary:
@@ -1848,8 +1856,9 @@ class ReleaseVersionSerializer(serializers.ModelSerializer):
     class Meta:
         model = ReleaseVersion
         depth = 6
-        fields = ("id", "char_length", "tok_length", "url", "analysis_priority", 
-                  "annotation_status", "tags", "notes", "release_info", "version", "uncorrected_ocr")
+        fields = ("id", "char_length", "tok_length", "url", "analysis_priority",
+                  "annotation_status", "tags", "notes", "release_info", "version",
+                  "uncorrected_ocr", "reuse_stats")
 
 
 class ReleaseInfoSerializer(serializers.ModelSerializer):
