@@ -114,7 +114,7 @@ class CustomSearchFilter(filters.SearchFilter):
         # get the search string in the standard Django way:
         params = request.query_params.get(self.search_param, '')
 
-        print("search params, in CustomSearchFilter:", params)
+        #print("search params, in CustomSearchFilter:", params)
         
         # normalize the search string:
         # (if the query string does not contain "&normalize=False")
@@ -140,7 +140,7 @@ class VersionSearchFilter(CustomSearchFilter):
 
         # get the default search fields:
         search_fields = super().get_search_fields(view, request)
-        print("VersionSearchFilter: default search fields", search_fields)
+        #print("VersionSearchFilter: default search fields", search_fields)
 
         related_search_fields = search_fields + [ 
             # ALSO SEARCH URI, TITLE AND AUTHOR NAMES OF RELATED TEXTS:
@@ -212,10 +212,10 @@ class VersionSearchFilter(CustomSearchFilter):
             return search_fields
         elif search_fields_q == "extended":
             search_fields = extended_search_fields
-            print("SEARCHING IN EXTENDED SEARCH FIELDS!")
+            #print("SEARCHING IN EXTENDED SEARCH FIELDS!")
         elif search_fields_q == "related":
             search_fields = related_search_fields
-            print("SEARCHING IN RELATED SEARCH FIELDS!")
+            #print("SEARCHING IN RELATED SEARCH FIELDS!")
         # perhaps a last option could be added: user/app could send the desired search fields as a comma-separated list
 
         return search_fields
@@ -233,9 +233,9 @@ class ReleaseVersionSearchFilter(CustomSearchFilter):
 
         # get the default search fields:
         search_fields = super().get_search_fields(view, request)
-        print("ReleaseVersionSearchFilter default search fields:", search_fields)
+        #print("ReleaseVersionSearchFilter default search fields:", search_fields)
 
-        search_fields += [
+        search_fields = search_fields + [
             'version__version_uri',        # also contains the version_code, source_coll__code, text_uri, author_uri and text__author__date_str!
             "version__edition__ed_info",
             'version__manuscript__titles__name',
@@ -316,14 +316,14 @@ class ReleaseVersionSearchFilter(CustomSearchFilter):
         # check whether the user wants to use other search fields than the basic search fields:
         search_fields_q = request.query_params.get('search_fields', "")
         if not search_fields_q:
-            print("SEARCHING IN BASIC SEARCH FIELDS!")
+            #print("SEARCHING IN BASIC SEARCH FIELDS!", search_fields)
             return search_fields
         elif search_fields_q == "extended":
             search_fields = extended_search_fields
-            print("SEARCHING IN EXTENDED SEARCH FIELDS!")
+            #print("SEARCHING IN EXTENDED SEARCH FIELDS!")
         elif search_fields_q == "related":
             search_fields = related_search_fields
-            print("SEARCHING IN RELATED SEARCH FIELDS!")
+            #print("SEARCHING IN RELATED SEARCH FIELDS!")
         # perhaps a last option could be added: user/app could send the desired search fields as a comma-separated list
 
         return search_fields
