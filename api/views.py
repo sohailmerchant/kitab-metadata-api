@@ -1107,9 +1107,10 @@ class ReleaseVersionListView(CustomListView):
         if release_code:
             queryset = ReleaseVersion.objects\
                 .filter(release_info__release_code=release_code)\
+                .order_by('version__version_uri')\
                 .distinct()
         else:
-            queryset = ReleaseVersion.objects.all()
+            queryset = ReleaseVersion.objects.order_by('version__version_uri')
 
         # # exclude manuscript versions if include_manuscripts=False:
         # include_manuscripts = self.request.GET.get("include_manuscripts", "True")
