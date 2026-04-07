@@ -244,6 +244,9 @@ translitArabic = {
     'ả' : ' َ ',  # final fatḥaŧ
     'ỉ' : ' ِ ',  # final ḍammaŧ
     'ủ' : ' ُ ',  # final kasraŧ 
+# punctuation:
+    ',': '،',
+    ';': '؛',
     }
 
 arabicbetacode = {
