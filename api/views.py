@@ -1068,6 +1068,7 @@ class ReleaseVersionListView(CustomListView):
         'tok_length', 
         'analysis_priority', 
         'version__text__author__date', 
+        'versionwise_reuse__n_instances'
         # 'version__text__title_lat_prefered', 
         # 'version__text__author__author_lat_prefered',
         # 'versionwise_reuse__n_instances'

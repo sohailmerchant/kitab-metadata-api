@@ -288,6 +288,7 @@ class Command(BaseCommand):
             "version__text__authors__names__normalized_name",
             "version__text__titles__name",
             "version__text__titles__normalized_name",
+            "versionwise_reuse__n_instances",
 
         ]
 

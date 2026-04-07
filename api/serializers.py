@@ -1787,7 +1787,13 @@ class ReleaseVersionSerializer(serializers.ModelSerializer):
     requested release.
     """
     version = VersionSerializer(read_only=True)
-    reuse_stats = VersionwiseReuseStatsSerializer(source="versionwise_reuse_stats", many=True, read_only=True)
+    reuse_stats = serializers.SerializerMethodField()
+
+    def get_reuse_stats(self, instance):
+        stats = instance.versionwise_reuse_stats.first()
+        if stats:
+            return VersionwiseReuseStatsSerializer(stats).data
+        return None
 
     def serialize_relations(self, instance):
         """serialize a version's parts 
