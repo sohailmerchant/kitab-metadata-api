@@ -30,6 +30,7 @@ class ObjectName(models.Model):
             models.Index(fields=["name"]),
             models.Index(fields=["normalized_name"]),
         ]
+        unique_together = [['name', 'normalized_name', 'language', 'name_type']]
 
     def __str__(self):
         return f"{self.language or 'und'}: {self.name}"
