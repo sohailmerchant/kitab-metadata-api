@@ -1,19 +1,24 @@
-"""WORK IN PROGRESS, CONVERTING FROM CSV INPUT...
-
-This script uploads the metadata of a single release to the database,
+"""
+This script uploads the metadata of one or more releases to the database,
 based on a json representation of all yml files in a release.
 
-Provide the relevant inputs for the script in the Command.handle() function: e.g., 
-    release_code = "2025.1.9"
-    release_date = datetime.date(2025, 12, 30) # YYYY, M, D
-    meta_fp = "meta/release-2025_1_9_wNoor.json"
-    base_url = "https://raw.githubusercontent.com/OpenITI/RELEASE/v2025.1.9/data"
-    zenodo_link = "https://zenodo.org/records/17767721"
-    release_notes_fp = "meta/release_notes_2025-1-9.txt"
-    reuse_data_fp = None
-    reuse_data_base_url = "http://dev.kitab-project.org/2025.1.9-pairwise/"
+NB: To generate that json file, use this script: api/util/collect_release_yml_json.py
 
-NB: for the metadata file, use the _wNoor version, non-merged.
+Provide the relevant inputs for the script in the Command.handle() function: e.g., 
+    releases = [
+        dict(
+            release_code = "2021.2.5",
+            release_date = datetime.date(2021, 10, 18), # YYYY, M, D
+            meta_fp = "meta/OpenITI_metadata_2021-2-5_wNoor.json",
+            base_url = "https://raw.githubusercontent.com/OpenITI/RELEASE/v2021.2.5/data",
+            zenodo_link = "https://zenodo.org/record/5550338",
+            release_notes_fp="meta/release_notes_2021-2-5.txt",
+            reuse_data_fp = "reuse_data/stats-v2021-2-5_bi-dir.csv",
+            reuse_stats_fp = "reuse_data/bookwise-stats-v2021.2.5_uni-dir.csv",
+            reuse_data_base_url = "http://dev.kitab-project.org/2021.2.5-pairwise/"
+        ),
+    ]
+
 
 """
 
@@ -29,7 +34,8 @@ from api.models import Author, Text, Version, Edition, \
     TextType, TextTypeLink, ReleaseInfo, \
     ManuscriptHolding, Place, Manuscript, \
     ExternalID, ExternalIDLink, IdentifierProvider, \
-    Language, Script, LanguageScriptCombo, CorpusInsights
+    Language, Script, LanguageScriptCombo, CorpusInsights, \
+    VersionwiseReuseStats
 from django.core.management.base import BaseCommand
 import os
 import re
@@ -114,6 +120,7 @@ class Command(BaseCommand):
                 zenodo_link = "https://zenodo.org/record/5550338",
                 release_notes_fp="meta/release_notes_2021-2-5.txt",
                 reuse_data_fp = "reuse_data/stats-v2021-2-5_bi-dir.csv",
+                reuse_stats_fp = "reuse_data/bookwise-stats-v2021.2.5_uni-dir.csv",
                 #reuse_data_base_url = "http://dev.kitab-project.org/passim01102021/",
                 reuse_data_base_url = "http://dev.kitab-project.org/2021.2.5-pairwise/"
             ),
@@ -125,6 +132,7 @@ class Command(BaseCommand):
                 zenodo_link = "https://zenodo.org/record/6808108",
                 release_notes_fp = "meta/release_notes_2022-1-6.txt",
                 reuse_data_fp = "reuse_data/stats-v2022-1-6_bi-dir.csv",
+                reuse_stats_fp = "reuse_data/bookwise-stats-v2022.1.6_uni-dir.csv",
                 #reuse_data_base_url = "http://dev.kitab-project.org/passim01102022/",
                 reuse_data_base_url = "http://dev.kitab-project.org/2022.1.6-pairwise/"
             ),
@@ -136,6 +144,7 @@ class Command(BaseCommand):
                 zenodo_link = "https://zenodo.org/record/7687795",
                 release_notes_fp = "meta/release_notes_2022-2-7.txt",
                 reuse_data_fp = "reuse_data/stats-v2022-2-7_bi-dir.csv",
+                reuse_stats_fp = "reuse_data/bookwise-stats-v2022.2.7_uni-dir.csv",
                 #reuse_data_base_url = "http://dev.kitab-project.org/passim01122022-v7/",
                 reuse_data_base_url = "http://dev.kitab-project.org/2022.2.7-pairwise/"
             ),
@@ -147,6 +156,7 @@ class Command(BaseCommand):
                 zenodo_link = "https://zenodo.org/records/10007820",
                 release_notes_fp = "meta/release_notes_2023-1-8.txt",
                 reuse_data_fp = "reuse_data/stats-v8_uni-dir.csv",
+                reuse_stats_fp = "reuse_data/bookwise-stats-v2023.1.8_uni-dir.csv",
                 #reuse_data_base_url = "http://dev.kitab-project.org/2023.1.8/",
                 reuse_data_base_url = "http://dev.kitab-project.org/2023.1.8-pairwise/"
             ),
@@ -159,6 +169,7 @@ class Command(BaseCommand):
                 zenodo_link = "https://zenodo.org/records/17767721",
                 release_notes_fp = "meta/release_notes_2025-1-9.txt",
                 reuse_data_fp = None,
+                reuse_stats_fp = "reuse_data/bookwise-stats-v2025.1.9_uni-dir.csv",
                 reuse_data_base_url = "http://dev.kitab-project.org/2025.1.9-pairwise/"
             ),
             # dict(
@@ -350,6 +361,8 @@ def main(release_d, authorship_obj, book_type_obj, part_of_obj, worldcat_obj,
     msg = f'Uploading release {release_d["release_code"]} metadata took {time.time()-start} seconds.'
     logger.info(msg)
     print(msg)
+
+    load_reuse_stats(release_obj, release_d["reuse_stats_fp"], release_d["release_code"])
     
     
     # BUILDUP: UNCOMMENT:
@@ -371,6 +384,46 @@ def main(release_d, authorship_obj, book_type_obj, part_of_obj, worldcat_obj,
     
     # # create the corpus insights data:
     # # TODO
+
+def load_reuse_stats(release_obj, versionwise_stats_fp, release_code):
+    """Load the reuse stats for each version 
+    (number of instances, number of versions)
+    """
+    print("Uploading text reuse stats for", release_obj)
+    n_created = 0
+    fieldnames = ['id', 'instances', 'book_cnt']
+    with open(versionwise_stats_fp, 'r', encoding='utf-8') as f:
+        reader = csv.DictReader(f, fieldnames=fieldnames, delimiter='\t')
+        header = next(reader)
+        i=0
+        for row in reader:
+            i += 1
+            if i % 100 == 0:
+                print(i, "items processed...")
+            try:
+                release_version_obj = ReleaseVersion.objects.get(
+                    version__version_code = row["id"],
+                    release_info = release_obj
+                )
+            except Exception as e:
+                print(e)
+                print(row["id"])
+                print(release_obj)
+                print("No release version found for", row["id"])
+                logger.info("No release version found for", row["id"])
+                print("skipping...")
+                continue
+            vrs_obj, created = VersionwiseReuseStats.objects.get_or_create(
+                release_version = release_version_obj,
+                n_instances = row["instances"],
+                n_versions = row["book_cnt"]
+            )
+            if created:
+                n_created += 1
+        
+        msg = (f"Done uploading reuse stats for release {release_code}. Added {n_created} item(s)")
+        print(msg)
+        logger.info(msg)
 
 def load_language_codes(fp):
     if not fp:
@@ -702,6 +755,7 @@ def get_or_create_name_obj(name, language, name_type):
         normalized_name = name
     
     # create the name object:
+    
     d = dict(
         name=name,
         normalized_name=normalized_name,
@@ -709,6 +763,8 @@ def get_or_create_name_obj(name, language, name_type):
     )
     if name_type:
         d["name_type"] = name_type
+    else:
+        d["name_type"] = ""
     nm, _created = ObjectName.objects.get_or_create(**d)
     if _created:
         IMPORT_STATS["objectName"] = IMPORT_STATS.get("objectName", 0) + 1

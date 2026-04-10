@@ -1,3 +1,7 @@
+"""Load text reuse statistics (n_instances, n_versions) for each text version.
+
+NB: this has now been moved into the load_release_from_yml script."""
+
 from api.models import Version, ReleaseVersion, ReleaseInfo, VersionwiseReuseStats
 from django.core.management.base import BaseCommand
 from django.db.models import Count, Sum, Max
@@ -23,6 +27,7 @@ class Command(BaseCommand):
             "2022.1.6", 
             "2022.2.7",
             "2023.1.8",
+            "2025.1.9",
         ]
 
         for release_code in release_codes:
@@ -35,6 +40,7 @@ def main(versionwise_stats_fp, release_code):
         release_code = release_code
     );
     print(release_obj)
+    n_created = 0
     fieldnames = ['id', 'instances', 'book_cnt']
     with open(versionwise_stats_fp, 'r', encoding='utf-8') as f:
         reader = csv.DictReader(f, fieldnames=fieldnames, delimiter='\t')
@@ -43,7 +49,7 @@ def main(versionwise_stats_fp, release_code):
         for row in reader:
             i += 1
             if i % 100 == 0:
-                print(i)
+                print(i, "items processed...")
             try:
                 release_version_obj = ReleaseVersion.objects.get(
                     version__version_code = row["id"],
@@ -61,6 +67,10 @@ def main(versionwise_stats_fp, release_code):
                 n_instances = row["instances"],
                 n_versions = row["book_cnt"]
             )
-        print("done")
+            if created:
+                n_created += 1
+        
+        print(f"done uploading reuse stats for {release_code}. Added {n_created} item(s)")
+
             
 
